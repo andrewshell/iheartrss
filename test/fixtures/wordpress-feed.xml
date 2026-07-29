@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom"
+	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+	>
+
+<channel>
+	<title>WordPress News</title>
+	<atom:link href="https://wordpress.org/news/feed/" rel="self" type="application/rss+xml" />
+	<link>https://wordpress.org/news</link>
+	<description>The latest news about WordPress and the WordPress community</description>
+	<lastBuildDate>Wed, 29 Jul 2026 15:30:58 +0000</lastBuildDate>
+	<language>en-US</language>
+	<sy:updatePeriod>
+	hourly	</sy:updatePeriod>
+	<sy:updateFrequency>
+	1	</sy:updateFrequency>
+	<generator>https://wordpress.org/?v=7.1-beta4-62927</generator>
+
+<image>
+	<url>https://s.w.org/favicon.ico?2</url>
+	<title>WordPress News</title>
+	<link>https://wordpress.org/news</link>
+	<width>32</width>
+	<height>32</height>
+</image> 
+<site xmlns="com-wordpress:feed-additions:1">14607090</site>	<item>
+		<title>WordPress 7.1 Beta 4</title>
+		<link>https://wordpress.org/news/2026/07/wordpress-7-1-beta-4/</link>
+		
+		<dc:creator><![CDATA[Benjamin Zekavica]]></dc:creator>
+		<pubDate>Wed, 29 Jul 2026 15:30:58 +0000</pubDate>
+				<category><![CDATA[Development]]></category>
+		<category><![CDATA[General]]></category>
+		<category><![CDATA[Releases]]></category>
+		<category><![CDATA[7-1]]></category>
+		<category><![CDATA[development]]></category>
+		<category><![CDATA[release]]></category>
+		<guid isPermaLink="false">https://wordpress.org/news/?p=21243</guid>
+
+					<description><![CDATA[WordPress 7.1 Beta 4 is ready for download and testing!&#160; This beta release is intended for testing and development only. Please do not install, run, or test this version of WordPress on production or mission-critical websites. Instead, use a test environment or local site to explore the new features. How to Test WordPress 7.1 Beta [&#8230;]]]></description>
+										<content:encoded><![CDATA[
+<p class="wp-block-paragraph">WordPress 7.1 Beta 4 is ready for download and testing!&nbsp;</p>
+
+
+
+<p class="wp-block-paragraph"><strong>This beta release is intended for testing and development</strong> only. Please do not install, run, or test this version of WordPress on production or mission-critical websites. Instead, use a test environment or local site to explore the new features.</p>
+
+
+
+<h2 class="wp-block-heading">How to Test WordPress 7.1 Beta 4</h2>
+
+
+
+<p class="wp-block-paragraph">You can test WordPress 7.1 Beta 4 in any of the following ways:</p>
+
+
+
+<figure class="wp-block-table"><table class="has-fixed-layout"><tbody><tr><td><strong>WordPress Beta Tester Plugin</strong></td><td>Install and activate the <a href="https://wordpress.org/plugins/wordpress-beta-tester/" target="_blank" rel="noreferrer noopener">WordPress Beta Tester</a> plugin on a WordPress install. Select the “Bleeding edge” channel and “Beta/RC Only” stream.</td></tr><tr><td><strong>Direct Download</strong></td><td>Download the <a href="https://wordpress.org/wordpress-7.1-beta4.zip">Beta 4 version (zip)</a> and install it on a WordPress website.</td></tr><tr><td><strong>Command Line (WP-CLI)</strong></td><td>Use this <a href="https://make.wordpress.org/cli/" target="_blank" rel="noreferrer noopener">WP-CLI</a> command: <br><code>wp core update --version=7.1-beta4</code></td></tr><tr><td><strong>WordPress Playground</strong></td><td>Use a <a href="https://playground.wordpress.net/?site-slug=kind-classic-mountain&amp;networking=no&amp;php=8.3&amp;wp=beta&amp;language=&amp;multisite=no" target="_blank" rel="noopener">7.1 Beta 4 WordPress Playground instance</a> to test the software directly in your browser. No setup required-just click and go!</td></tr></tbody></table></figure>
+
+
+
+<p class="wp-block-paragraph">The scheduled final release date for WordPress 7.1 is <strong>August 19, 2026</strong>. The full <a href="https://make.wordpress.org/core/2026/07/03/wordpress-7-1-release-party-schedule/">release schedule can be found here</a>. Your help testing Beta and RC versions is vital to making this release as stable and powerful as possible. Thank you to everyone who contributes by testing!</p>
+
+
+
+<p class="wp-block-paragraph"><strong>Find out what’s new in WordPress 7.1</strong>: Read the <a href="https://wordpress.org/news/2026/07/wordpress-7-1-beta-1/">Beta 1 announcement</a> for details and highlights.</p>
+
+
+
+<h2 class="wp-block-heading">How important is your testing?</h2>
+
+
+
+<p class="wp-block-paragraph">Testing for issues is a critical part of developing any software, and it’s a meaningful way for anyone to contribute – whether or not you have experience.&nbsp;<a href="https://make.wordpress.org/test/2026/07/15/help-test-wordpress-7-1/">Details on what to test in WordPress 7.1 are available here</a>.</p>
+
+
+
+<p class="wp-block-paragraph">If you encounter an issue, please share it in the&nbsp;<a href="https://wordpress.org/support/forum/alphabeta/" target="_blank" rel="noopener">Alpha/Beta area</a>&nbsp;of the support forums. If you are comfortable submitting a reproducible bug report, you can do so&nbsp;<a href="https://core.trac.wordpress.org/newticket" target="_blank" rel="noopener">via WordPress Trac</a>. You can also check your issue against this list of&nbsp;<a href="https://core.trac.wordpress.org/tickets/major" target="_blank" rel="noopener">known bugs</a>.</p>
+
+
+
+<p class="wp-block-paragraph">Curious about testing releases in general and how to get started? Follow along with the<a href="https://make.wordpress.org/test/"> testing initiatives in Make Core</a>&nbsp;and join the&nbsp;<a href="https://wordpress.slack.com/messages/core-test/">#core-test channel</a>&nbsp;on&nbsp;<a href="https://wordpress.slack.com/">Making WordPress Slack</a>.</p>
+
+
+
+<h2 class="wp-block-heading">What’s in WordPress 7.1 Beta 4?</h2>
+
+
+
+<p class="wp-block-paragraph">WordPress 7.1 Beta 4 contains more than <strong>114</strong> updates and fixes since the Beta 3 release, including <strong>51</strong> in the Editor and <strong>63</strong> in Core.&nbsp;</p>
+
+
+
+<p class="wp-block-paragraph">Each beta cycle focuses on bug fixes, and more are on the way with your help through testing. You can browse the technical details for all issues addressed since Beta 3 using these links:</p>
+
+
+
+<ul class="wp-block-list">
+<li><a href="https://github.com/WordPress/gutenberg/commits/wp/7.1?since=2026-07-22&amp;until=2026-07-29" target="_blank" rel="noopener">GitHub commits for 7.1</a> &nbsp;since July 22, 2026</li>
+
+
+
+<li><a href="https://core.trac.wordpress.org/query?status=closed&amp;changetime=07%2F22%2F2026..07%2F29%2F2026&amp;milestone=7.1&amp;col=id&amp;col=milestone&amp;col=owner&amp;col=type&amp;col=priority&amp;order=id" target="_blank" rel="noopener">Closed Trac tickets for 7.1</a> since July 22, 2026</li>
+</ul>
+
+
+
+<p class="wp-block-paragraph">Beta 4 brings a round of fixes that make the editor smoother to work with. Notes now stay reliably tied to the passage they refer to, and tagged people are displayed cleanly and clearly.</p>
+
+
+
+<h2 class="wp-block-heading">A Beta 4 haiku</h2>
+
+
+
+<p class="wp-block-paragraph">Testers lend their eyes,<br>edge cases hide in plain sight—<br>Patch, rebuild, refine.</p>
+
+
+
+<p class="has-text-align-right wp-block-paragraph"><em>Props to <a href='https://profiles.wordpress.org/krupajnanda/' class='mention'><span class='mentions-prefix'>@</span>krupajnanda</a> for preparing this post and <a href='https://profiles.wordpress.org/annezazu/' class='mention'><span class='mentions-prefix'>@</span>annezazu</a>, <a href='https://profiles.wordpress.org/wildworks/' class='mention'><span class='mentions-prefix'>@</span>wildworks</a>, <a href='https://profiles.wordpress.org/amykamala/' class='mention'><span class='mentions-prefix'>@</span>amykamala</a> for proofreading and review.</em></p>
+
+
+
+<div class="wp-block-group is-layout-constrained wp-block-group-is-layout-constrained">
+<figure class="wp-block-image size-large has-custom-border"><a href="https://us.wordcamp.org/2026/" target="_blank" rel=" noopener"><img data-recalc-dims="1" fetchpriority="high" decoding="async" width="1024" height="321" src="https://i0.wp.com/wordpress.org/news/files/2026/06/wcus-2026-teaser.png?resize=1024%2C321&#038;ssl=1" alt="WordCamp US: Powered by WordPress, Driven by Community, August 16-19, 2026" class="wp-image-20859" style="border-style:none;border-width:0px;border-top-left-radius:2px;border-top-right-radius:2px;border-bottom-left-radius:2px;border-bottom-right-radius:2px;box-shadow:var(--wp--preset--shadow--natural)" srcset="https://i0.wp.com/wordpress.org/news/files/2026/06/wcus-2026-teaser-scaled.png?resize=1024%2C321&amp;ssl=1 1024w, https://i0.wp.com/wordpress.org/news/files/2026/06/wcus-2026-teaser-scaled.png?resize=300%2C94&amp;ssl=1 300w, https://i0.wp.com/wordpress.org/news/files/2026/06/wcus-2026-teaser-scaled.png?resize=768%2C241&amp;ssl=1 768w, https://i0.wp.com/wordpress.org/news/files/2026/06/wcus-2026-teaser-scaled.png?resize=1536%2C482&amp;ssl=1 1536w, https://i0.wp.com/wordpress.org/news/files/2026/06/wcus-2026-teaser-scaled.png?resize=2048%2C643&amp;ssl=1 2048w" sizes="(max-width: 1000px) 100vw, 1000px" /></a><figcaption class="wp-element-caption">Join us for the launch of WordPress 7.1 at <a href="https://us.wordcamp.org/2026/">WordCamp US 2026</a>, August 16–19.</figcaption></figure>
+</div>
+]]></content:encoded>
+					
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">21243</post-id>	</item>
+		<item>
+		<title>WordPress 7.1 Beta 3</title>
+		<link>https://wordpress.org/news/2026/07/wordpress-7-1-beta-3/</link>
+		
+		<dc:creator><![CDATA[Benjamin Zekavica]]></dc:creator>
+		<pubDate>Wed, 22 Jul 2026 15:23:14 +0000</pubDate>
+				<category><![CDATA[Development]]></category>
+		<category><![CDATA[General]]></category>
+		<category><![CDATA[Releases]]></category>
+		<category><![CDATA[7-1]]></category>
+		<category><![CDATA[development]]></category>
+		<category><![CDATA[release]]></category>
+		<guid isPermaLink="false">https://wordpress.org/news/?p=21177</guid>
+
+					<description><![CDATA[WordPress 7.1 Beta 3 is ready for download and testing!&#160; This beta release is intended for testing and development only. Please do not install, run, or test this version of WordPress on production or mission-critical websites. Instead, use a test environment or local site to explore the new features. How to Test WordPress 7.1 Beta [&#8230;]]]></description>
+										<content:encoded><![CDATA[
+<p class="wp-block-paragraph">WordPress 7.1 Beta 3 is ready for download and testing!&nbsp;</p>
+
+
+
+<p class="wp-block-paragraph"><strong>This beta release is intended for testing and development</strong> only. Please do not install, run, or test this version of WordPress on production or mission-critical websites. Instead, use a test environment or local site to explore the new features.</p>
+
+
+
+<h2 class="wp-block-heading">How to Test WordPress 7.1 Beta 3</h2>
+
+
+
+<p class="wp-block-paragraph">You can test WordPress 7.1 Beta 3 in any of the following ways:</p>
+
+
+
+<figure class="wp-block-table"><table class="has-fixed-layout"><tbody><tr><td><strong>WordPress Beta Tester Plugin</strong></td><td>Install and activate the <a href="https://wordpress.org/plugins/wordpress-beta-tester/" target="_blank" rel="noreferrer noopener">WordPress Beta Tester</a> plugin on a WordPress install. Select the “Bleeding edge” channel and “Beta/RC Only” stream.</td></tr><tr><td><strong>Direct Download</strong></td><td>Download the <a href="https://wordpress.org/wordpress-7.1-beta3.zip">Beta 3 version (zip)</a> and install it on a WordPress website.</td></tr><tr><td><strong>Command Line (WP-CLI)</strong></td><td>Use this <a href="https://make.wordpress.org/cli/" target="_blank" rel="noreferrer noopener">WP-CLI</a> command: <br><code>wp core update --version=7.1-beta3</code></td></tr><tr><td><strong>WordPress Playground</strong></td><td>Use a <a href="https://playground.wordpress.net/?site-slug=kind-classic-mountain&amp;networking=no&amp;php=8.3&amp;wp=beta&amp;language=&amp;multisite=no" target="_blank" rel="noopener">7.1 Beta 3 WordPress Playground instance</a> to test the software directly in your browser. No setup required-just click and go!</td></tr></tbody></table></figure>
+
+
+
+<p class="wp-block-paragraph">The scheduled final release date for WordPress 7.1 is <strong>August 19, 2026</strong>. The full <a href="https://make.wordpress.org/core/2026/07/03/wordpress-7-1-release-party-schedule/">release schedule can be found here</a>. Your help testing Beta and RC versions is vital to making this release as stable and powerful as possible. Thank you to everyone who contributes by testing!</p>
+
+
+
+<p class="wp-block-paragraph"><strong>Find out what’s new in WordPress 7.1</strong>: Read the <a href="https://wordpress.org/news/2026/07/wordpress-7-1-beta-1/">Beta 1 announcement</a> for details and highlights.</p>
+
+
+
+<h2 class="wp-block-heading">How important is your testing?</h2>
+
+
+
+<p class="wp-block-paragraph">Testing for issues is a critical part of developing any software, and it’s a meaningful way for anyone to contribute – whether or not you have experience.&nbsp;<a href="https://make.wordpress.org/test/2026/07/15/help-test-wordpress-7-1/">Details on what to test in WordPress 7.1 are available here</a>.</p>
+
+
+
+<p class="wp-block-paragraph">If you encounter an issue, please share it in the&nbsp;<a href="https://wordpress.org/support/forum/alphabeta/" target="_blank" rel="noopener">Alpha/Beta area</a>&nbsp;of the support forums. If you are comfortable submitting a reproducible bug report, you can do so&nbsp;<a href="https://core.trac.wordpress.org/newticket" target="_blank" rel="noopener">via WordPress Trac</a>. You can also check your issue against this list of&nbsp;<a href="https://core.trac.wordpress.org/tickets/major" target="_blank" rel="noopener">known bugs</a>.</p>
+
+
+
+<p class="wp-block-paragraph">Curious about testing releases in general and how to get started? Follow along with the<a href="https://make.wordpress.org/test/"> testing initiatives in Make Core</a>&nbsp;and join the&nbsp;<a href="https://wordpress.slack.com/messages/core-test/">#core-test channel</a>&nbsp;on&nbsp;<a href="https://wordpress.slack.com/">Making WordPress Slack</a>.</p>
+
+
+
+<h2 class="wp-block-heading">What&#8217;s in WordPress 7.1 Beta 3?</h2>
+
+
+
+<p class="wp-block-paragraph">For technical details on the more than <strong>71 issues</strong> addressed since Beta 1, see the following links:</p>
+
+
+
+<ul class="wp-block-list">
+<li><a href="https://core.trac.wordpress.org/query?status=closed&amp;changetime=07%2F15%2F2026..07%2F22%2F2026&amp;milestone=7.1&amp;group=component&amp;col=id&amp;col=milestone&amp;col=owner&amp;col=type&amp;col=priority&amp;order=id">Closed 7.1 WordPress Core Trac tickets</a> since July 15, 2026</li>
+
+
+
+<li><a href="https://github.com/WordPress/gutenberg/commits/wp/7.1?since=2026-07-15&amp;until=2026-07-22">7.1 Gutenberg commits</a> since July 15, 2026</li>
+</ul>
+
+
+
+<p class="wp-block-paragraph">Note: <strong>Beta 2 was released on July 17, 2026</strong>, as part of the <a href="https://wordpress.org/news/2026/07/wordpress-7-0-2-release/">WordPress 7.0.2 release</a> and includes important security fixes.</p>
+
+
+
+<h3 class="wp-block-heading">Beta 3 introduces two improvements to styling.</h3>
+
+
+
+<p class="wp-block-paragraph">Applying local style changes globally is no longer an all-or-nothing action. The <a href="https://github.com/WordPress/gutenberg/pull/79839" target="_blank" rel="noopener">Apply globally</a>&nbsp;option in the block inspector now opens a quick review step, allowing you to choose which modified styles to apply globally while keeping the rest as local overrides.</p>
+
+
+
+<p class="wp-block-paragraph">Other notable fixes include improvements to media uploads: long animated GIF uploads no longer hang, images rotated using EXIF metadata are processed correctly, and uploading a single HEIC image in Safari no longer creates two entries.</p>
+
+
+
+<p class="wp-block-paragraph">The editor also includes additional fixes for Notes, responsive styling, and custom CSS. For developers, WordPress Coding Standards has been updated to version 3.4.0.</p>
+
+
+
+<p class="wp-block-paragraph"><a href="https://make.wordpress.org/core/2026/05/22/extending-unicode-support-in-email-addresses-usernames-and-slugs/" target="_blank" rel="noopener">Unicode email address support</a> will <strong>not be included</strong> in WordPress 7.1. The work will continue in a community plugin, allowing broader testing of compatibility, security, and data-handling considerations.</p>
+
+
+
+<h2 class="wp-block-heading">A Beta 3 haiku</h2>
+
+
+
+<p class="wp-block-paragraph">Fresh bugs surface now,<br>click by click, we chase them down—<br>codebase grows steady.</p>
+
+
+
+<p class="has-text-align-right wp-block-paragraph"><em>Props to </em><a href='https://profiles.wordpress.org/krupajnanda/' class='mention'><span class='mentions-prefix'>@</span>krupajnanda</a>, <a href='https://profiles.wordpress.org/annezazu/' class='mention'><span class='mentions-prefix'>@</span>annezazu</a>, <br><a href='https://profiles.wordpress.org/wildworks/' class='mention'><span class='mentions-prefix'>@</span>wildworks</a>, <a href='https://profiles.wordpress.org/amykamala/' class='mention'><span class='mentions-prefix'>@</span>amykamala</a> <em>for proofreading and review.</em></p>
+
+
+
+<div class="wp-block-group is-layout-constrained wp-block-group-is-layout-constrained">
+<figure class="wp-block-image size-large has-custom-border"><a href="https://us.wordcamp.org/2026/"><img data-recalc-dims="1" decoding="async" width="1024" height="321" src="https://i0.wp.com/wordpress.org/news/files/2026/06/wcus-2026-teaser.png?resize=1024%2C321&#038;ssl=1" alt="WordCamp US: Powered by WordPress, Driven by Community, August 16-19, 2026" class="wp-image-20859" style="border-style:none;border-width:0px;border-top-left-radius:2px;border-top-right-radius:2px;border-bottom-left-radius:2px;border-bottom-right-radius:2px;box-shadow:var(--wp--preset--shadow--natural)" srcset="https://i0.wp.com/wordpress.org/news/files/2026/06/wcus-2026-teaser-scaled.png?resize=1024%2C321&amp;ssl=1 1024w, https://i0.wp.com/wordpress.org/news/files/2026/06/wcus-2026-teaser-scaled.png?resize=300%2C94&amp;ssl=1 300w, https://i0.wp.com/wordpress.org/news/files/2026/06/wcus-2026-teaser-scaled.png?resize=768%2C241&amp;ssl=1 768w, https://i0.wp.com/wordpress.org/news/files/2026/06/wcus-2026-teaser-scaled.png?resize=1536%2C482&amp;ssl=1 1536w, https://i0.wp.com/wordpress.org/news/files/2026/06/wcus-2026-teaser-scaled.png?resize=2048%2C643&amp;ssl=1 2048w" sizes="(max-width: 1000px) 100vw, 1000px" /></a><figcaption class="wp-element-caption">Join us for the launch of WordPress 7.1 at <a href="https://us.wordcamp.org/2026/">WordCamp US 2026</a>, August 16–19.</figcaption></figure>
+</div>
+]]></content:encoded>
+					
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">21177</post-id>	</item>
+		
+	</channel>
+</rss>

@@ -1,0 +1,289 @@
+/**
+ * `verifySite` — the §5 pipeline, Steps 0 through 6.
+ *
+ * It never throws for an expected failure: every outcome is a structured result with
+ * a machine-readable `reason` so the UI can show a specific, actionable message.
+ *
+ * It deliberately does **not** persist. Step 7 (upsert, the `UNIQUE(feed_url)`
+ * collision rules, the incumbent re-check) is phase 5; keeping it out means this
+ * module has no database dependency and the whole pipeline is testable against a
+ * fixture HTTP server.
+ */
+
+import { checkFeedProvenance, resolveCanonicalUrl } from './canonical.js';
+import { parseFeed } from './feed.js';
+import { findLinkBack, parsePage } from './page.js';
+import { normalizeUrl } from './url.js';
+
+/**
+ * @param {object} deps
+ * @param {Function} deps.safeFetch - from `createFetcher`; the only way out to the network.
+ * @param {object} deps.config - `submitBudgetMs`, `linkbackHosts`.
+ */
+export function createVerifier({ safeFetch, config }) {
+  /**
+   * @param {string} submittedUrl - raw user input.
+   * @returns {Promise<object>} `{ ok: true, url, feedUrl, title, description, features,
+   *   … }` or `{ ok: false, reason, … }`.
+   */
+  return async function verifySite(submittedUrl) {
+    // ── Step 0 — normalize and pre-screen ────────────────────────────────────────
+    // `banned_hosts` is a §4 table, so that half of Step 0.6 lands with phase 5.
+    const normalized = normalizeUrl(submittedUrl);
+    if (!normalized.ok) return { ok: false, reason: normalized.reason };
+
+    // §5's fetch budget: ONE budget shared by every fetch in this submission. Per-request
+    // timeouts alone let 6 fetches × 5 redirect hops block a synchronous POST far past
+    // any reverse-proxy timeout while the user resubmits and trips the rate limiter.
+    const budget = {
+      deadline: Date.now() + config.submitBudgetMs,
+      signal: AbortSignal.timeout(config.submitBudgetMs),
+    };
+
+    // ── Step 1 — fetch the submitted page ────────────────────────────────────────
+    const submitted = await fetchOk(safeFetch, normalized.url, {
+      budget,
+      kind: 'page',
+      failure: 'page_fetch_failed',
+    });
+    if (!submitted.ok) return { ...submitted, url: normalized.url };
+
+    // ── Step 2 — find the feed ───────────────────────────────────────────────────
+    const start = await startFromSubmitted(submitted, { budget });
+    if (!start.ok) return start;
+
+    const { submittedResourceWasFeed, feed } = start;
+    let feedUrl = start.feedUrl;
+
+    // ── Step 4 — resolve the canonical URL from `<channel><link>` ────────────────
+    const canonical = resolveCanonicalUrl({
+      submittedUrl: submitted.url,
+      channelLink: feed.channelLink,
+      submittedResourceWasFeed,
+    });
+    if (!canonical.ok) {
+      return { ok: false, reason: canonical.reason, url: submitted.url, feedUrl };
+    }
+
+    let canonicalUrl = canonical.canonicalUrl;
+    let canonicalHtml = submitted.body;
+    let winningFeed = feed;
+
+    if (canonicalUrl !== submitted.url) {
+      // §5 Step 4: the feed we publish must come from the page we publish, so
+      // discovery re-runs on the canonical page and *its* feed wins. The feed recorded
+      // against `example.com/` is the one `example.com/` itself declares — never one
+      // asserted by a third party's page. Canonical resolution runs **once**: we do not
+      // re-derive a canonical from the second feed, so there is no loop.
+      const page = await fetchOk(safeFetch, canonicalUrl, {
+        budget,
+        kind: 'page',
+        failure: 'canonical_fetch_failed',
+      });
+      if (!page.ok) return { ...page, url: canonicalUrl, submittedUrl: submitted.url };
+
+      canonicalUrl = page.url; // the final post-redirect URL becomes `sites.url`
+      canonicalHtml = page.body;
+
+      const rediscovered = await rediscoverOnCanonical(page, { budget, alreadyValidated: { feedUrl, feed } });
+      if (!rediscovered.ok) {
+        return { ...rediscovered, url: canonicalUrl, submittedUrl: submitted.url };
+      }
+
+      feedUrl = rediscovered.feedUrl;
+      winningFeed = rediscovered.feed;
+    }
+
+    // The mutual half of the provenance rule, run in every case — including the one
+    // where canonical fell back to the submitted URL, which is where the
+    // channel-link-less hijack lives (§5 Step 4).
+    const provenance = checkFeedProvenance({
+      canonicalUrl,
+      feedUrl,
+      feedChannelLink: winningFeed.channelLink,
+    });
+    if (!provenance.ok) {
+      return {
+        ok: false,
+        reason: provenance.reason,
+        url: canonicalUrl,
+        feedUrl,
+        channelLink: winningFeed.channelLink,
+      };
+    }
+
+    // ── Step 5 — find the link-back, on the CANONICAL page ───────────────────────
+    // Not "either page": accepting it on the submitted page would break the consent
+    // property, since being listed under a URL would no longer require that page's
+    // owner to have opted in.
+    const linkBack = findLinkBack(canonicalHtml, canonicalUrl, config.linkbackHosts);
+    if (linkBack === null) {
+      return {
+        ok: false,
+        reason: 'no_linkback',
+        url: canonicalUrl,
+        submittedUrl: submitted.url,
+        feedUrl,
+      };
+    }
+
+    // ── Step 6 — optional feature detection (booleans, never fail the submission) ─
+    return {
+      ok: true,
+      url: canonicalUrl,
+      submittedUrl: submitted.url,
+      feedUrl,
+      title: winningFeed.title,
+      description: winningFeed.description,
+      linkBack,
+      features: winningFeed.features,
+    };
+  };
+
+  /**
+   * §5 Step 2's short-circuit. On a site about RSS a large share of people paste
+   * `example.com/feed.xml` into the box; without this they get "we couldn't find an RSS
+   * feed on your page" about a page that *is* an RSS feed.
+   */
+  async function startFromSubmitted(submitted, { budget }) {
+    if (looksLikeFeed(submitted)) {
+      const parsed = parseFeed(submitted.body);
+      if (!parsed.ok) {
+        return { ok: false, reason: parsed.reason, feedUrl: submitted.url };
+      }
+      return {
+        ok: true,
+        submittedResourceWasFeed: true,
+        feedUrl: submitted.url,
+        feed: parsed,
+      };
+    }
+
+    const discovered = discoverFeed(submitted);
+    if (!discovered.ok) return { ...discovered, url: submitted.url };
+
+    const fetched = await fetchAndParseFeed(discovered.feedUrl, {
+      budget,
+      failure: 'feed_fetch_failed',
+    });
+    if (!fetched.ok) return { ...fetched, url: submitted.url };
+
+    return {
+      ok: true,
+      submittedResourceWasFeed: false,
+      feedUrl: discovered.feedUrl,
+      feed: fetched.feed,
+    };
+  }
+
+  /**
+   * Rows 4 and 5 of §5 Step 4's decision table: a canonical page that declares no RSS
+   * feed is `feed_not_declared_on_canonical`, and one whose feed won't fetch or fails
+   * Step 3 is `canonical_feed_unavailable` — **transient**, retry later. Never
+   * substitute a different feed.
+   */
+  async function rediscoverOnCanonical(page, { budget, alreadyValidated }) {
+    const discovered = discoverFeed(page, {
+      noneReason: 'feed_not_declared_on_canonical',
+      otherFormatReason: 'feed_not_declared_on_canonical',
+    });
+    if (!discovered.ok) return discovered;
+
+    // No extra fetch if it's the URL we already validated.
+    if (discovered.feedUrl === alreadyValidated.feedUrl) {
+      return { ok: true, feedUrl: discovered.feedUrl, feed: alreadyValidated.feed };
+    }
+
+    const fetched = await fetchAndParseFeed(discovered.feedUrl, {
+      budget,
+      failure: 'canonical_feed_unavailable',
+      parseFailure: 'canonical_feed_unavailable',
+    });
+    if (!fetched.ok) return { ...fetched, feedUrl: discovered.feedUrl };
+
+    return { ok: true, feedUrl: discovered.feedUrl, feed: fetched.feed };
+  }
+
+  async function fetchAndParseFeed(feedUrl, { budget, failure, parseFailure }) {
+    const response = await fetchOk(safeFetch, feedUrl, { budget, kind: 'feed', failure });
+    if (!response.ok) return { ...response, feedUrl };
+
+    const parsed = parseFeed(response.body);
+    if (!parsed.ok) {
+      return { ok: false, reason: parseFailure ?? parsed.reason, feedUrl, feedReason: parsed.reason };
+    }
+
+    return { ok: true, feed: parsed };
+  }
+}
+
+/**
+ * §5 Step 2's two buckets. Atom and JSON-feed candidates are collected deliberately:
+ * without them an Atom-only site gets `no_feed_link` — "we couldn't find an RSS feed
+ * link" — while the author stares at a perfectly good
+ * `<link rel="alternate" type="application/atom+xml">` and concludes we're broken.
+ */
+function discoverFeed(response, { noneReason = 'no_feed_link', otherFormatReason = 'feed_not_rss2' } = {}) {
+  const page = parsePage(response.body, response.url);
+
+  if (page.feedUrl !== null) {
+    return { ok: true, feedUrl: page.feedUrl, candidates: page.rssCandidates };
+  }
+
+  if (page.otherFormatCandidates.length > 0) {
+    return {
+      ok: false,
+      reason: otherFormatReason,
+      // Naming the exact feed we found is what turns the most common rejection on the
+      // site from "this site is broken" into an invitation (§5 Step 2).
+      otherFormatUrl: page.otherFormatCandidates[0].url,
+      otherFormatType: page.otherFormatCandidates[0].type,
+    };
+  }
+
+  return { ok: false, reason: noneReason };
+}
+
+/**
+ * Is the fetched resource itself a feed rather than an HTML page? Content type first,
+ * then the document's own root element — plenty of real feeds are served as
+ * `text/plain` or `text/html`, and a submitted Atom feed has to reach Step 3's
+ * carefully-worded refusal rather than "we couldn't find a feed on your page".
+ */
+function looksLikeFeed({ body, contentType }) {
+  const type = String(contentType ?? '').split(';')[0].trim().toLowerCase();
+  if (type === 'text/html' || type === 'application/xhtml+xml') return false;
+  if (/(^|\/|\+)(rss|atom|rdf)(\+xml)?$/.test(type) || type === 'application/feed+json') {
+    return true;
+  }
+
+  const head = String(body ?? '').slice(0, 2048).replace(/^﻿/, '').trimStart();
+  const withoutProlog = head.replace(/^<\?xml[^>]*\?>\s*/i, '').replace(/^<!--[\s\S]*?-->\s*/, '');
+  return /^<(rss|feed|rdf:RDF)\b/i.test(withoutProlog);
+}
+
+/**
+ * `safeFetch` plus the status rules §5 needs: a completed exchange is not a success.
+ *
+ * A persistent 403 is `blocked_by_site`, not a failure of the member's making —
+ * verified against `medium.com/@dhh`, Vercel, AWS WAF and Substack custom domains. The
+ * message has to say plainly that bot protection is the usual cause and offer the human
+ * path, so it needs its own reason code (§5 Step 4).
+ */
+async function fetchOk(safeFetch, url, { budget, kind, failure }) {
+  const response = await safeFetch(url, { budget, kind });
+
+  if (!response.ok) {
+    return { ok: false, reason: response.reason, fetchedUrl: url };
+  }
+
+  if (response.status === 403) {
+    return { ok: false, reason: 'blocked_by_site', status: 403, fetchedUrl: url };
+  }
+
+  if (response.status < 200 || response.status >= 300) {
+    return { ok: false, reason: failure, status: response.status, fetchedUrl: url };
+  }
+
+  return response;
+}

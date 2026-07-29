@@ -687,6 +687,22 @@ Verified; a UTF-8 BOM alone is tolerated, leading whitespace is not.
      a `>= 4.5` pin — a 112 KB body produced a **500,000,000-character string** with no
      throw; under §9's `mem_limit: 512m` that is a remote, unauthenticated OOM-kill via
      `/submit`. 4.5.4 through 4.5.7 all reject it safely. Re-verify before moving to 5.x.
+
+     **But 4.5.4's default `maxTotalExpansions: 1000` rejects honest feeds** — found during
+     implementation, not review. scripting.com's real feed contains **2,193 entity
+     references** (700 `&lt;`, 700 `&gt;`, 554 `&quot;`, 234 `&#10;`, 5 `&amp;`) across 50
+     items, so `parse()` threw `Entity expansion limit exceeded: 1020 > 1000` and the
+     reference feed for this entire project came back `feed_invalid`. Every full-content
+     WordPress feed hits the same wall. Use the object form:
+     `processEntities: { maxTotalExpansions: 2_000_000, maxEntitySize: 10000,
+     maxEntityCount: 1000, maxExpandedLength: 100000 }` — raising only the total, keeping the
+     three per-entity bounds at their 4.5.4 defaults. Both halves of the defence survive:
+     those three bound *DTD-declared* entities, and the DOCTYPE scan below rejects any
+     document that declares one before `parse()` ever runs, so what remains is 1:1 character
+     references whose count is linear in body size and already capped by
+     `MAX_RESPONSE_BYTES`. Verified defence-in-depth: with the DOCTYPE scan deliberately
+     bypassed, a 20,000 × 100 KB bomb still throws on `maxEntitySize` with a 3.3 MB heap
+     delta.
   2. **Reject `<!DOCTYPE` / `<!ENTITY` anywhere outside CDATA — not just the prolog.**
      A prolog-only scan is bypassed by placement: a DOCTYPE *after* the root element still
      declares and expands entities, and `XMLValidator.validate()` returns `true` on it —
