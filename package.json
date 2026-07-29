@@ -16,6 +16,10 @@
   "license": "MIT",
   "dependencies": {
     "@hono/node-server": "^2.0.12",
-    "hono": "^4.12.32"
+    "fast-xml-parser": "^4.5.7",
+    "hono": "^4.12.32",
+    "node-html-parser": "^9.0.1",
+    "tldts": "^7.4.9",
+    "undici": "^8.9.0"
   }
 }

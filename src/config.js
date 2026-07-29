@@ -24,13 +24,43 @@ export function loadConfig(env = process.env) {
   const linkbackHosts = parseLinkbackHosts(env.LINKBACK_HOSTS, errors);
   const databasePath = parseDatabasePath(env.DATABASE_PATH, errors);
 
+  // §5's fetcher: `SUBMIT_BUDGET_MS` is the only real ceiling and
+  // `FETCH_TIMEOUT_MS` is a per-request sanity cap — the effective per-request
+  // timeout is `min(FETCH_TIMEOUT_MS, budgetRemaining)`.
+  const fetchTimeoutMs = parsePositiveInt(
+    env.FETCH_TIMEOUT_MS,
+    8000,
+    'FETCH_TIMEOUT_MS',
+    errors,
+  );
+  const maxResponseBytes = parsePositiveInt(
+    env.MAX_RESPONSE_BYTES,
+    5242880,
+    'MAX_RESPONSE_BYTES',
+    errors,
+  );
+  const submitBudgetMs = parsePositiveInt(
+    env.SUBMIT_BUDGET_MS,
+    30000,
+    'SUBMIT_BUDGET_MS',
+    errors,
+  );
+
   if (errors.length > 0) {
     throw new Error(
       `Invalid configuration:\n${errors.map((e) => `  - ${e}`).join('\n')}`,
     );
   }
 
-  return Object.freeze({ port, siteUrl, linkbackHosts, databasePath });
+  return Object.freeze({
+    port,
+    siteUrl,
+    linkbackHosts,
+    databasePath,
+    fetchTimeoutMs,
+    maxResponseBytes,
+    submitBudgetMs,
+  });
 }
 
 function parsePort(raw, errors) {
@@ -42,6 +72,17 @@ function parsePort(raw, errors) {
     return 3000;
   }
   return port;
+}
+
+function parsePositiveInt(raw, fallback, name, errors) {
+  if (raw === undefined || raw === '') return fallback;
+
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) {
+    errors.push(`${name} must be a positive integer, got "${raw}"`);
+    return fallback;
+  }
+  return value;
 }
 
 function parseSiteUrl(raw, errors) {
