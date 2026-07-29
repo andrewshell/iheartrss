@@ -4,11 +4,17 @@
  * Fail fast and loudly: a bad value here should stop the process at startup,
  * not surface as a strange 500 three phases later.
  *
- * Only the variables phase 1 actually uses are parsed. The rest of §9's table
- * (DATABASE_PATH, ADMIN_TOKEN, IP_HMAC_KEY_FILE, TRUST_PROXY, the revalidation
- * knobs, …) lands with the phase that first reads it — an unused-but-validated
- * variable is just a way to fail a boot for a feature that does not exist yet.
+ * Only the variables the app actually uses are parsed. The rest of §9's table
+ * (ADMIN_TOKEN, IP_HMAC_KEY_FILE, TRUST_PROXY, the revalidation knobs, …) lands
+ * with the phase that first reads it — an unused-but-validated variable is just
+ * a way to fail a boot for a feature that does not exist yet.
+ *
+ * DATABASE_PATH arrives in phase 2 rather than phase 3, deliberately: §12.2 wants
+ * the data directory created and probed on the first real deploy, so the
+ * root-owned bind mount fails on a deploy that has nothing to lose.
  */
+
+import { basename } from 'node:path';
 
 export function loadConfig(env = process.env) {
   const errors = [];
@@ -16,6 +22,7 @@ export function loadConfig(env = process.env) {
   const port = parsePort(env.PORT, errors);
   const siteUrl = parseSiteUrl(env.SITE_URL, errors);
   const linkbackHosts = parseLinkbackHosts(env.LINKBACK_HOSTS, errors);
+  const databasePath = parseDatabasePath(env.DATABASE_PATH, errors);
 
   if (errors.length > 0) {
     throw new Error(
@@ -23,7 +30,7 @@ export function loadConfig(env = process.env) {
     );
   }
 
-  return Object.freeze({ port, siteUrl, linkbackHosts });
+  return Object.freeze({ port, siteUrl, linkbackHosts, databasePath });
 }
 
 function parsePort(raw, errors) {
@@ -56,6 +63,30 @@ function parseSiteUrl(raw, errors) {
   // Normalised to an origin + trailing slash so every `new URL(path, siteUrl)`
   // in the app behaves the same whether or not the operator typed the slash.
   return `${url.origin}/`;
+}
+
+function parseDatabasePath(raw, errors) {
+  const value = raw === undefined || raw === '' ? './data/iheartrss.db' : raw;
+
+  // The path has to name a *file*. `DatabaseSync` pointed at a directory fails
+  // at the first query with EISDIR, which reads as a database bug rather than as
+  // the typo it is — and a trailing separator is the common way to write it.
+  const file = basename(value);
+  const namesADirectory =
+    value !== value.trim() ||
+    value.trim() === '' ||
+    /[/\\]$/.test(value) ||
+    file === '' ||
+    file === '.' ||
+    file === '..';
+
+  if (namesADirectory) {
+    errors.push(
+      `DATABASE_PATH must name a database file, not a directory, got "${value}"`,
+    );
+  }
+
+  return value;
 }
 
 function parseLinkbackHosts(raw, errors) {

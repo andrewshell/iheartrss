@@ -7,10 +7,24 @@ import { badgePage } from './views/badge.js';
 import { notFoundPage } from './views/error.js';
 import { homePage } from './views/home.js';
 
-export function createApp({ config }) {
+export function createApp({ config, checkHealth = () => ({ ok: true }) }) {
   const app = new Hono();
 
-  app.get('/healthz', (c) => c.json({ ok: true }));
+  // Plan §9: the container healthcheck only inspects the HTTP status, so an
+  // unhealthy answer has to *be* a 503. `{ok: false}` with a 200 is a container
+  // that never restarts. Phases 3+ fold the database into `checkHealth`.
+  app.get('/healthz', (c) => {
+    let result;
+    try {
+      result = checkHealth();
+    } catch (err) {
+      result = { ok: false, reason: err.message };
+    }
+
+    return result?.ok
+      ? c.json({ ok: true })
+      : c.json({ ok: false, reason: result?.reason ?? 'unhealthy' }, 503);
+  });
 
   app.get('/', (c) => c.html(homePage({ config })));
   app.get('/about', (c) => c.html(aboutPage({ config })));

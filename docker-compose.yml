@@ -1,0 +1,80 @@
+# The dockge stack for iheartrss.com (plan §9).
+#
+# Dockge builds from the stack directory, so this file lives at the root of a
+# clone in /opt/stacks/iheartrss and dockge's compose editor picks it up.
+# Secrets go in a `.env` beside this file. TLS is terminated by the existing
+# reverse proxy, not here.
+#
+# Before the first `up`, on the host, in this directory:
+#
+#   mkdir -p data content && sudo chown 1000:1000 data
+#   mkdir -p secrets && head -c 32 /dev/urandom | base64 > secrets/ip_hmac_key
+#   chmod 600 secrets/ip_hmac_key
+#
+# See README.md, "Deploying". Skipping the chown is the failure §9 predicts.
+
+services:
+  iheartrss:
+    build: .
+    container_name: iheartrss
+    restart: unless-stopped
+
+    # Reaps zombies and forwards signals. The app handles SIGTERM itself, but
+    # PID 1 duties are not the app's job.
+    init: true
+
+    mem_limit: 512m
+    pids_limit: 256
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+
+    # json-file is unbounded by default; left alone it fills the disk and takes
+    # SQLite down with it.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    ports:
+      # 127.0.0.1, NEVER 3000:3000. Docker inserts its own nat rules ahead of
+      # ufw/firewalld, so publishing on 0.0.0.0 puts the app on the public
+      # internet *beside* the reverse proxy rather than behind it. Combined with
+      # TRUST_PROXY=true, anyone connecting directly could then set
+      # X-Forwarded-For to anything — defeating every rate limit, poisoning every
+      # logged IP hash, and exposing /admin over plaintext.
+      - "127.0.0.1:3000:3000"
+
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - SITE_URL=https://iheartrss.com
+      - DATABASE_PATH=/data/iheartrss.db
+      - TRUST_PROXY=true
+      # One reverse proxy in front means 0 hops past the rightmost XFF entry,
+      # not 1 — see §6 and .env.example. Read from phase 5.
+      - TRUSTED_PROXY_HOPS=0
+      # Consumed from phase 5 (admin) and phase 4 (IP hashing). Harmless now.
+      - ADMIN_TOKEN=${ADMIN_TOKEN:-}
+      - IP_HMAC_KEY_FILE=/run/secrets/ip_hmac_key
+
+    volumes:
+      # Must exist and be owned by uid 1000 before the first start.
+      - ./data:/data
+      # Blog posts (phase 7): drop a .md file in to publish, no rebuild needed.
+      # This mount masks anything baked into the image at /app/content, which is
+      # why content/ is in .dockerignore — the bind mount is the publishing path.
+      - ./content:/app/content:ro
+      # NOT under ./data: the IP HMAC key living beside the database it protects
+      # would travel with it in one backup tarball, defeating the point.
+      - ./secrets/ip_hmac_key:/run/secrets/ip_hmac_key:ro
+
+    healthcheck:
+      # Only the HTTP status is inspected, which is why /healthz answers 503
+      # rather than a 200 carrying {ok:false}.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      # Boot is fast, but a cold first check should not spend a retry.
+      start_period: 15s

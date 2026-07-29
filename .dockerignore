@@ -1,0 +1,22 @@
+# Keep the build context small and keep host state out of the image.
+# The repo is a live clone on the server, so `data/`, `secrets/` and `.env` are
+# all real files there — none of them may ever be baked into a layer.
+
+.git
+.gitignore
+node_modules
+.env
+.env.*
+!.env.example
+data
+secrets
+content
+*.local.md
+test
+Dockerfile
+.dockerignore
+docker-compose.yml
+README.md
+npm-debug.log*
+.DS_Store
+coverage
