@@ -11,6 +11,7 @@ import { serve } from '@hono/node-server';
 
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
+import { closeDb, createDb } from './db/index.js';
 import { ensureDataDirectory, probeDataDirectory } from './storage.js';
 
 const config = loadConfig();
@@ -20,8 +21,16 @@ const config = loadConfig();
 // Plan §12.2 wants this failure to happen on the phase-2 deploy.
 ensureDataDirectory({ databasePath: config.databasePath });
 
+// Opened and migrated before we listen, for the same reason: a schema that fails
+// to apply must be a container that never comes up, not one that 500s per
+// request. Migrations are idempotent, so every restart runs this.
+const { db, queries } = createDb(config.databasePath);
+log('db.ready', { path: config.databasePath });
+
 const app = createApp({
   config,
+  db,
+  queries,
   checkHealth: () => probeDataDirectory({ databasePath: config.databasePath }),
 });
 
@@ -35,8 +44,10 @@ const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
  * `docker stop` takes 10.29s with no handler and 0.16s with one, so without this
  * every dockge redeploy is a SIGKILL that drops in-flight requests.
  *
- * Phase 3 adds `PRAGMA wal_checkpoint(TRUNCATE)` and `db.close()` here; phase 8a
- * adds stopping the revalidation interval.
+ * The database is checkpointed and closed on the way out (§9): the nightly backup
+ * copies the main database file, so the WAL is folded back into it rather than
+ * left for whatever the next unclean exit does. Phase 8a adds stopping the
+ * revalidation interval.
  */
 let shuttingDown = false;
 
@@ -54,12 +65,16 @@ function shutdown(signal) {
   // shutdown back into a hard kill.
   const deadline = setTimeout(() => {
     log('shutdown.timeout', { signal });
+    // Still worth a checkpoint: a hung keep-alive connection is no reason to
+    // leave the WAL for the next boot to replay.
+    closeQuietly();
     process.exit(1);
   }, 8000);
   deadline.unref();
 
   server.close((err) => {
     clearTimeout(deadline);
+    closeQuietly();
     if (err) {
       log('shutdown.error', { signal, error: err.message });
       process.exit(1);
@@ -71,6 +86,19 @@ function shutdown(signal) {
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => shutdown(signal));
+}
+
+// Both shutdown paths can reach this, and closing twice throws.
+let closed = false;
+
+function closeQuietly() {
+  if (closed) return;
+  closed = true;
+  try {
+    closeDb(db);
+  } catch (err) {
+    log('shutdown.db_error', { error: err.message });
+  }
 }
 
 function log(msg, fields) {

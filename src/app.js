@@ -7,8 +7,21 @@ import { badgePage } from './views/badge.js';
 import { notFoundPage } from './views/error.js';
 import { homePage } from './views/home.js';
 
-export function createApp({ config, checkHealth = () => ({ ok: true }) }) {
+/**
+ * `db` and `queries` come from `createDb(path)` and are injected rather than
+ * imported (plan §11) — that is what lets a test hand the app an in-memory
+ * database. Phase 3 only wires them through; the routes that read them arrive in
+ * phase 5.
+ */
+export function createApp({
+  config,
+  db = null,
+  queries = null,
+  checkHealth = () => ({ ok: true }),
+}) {
   const app = new Hono();
+  void db;
+  void queries;
 
   // Plan §9: the container healthcheck only inspects the HTTP status, so an
   // unhealthy answer has to *be* a 503. `{ok: false}` with a 200 is a container
