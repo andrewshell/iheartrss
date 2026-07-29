@@ -1,0 +1,353 @@
+/*
+ * iheartrss.com — one hand-written stylesheet, no framework, no build step.
+ *
+ * MOBILE-FIRST (plan §6.3). Base styles target small screens; `min-width`
+ * media queries add the wider layouts. Nothing in here is written desktop-first
+ * and patched downward.
+ */
+
+/* ---------------------------------------------------------------- tokens -- */
+
+:root {
+  --brand: #ea7819;
+
+  /* #ea7819 on white is 2.6:1 — fine for large text and for the heart glyph,
+     not for body copy or links. --brand-text is the darkened variant that
+     clears 4.5:1 on white; use it anywhere text carries meaning. */
+  --brand-text: #a04c00;
+
+  --bg: #fdfcfa;
+  --surface: #fff;
+  --text: #1b1a18;
+  --text-muted: #56514b;
+  --border: #ddd7ce;
+  --code-bg: #f4f1ec;
+  --focus: #0b5fff;
+
+  --measure: 38rem;
+  --page-max: 46rem;
+  --tap: 2.75rem; /* 44px minimum touch target */
+
+  --step-0: 1rem;
+  --step-1: 1.15rem;
+  --step-2: 1.4rem;
+  --step-3: 1.8rem;
+  --step-4: 2.2rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --brand-text: #f0913c;
+    --bg: #15161a;
+    --surface: #1c1e23;
+    --text: #eceae7;
+    --text-muted: #b0aaa2;
+    --border: #35383f;
+    --code-bg: #21242a;
+    --focus: #7fa9ff;
+  }
+}
+
+/* ------------------------------------------------------------------ base -- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0 1rem;
+  background: var(--bg);
+  color: var(--text);
+  /* >=16px, or iOS Safari zooms the submit form on focus (§6.3). */
+  font: var(--step-0) / 1.6 system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  /* Fluid by default — a centred column with a max-width, never a fixed one. */
+  max-width: var(--page-max);
+  margin-inline: auto;
+  overflow-wrap: break-word;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.2;
+  text-wrap: balance;
+  margin: 1.6em 0 0.5em;
+}
+
+h1 {
+  font-size: var(--step-4);
+  margin-top: 0.6em;
+}
+h2 {
+  font-size: var(--step-3);
+}
+h3 {
+  font-size: var(--step-1);
+}
+
+p,
+ul,
+ol {
+  max-width: var(--measure);
+}
+
+a {
+  color: var(--brand-text);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
+
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* Visible focus, and only for keyboard users. */
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.lede {
+  font-size: var(--step-1);
+  color: var(--text-muted);
+}
+
+.note {
+  border-left: 3px solid var(--brand);
+  padding: 0.1rem 0 0.1rem 0.9rem;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------ skip link -- */
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--focus);
+  z-index: 10;
+}
+
+.skip-link:focus {
+  left: 0.5rem;
+  top: 0.5rem;
+}
+
+/* --------------------------------------------------------------- header -- */
+
+.site-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 1rem 0 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.site-header__home {
+  display: inline-flex;
+  /* The whole logo is the tap target. */
+  min-height: var(--tap);
+  align-items: center;
+}
+
+.site-header__home img {
+  width: 128px;
+  height: 45px;
+}
+
+.site-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.1rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: none;
+}
+
+.site-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  text-decoration: none;
+}
+
+.site-nav a:hover,
+.site-nav a:focus-visible {
+  text-decoration: underline;
+}
+
+/* ----------------------------------------------------------------- main -- */
+
+main {
+  padding-bottom: 2.5rem;
+}
+
+section {
+  margin-block: 1.5rem;
+}
+
+.steps {
+  list-style: none;
+  counter-reset: step;
+  padding: 0;
+  max-width: none;
+}
+
+.steps > li {
+  counter-increment: step;
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  padding: 1rem;
+  margin-block: 1rem;
+}
+
+.steps > li > h3 {
+  margin-top: 0;
+}
+
+.steps > li > h3::before {
+  content: counter(step) '. ';
+  color: var(--brand-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------- code + badges -- */
+
+code {
+  background: var(--code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+/*
+ * §6.3: a long snippet line scrolls INSIDE its own container. The page itself
+ * must never scroll sideways.
+ */
+pre.code {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.9rem;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+pre.code code {
+  background: none;
+  padding: 0;
+  white-space: pre;
+}
+
+.badge-preview {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0.9rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+}
+
+/* The previews are deliberately fixed light/dark — they exist to show what the
+   badge looks like against each background, so they must not follow the theme. */
+.badge-preview--light {
+  background: #fff;
+}
+
+.badge-preview--light a {
+  color: #a04c00;
+}
+
+.badge-preview--dark {
+  background: #16171b;
+}
+
+.badge-preview--dark a {
+  color: #f0913c;
+}
+
+/* --------------------------------------------------------------- footer -- */
+
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding: 1rem 0 2rem;
+  color: var(--text-muted);
+  font-size: 0.925rem;
+}
+
+.site-footer p {
+  margin: 0.35rem 0;
+}
+
+.site-footer a {
+  display: inline-block;
+  padding: 0.25rem 0;
+}
+
+.site-footer__note {
+  color: var(--text-muted);
+}
+
+/* -------------------------------------------------------- wider screens -- */
+
+@media (min-width: 40rem) {
+  body {
+    padding-inline: 1.5rem;
+  }
+
+  .site-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+  }
+
+  .site-nav ul {
+    gap: 1.25rem;
+  }
+
+  .steps > li {
+    padding: 1.25rem 1.5rem;
+  }
+}
+
+@media (min-width: 60rem) {
+  :root {
+    --step-4: 2.6rem;
+  }
+}
+
+/* Respect a reduced-motion preference. Nothing animates today; this keeps that
+   true if anything is added later. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
