@@ -18,6 +18,7 @@ import { closeDb, createDb } from './db/index.js';
 import { seedSelfListing } from './db/seed.js';
 import { backupDir, createBackupJob } from './jobs/backup.js';
 import { createRevalidator } from './jobs/revalidate.js';
+import { createRsscloudPing } from './jobs/rsscloud.js';
 import { loadIpHmacKey } from './lib/iphash.js';
 import { ensureDataDirectory, probeDataDirectory } from './storage.js';
 import { createFetcher } from './verify/fetch.js';
@@ -122,8 +123,19 @@ if (backups.start()) {
   });
 }
 
+// §6.4: tell our rssCloud server the feed may have changed. **Started from inside the
+// listening callback, deliberately** — nothing about a third-party host may delay or
+// fail our own startup, and the ping itself is a timer a couple of seconds later.
+// Blog posts ship inside the image, so a restart is exactly when the feed changes; the
+// cloud server re-fetches and only notifies anyone if it really did.
+const rsscloud = createRsscloudPing({ config, log });
+
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   log('listening', { port: info.port, siteUrl: config.siteUrl });
+
+  if (rsscloud.start()) {
+    log('rsscloud.scheduled', { ping: config.rsscloudPingUrl });
+  }
 });
 
 /**
@@ -154,6 +166,9 @@ function shutdown(signal) {
   // the process open, but a backup that starts copying pages while we are closing the
   // database can.
   backups.stop();
+  // A pending ping is unref'd and harmless, but a container that is stopped two
+  // seconds after it started should not still reach out on its way down.
+  rsscloud.stop();
 
   // Docker's grace period is 10s. Give in-flight requests most of it, then stop
   // waiting — a keep-alive connection that never closes must not turn a clean

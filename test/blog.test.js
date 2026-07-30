@@ -152,6 +152,10 @@ test('same-date, same-time posts are ordered by filename rather than by readdir'
 const config = {
   siteUrl: 'https://iheartrss.com/',
   linkbackHosts: ['iheartrss.com', 'www.iheartrss.com'],
+  rsscloudDomain: 'rpc.rsscloud.io',
+  rsscloudPort: 80,
+  rsscloudPath: '/pleaseNotify',
+  rsscloudProtocol: 'http-post',
 };
 
 /** The `<item>` blocks of a feed document, in order. */
@@ -231,6 +235,40 @@ test('/feed.xml with real posts passes OUR OWN validator, source namespace and a
   assert.equal(parsed.ok, true, parsed.reason);
   assert.equal(parsed.features.has_source_ns, true);
   assert.equal(parsed.features.source_ns_prefix, 'source');
+  // §6.4: we now run against an rssCloud server, so our own feed carries both forms
+  // — and the detector that awards other people the badge has to award it to us.
+  assert.equal(parsed.features.has_rsscloud, true);
+  assert.equal(parsed.features.rsscloud_style, 'both');
+  assert.deepEqual(parsed.features.cloud, {
+    domain: 'rpc.rsscloud.io',
+    port: '80',
+    path: '/pleaseNotify',
+    registerProcedure: '',
+    protocol: 'http-post',
+  });
+  assert.equal(parsed.features.cloud_url, 'https://rpc.rsscloud.io/pleaseNotify');
+});
+
+test('the channel advertises the rssCloud server in both forms', () => {
+  // §6.4: `<cloud>` for every rssCloud client that ever shipped, and
+  // `<source:cloud>` because it is the element we detect on other people's feeds.
+  // The five attributes are the ones the RSS spec requires; `registerProcedure` is
+  // present but empty, which is what http-post asks for.
+  const xml = renderFeed({ config, posts: [] });
+  const { channel } = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: '@_',
+    parseTagValue: false,
+  }).parse(xml).rss;
+
+  assert.deepEqual(channel.cloud, {
+    '@_domain': 'rpc.rsscloud.io',
+    '@_port': '80',
+    '@_path': '/pleaseNotify',
+    '@_registerProcedure': '',
+    '@_protocol': 'http-post',
+  });
+  assert.equal(channel['source:cloud'], 'https://rpc.rsscloud.io/pleaseNotify');
 });
 
 test('GET /blog lists every post, newest first, linking each permalink', async () => {

@@ -16,17 +16,18 @@ cp .env.example .env      # optional; every value has a working default
 pnpm dev                  # http://localhost:3000
 ```
 
-| Command                  | What it does                                                                                                      |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `pnpm dev`               | Watch-mode server.                                                                                                |
-| `pnpm start`             | Runs the server the way the container does.                                                                       |
-| `pnpm test`              | `node --test` over `test/`.                                                                                       |
-| `pnpm lint`              | ESLint. `pnpm lint:fix` applies what it can.                                                                      |
-| `pnpm format`            | Prettier over the repo. `pnpm format:check` only reports.                                                         |
-| `pnpm verify <url>`      | Run the verification pipeline against a real site.                                                                |
-| `node bin/backup.js`     | Back up the database now, and verify the copy. In production: `docker compose exec iheartrss node bin/backup.js`. |
-| `pnpm docker:dry-run`    | Rehearse the manual image build: runs the quality checks and prints the tags it would push, without pushing.      |
-| `pnpm docker:build-push` | Build and push a multi-platform image to ghcr.io by hand. The out-of-band path; releases normally do this.        |
+| Command                  | What it does                                                                                                               |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`               | Watch-mode server.                                                                                                         |
+| `pnpm start`             | Runs the server the way the container does.                                                                                |
+| `pnpm test`              | `node --test` over `test/`.                                                                                                |
+| `pnpm lint`              | ESLint. `pnpm lint:fix` applies what it can.                                                                               |
+| `pnpm format`            | Prettier over the repo. `pnpm format:check` only reports.                                                                  |
+| `pnpm verify <url>`      | Run the verification pipeline against a real site.                                                                         |
+| `node bin/backup.js`     | Back up the database now, and verify the copy. In production: `docker compose exec iheartrss node bin/backup.js`.          |
+| `pnpm rsscloud:ping`     | Ping our rssCloud server for `/feed.xml` by hand. The server does this once per boot; this is for when that didn't happen. |
+| `pnpm docker:dry-run`    | Rehearse the manual image build: runs the quality checks and prints the tags it would push, without pushing.               |
+| `pnpm docker:build-push` | Build and push a multi-platform image to ghcr.io by hand. The out-of-band path; releases normally do this.                 |
 
 `./data/` is created on first boot and is gitignored. Configuration is
 documented in `.env.example` and validated at startup: a bad value stops the

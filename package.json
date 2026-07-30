@@ -13,6 +13,7 @@
     "start": "node src/server.js",
     "test": "node --test \"test/**/*.test.js\"",
     "verify": "node bin/verify.js",
+    "rsscloud:ping": "node bin/rsscloud.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

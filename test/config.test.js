@@ -246,3 +246,41 @@ test('the backup knobs default to §9 values and are validated', () => {
 test('BACKUP_ENABLED is off under NODE_ENV=test', () => {
   assert.equal(loadConfig({ NODE_ENV: 'test' }).backupEnabled, false);
 });
+
+// §6.4's rssCloud support: the `<cloud>` attributes the feed advertises, plus the
+// restart ping. Defaults are rpc.rsscloud.io's own documented values.
+test('the rssCloud knobs default to rpc.rsscloud.io and are validated', () => {
+  const config = loadConfig({});
+
+  assert.equal(config.rsscloudEnabled, true);
+  assert.equal(config.rsscloudPingUrl, 'https://rpc.rsscloud.io/ping');
+  assert.equal(config.rsscloudDomain, 'rpc.rsscloud.io');
+  assert.equal(config.rsscloudPort, 80);
+  assert.equal(config.rsscloudPath, '/pleaseNotify');
+  assert.equal(config.rsscloudProtocol, 'http-post');
+
+  const custom = loadConfig({
+    RSSCLOUD_ENABLED: 'false',
+    RSSCLOUD_PING_URL: 'http://localhost:5337/ping',
+    RSSCLOUD_DOMAIN: 'cloud.example',
+    RSSCLOUD_PORT: '5337',
+    RSSCLOUD_PATH: '/notify',
+    RSSCLOUD_PROTOCOL: 'https-post',
+  });
+  assert.equal(custom.rsscloudEnabled, false);
+  assert.equal(custom.rsscloudPingUrl, 'http://localhost:5337/ping');
+  assert.equal(custom.rsscloudDomain, 'cloud.example');
+  assert.equal(custom.rsscloudPort, 5337);
+  assert.equal(custom.rsscloudPath, '/notify');
+  assert.equal(custom.rsscloudProtocol, 'https-post');
+
+  // A ping URL that isn't a URL means every restart logs a failure nobody reads.
+  assert.throws(() => loadConfig({ RSSCLOUD_PING_URL: 'rpc.rsscloud.io' }), /PING_URL/);
+  assert.throws(() => loadConfig({ RSSCLOUD_PORT: '0' }), /RSSCLOUD_PORT/);
+});
+
+test('RSSCLOUD_ENABLED is off under NODE_ENV=test', () => {
+  // Same rule as REVALIDATE_ENABLED/BACKUP_ENABLED: a test run must not be able to
+  // ask a stranger's server to fetch anything.
+  assert.equal(loadConfig({ NODE_ENV: 'test' }).rsscloudEnabled, false);
+});
