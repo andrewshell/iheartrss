@@ -25,6 +25,13 @@ import { layout } from './layout.js';
  * it says what the site *is* instead.
  */
 export function homePage({ config, memberCount = 0 }) {
+  // Built from `config.siteUrl`, never hardcoded: FeedLand is handed this URL and
+  // fetches it itself, so it has to be whatever origin is actually serving the
+  // OPML. (A consequence worth knowing: FeedLand fetches it **server-side**, so
+  // pointing SITE_URL at localhost cannot work — the reader is empty in
+  // development and only populates on the deployed origin.)
+  const opmlUrl = new URL('/subscriptions.opml', config.siteUrl).href;
+
   const body = html`
 <section class="hero">
   <h1>A directory of people who love RSS</h1>
@@ -43,8 +50,35 @@ export function homePage({ config, memberCount = 0 }) {
   </p>
 </section>
 
-<!-- §10: the feed reader lands here. Everything above it is deliberately short so
-     that it starts at or near the fold rather than three screens down. -->
+<!-- §10: the feed reader. Everything above it is deliberately short so that it
+     starts at or near the fold rather than three screens down. -->
+<section class="blogroll">
+  <h2>What members are writing</h2>
+  <!-- Deliberately OUTSIDE the reader element, and it stays on the page forever.
+       The component clears its own innerHTML before rendering — including when
+       FeedLand errors and it has nothing to render — so anything inside the
+       element is gone the moment the script runs. Without a line out here, a
+       FeedLand outage leaves a heading above an empty box and no way onward. -->
+  <p class="blogroll__note">
+    Newest first, from the <a href="/subscriptions.opml">members&rsquo; OPML list</a>.
+    Open a name to see its recent items, or <a href="/sites">browse every member</a>.
+  </p>
+  <blog-roll opmlurl="${opmlUrl}">
+    <!-- Inside the element, so it is replaced the moment the reader renders. This
+         is what a visitor without JavaScript — or before the fetch returns — gets:
+         not a spinner, but the two links that do the same job by hand. -->
+    <p>
+      <a href="/sites">See every member site</a>, or subscribe to
+      <a href="/subscriptions.opml">the whole list as OPML</a> in your own reader.
+    </p>
+  </blog-roll>
+  <noscript>
+    <p>
+      The reader needs JavaScript. Without it, <a href="/sites">the member list</a>
+      and <a href="/subscriptions.opml">the OPML file</a> have the same feeds.
+    </p>
+  </noscript>
+</section>
 `;
 
   return layout({
@@ -53,5 +87,8 @@ export function homePage({ config, memberCount = 0 }) {
       'A directory for people who love RSS. Add the badge, submit your site, get listed in a public OPML subscription list.',
     body,
     config,
+    // Only this page. See `layout`'s note: the shell renders every page, and the
+    // reader has an element to attach to on exactly one of them.
+    scripts: ['/blog-roll.js'],
   });
 }

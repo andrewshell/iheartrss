@@ -17,6 +17,11 @@ const PUBLIC_DIR = fileURLToPath(new URL('../../public/', import.meta.url));
 const CONTENT_TYPES = {
   '.svg': 'image/svg+xml; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
+  // §10's feed reader. The type is load-bearing rather than cosmetic: every
+  // response carries `X-Content-Type-Options: nosniff`, so the octet-stream
+  // fallback below would make the browser refuse to execute the file — and the
+  // reader would simply never appear, with nothing in the network log to say why.
+  '.js': 'text/javascript; charset=utf-8',
   '.xml': 'text/xml; charset=utf-8',
   '.ico': 'image/x-icon',
   '.png': 'image/png',

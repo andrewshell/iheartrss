@@ -25,8 +25,9 @@ FeedLand (and any other OPML-aware reader) can subscribe to.
 
 ### Out of scope (v1, noted where it would hook in)
 
-- The feed reader / river on the homepage — coming after launch, and the reason the
-  homepage carries no member list. §10 covers the seam and what it would cost.
+- The feed reader / river on the homepage — out of scope for v1, and the reason the
+  homepage carries no member list. **Shipped after launch** by embedding FeedLand, which
+  left v1's architecture untouched; see §10.
 - User accounts, editing your own listing, email notifications.
 - Atom feed support (decision below).
 - rssCloud *subscription* — we detect and record other sites' cloud support, we don't
@@ -2082,11 +2083,14 @@ recovery and a rebuild from nothing.
 
 ## 10. The feed reader, and what the homepage is for
 
-**The homepage does not list members.** The feed reader coming after launch is the
-discovery surface — a list of names is a worse version of the same thing, and shipping one
-now means building something to delete. So v1's homepage is: what this is, how to join, the
-a member count, a link to `/submit`, and an explicitly reserved slot where the reader
-will go.
+**The homepage does not list members.** The feed reader is the discovery surface — a list
+of names is a worse version of the same thing, and shipping one means building something
+to delete. So the homepage is: what this is, how to join, a member count, a link to
+`/submit`, and the reader.
+
+**The reader has now landed** (`feat/blogroll`). Everything below that reads as a plan is
+kept because it is the reasoning; what actually shipped is recorded under "What the
+reader is" at the end.
 
 **Trimmed further during implementation, once it could be looked at.** An earlier draft
 also put the three "how to join" steps and the latest blog post on `/`. Rendered, that
@@ -2104,11 +2108,11 @@ the fold on a laptop, which defeats the point of giving it this page.
   site *is* instead — which is also the more useful thing for a search result to carry.
 
 `/sites` still exists, for a different job: letting someone confirm they actually got
-listed, and showing publicly what's in the OPML. That need doesn't go away when the reader
-arrives — arguably it matters more, since the OPML is otherwise machine-readable only.
+listed, and showing publicly what's in the OPML. That need did not go away when the reader
+arrived — arguably it matters more, since the OPML is otherwise machine-readable only.
 Newest-first ordering is deliberate: right after you submit, you're at the top.
 
-**What changes when the reader lands.** Two paths, and they cost very differently:
+**Two paths were on the table, and they cost very differently:**
 
 - *Embedding FeedLand* — it renders the river from our OPML. Nearly free; drop it into the
   reserved slot and v1's architecture is untouched.
@@ -2119,12 +2123,43 @@ Newest-first ordering is deliberate: right after you submit, you're at the top.
 Nothing in v1 forecloses either. A future `items` table keyed on `sites.id` slots in
 alongside the current schema without migrating anything, and the revalidation scheduler in
 §8 is already the right shape to grow into a polling loop — same batching, same politeness
-delay, same `last_checked_at` cursor. Worth keeping that in mind when writing it, without
-building for it now.
+delay, same `last_checked_at` cursor. Worth keeping that in mind, without building for it
+now.
 
-At that point the homepage's centre of gravity shifts to the river, and the submit form
-likely moves out to its own `/submit` page with the homepage keeping only a "join" link.
-The route already exists as a POST target, so that's a template change, not a rewrite.
+### What the reader is
+
+**We took the first path: embedding FeedLand.** The consequence is the one the choice
+promised — **v1's architecture is untouched.** No per-member polling, no `items` table, no
+new scheduler, no new state of any kind. The server-side diff is a static file, a homepage
+section and two CSP directives.
+
+- `public/blog-roll.js` defines a `<blog-roll opmlurl="…">` custom element. It asks
+  FeedLand for `getfeedlistfromopml` on our own `/subscriptions.opml`, renders one
+  `<details>` per feed newest-first, and fetches `getfeeditems` for that feed only when the
+  row is opened. It is **our file on our origin** — nothing is `<script src>`'d from a
+  third party.
+- The OPML URL is built from `config.siteUrl`, never hardcoded. **FeedLand fetches that URL
+  server-side**, which means a `SITE_URL` pointing at localhost cannot work: the reader is
+  empty in development and populates only on the deployed origin. Expected, not a bug.
+- **CSP widened by exactly two directives** (§6): `script-src` from `'none'` to `'self'`,
+  and `connect-src` to `'self' https://feedland.com`. Still no `'unsafe-inline'` — there is
+  still no inline JS anywhere in the app, and an injected inline script still cannot run.
+- **Progressive enhancement is deliberate**, because `render()` clears the element's
+  innerHTML before appending and appends nothing when FeedLand errors. So the section
+  carries fallback links *inside* the element (replaced on render — this is the no-JS
+  view), a static line *outside* it that survives a FeedLand outage, and a `<noscript>`.
+
+**The privacy consequence, stated plainly.** The reader runs in the visitor's browser, so
+**FeedLand sees the IP address of anyone who loads our homepage**, and that it was our
+homepage. The old `/about` sentence — "no analytics, no third-party scripts and no
+tracking of any kind" — stayed *literally* true (the script is ours, self-hosted) and
+stopped being honest, so it was rewritten to name FeedLand and say what it sees. Every
+other page on the site still makes no third-party request at all, and there are still no
+analytics, no tracking and no cookies for visitors. Same rule as the admin disclosure and
+§4's note on `IP_HMAC_KEY`: say the awkward thing rather than hide behind a technicality.
+
+Should the homepage's centre of gravity shift further to the river, the submit form is
+already out on `/submit`, so that is a template change, not a rewrite.
 
 ---
 
@@ -2294,7 +2329,7 @@ Not blocking — sensible defaults are assumed in the plan and each is cheap to 
    created and verified in-browser at final sizes. See §6.1. *Deferred:* a maskable/PWA
    icon variant — numbers computed in §6.1, needed only once there's a web app manifest.
 2. ~~Directory ordering on the homepage.~~ **Resolved:** there is no directory on the
-   homepage — the feed reader will serve that purpose after launch. `/sites` remains as a
+   homepage — the feed reader serves that purpose, and now does. `/sites` remains as a
    verification page, newest first. See §10.
 3. ~~Do we require the link-back on the exact submitted URL?~~ **Resolved:** the link-back
    is required on the feed's `<channel><link>` target, because that's the URL the OPML

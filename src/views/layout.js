@@ -30,8 +30,17 @@ const SITE_NAME = 'I ♥ RSS';
  * older blogroll readers do, and a string-comparing parser would miss it. Two lines
  * is cheap insurance. `subscriptions` is skipped: `following` already covers the one
  * consumer that recognises it.
+ *
+ * `scripts` is a list of same-origin script paths, and it is a **parameter rather
+ * than a line in this template** because this function renders every page. §10's
+ * feed reader is wanted on `/` and nowhere else; hardcoding its tag here would
+ * make /about, /guide and the rest download and execute a component that has no
+ * element to attach to. Each entry becomes a `defer`red external tag — deferred
+ * because the element it hydrates is below the fold and blocking the parser on the
+ * one page that most needs to be fast is the wrong trade, external because the CSP
+ * allows `script-src 'self'` and deliberately not `'unsafe-inline'`.
  */
-export function layout({ title, body, config, description }) {
+export function layout({ title, body, config, description, scripts = [] }) {
   const fullTitle = title ? `${title} — ${SITE_NAME}` : SITE_NAME;
   const feedUrl = new URL('/feed.xml', config.siteUrl).href;
   const opmlUrl = new URL('/subscriptions.opml', config.siteUrl).href;
@@ -53,6 +62,7 @@ ${description ? html`<meta name="description" content="${description}">` : ''}
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
     <link rel="manifest" href="/site.webmanifest">
 <link rel="stylesheet" href="/style.css">
+${scripts.map((src) => html`<script src="${src}" defer></script>`)}
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to main content</a>

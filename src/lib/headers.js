@@ -8,14 +8,27 @@
  */
 
 /**
- * There is no inline JS and no inline `style=` anywhere in the app — every page is
- * server-rendered HTML linking a single same-origin stylesheet — so the policy can
- * be the strict one §6 asks for rather than the `'unsafe-inline'` compromise most
- * apps settle for.
+ * There is still no inline JS and no inline `style=` anywhere in the app — every
+ * page is server-rendered HTML linking a single same-origin stylesheet, and the one
+ * script we serve is a separate same-origin file — so the policy stays close to the
+ * strict one §6 asks for rather than the `'unsafe-inline'` compromise most apps
+ * settle for.
  *
  *  * `default-src 'none'` then allow-listing is the direction that fails safe: a
  *    fetch type nobody thought about is refused rather than inherited.
+ *  * `script-src 'self'`: §10's feed reader (`/blog-roll.js`) is the app's only
+ *    script, and it is our file on our origin. Deliberately **not**
+ *    `'unsafe-inline'` — no page carries an inline `<script>` or an event-handler
+ *    attribute, so an injected one is still refused, which is the property worth
+ *    keeping. No third-party script host is allow-listed either: the reader is
+ *    self-hosted precisely so this line does not have to name anyone else.
+ *  * `style-src 'self'`: one stylesheet, ours. No inline `style=` anywhere.
  *  * `img-src 'self'`: the only images are our own badge SVGs and the favicons.
+ *  * `connect-src 'self' https://feedland.com`: the feed reader runs in the
+ *    visitor's browser and calls FeedLand's `getfeedlistfromopml` and
+ *    `getfeeditems` from there. One host, https only, and no wildcard — a
+ *    compromised script cannot exfiltrate to anywhere else. The privacy cost of
+ *    that request (FeedLand sees the visitor's IP) is stated on /about.
  *  * `form-action 'self'`: /submit, /check, /report and /admin post to us. Note
  *    that CSP is a second line here, not the first — §6's `Sec-Fetch-Site`
  *    check is what actually stops a cross-origin form driving our fetcher.
@@ -23,14 +36,18 @@
  *    modern replacement for `X-Frame-Options: DENY`.
  *  * `base-uri 'none'`: an injected `<base>` would silently repoint every
  *    relative URL on the page, including the form actions above.
+ *
+ * Still forbidden, and worth naming: inline and `eval`'d script, script from any
+ * other origin, objects/plugins, framing us, `<base>` rewriting, and every fetch
+ * type `default-src 'none'` catches by omission.
  */
 const CSP = [
   "default-src 'none'",
-  "script-src 'none'",
+  "script-src 'self'",
   "style-src 'self'",
   "img-src 'self'",
   "font-src 'self'",
-  "connect-src 'self'",
+  "connect-src 'self' https://feedland.com",
   "form-action 'self'",
   "frame-ancestors 'none'",
   "base-uri 'none'",
