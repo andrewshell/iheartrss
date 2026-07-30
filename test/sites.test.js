@@ -136,6 +136,42 @@ test('/sites badges the four states §6 names, and explains them in a legend', a
   assert.doesNotMatch(plainRow, /badge--failing/);
 });
 
+/**
+ * The operator's question when member #1 showed only `source ns`: does a row with
+ * both features actually render both badges?
+ *
+ * It does — `badges()` in `views/sites.js` pushes each independently, and this was
+ * read and confirmed correct at the time the bug was found. The fault was upstream,
+ * in `db/seed.js`, which hardcoded `has_rsscloud: false`. This test exists so the
+ * view is not re-suspected next time, and so the two badges cannot become mutually
+ * exclusive by accident.
+ */
+test('a member with both features renders BOTH badges, not just the first', async () => {
+  const { app, queries } = withApp();
+
+  queries.insertSite(
+    member({
+      n: 1,
+      title: 'Both Features',
+      has_source_ns: true,
+      has_rsscloud: true,
+      rsscloud_style: 'both',
+    }),
+  );
+
+  const html = await (await app.request('/sites')).text();
+  // Scoped to the member's own <li>, so the legend's specimen badges — which carry
+  // the same classes — cannot make this pass on their own.
+  const start = html.indexOf('id="site-');
+  const li = html.slice(start, html.indexOf('</li>', start));
+
+  assert.match(li, /class="badge badge--source-ns"/);
+  assert.match(li, /class="badge badge--rsscloud"/);
+  // …and not the "nothing to report" fallback that a single-badge-only bug would
+  // have to choose between.
+  assert.doesNotMatch(li, /badge--none/);
+});
+
 test('/sites omits dropped, removed and hidden members', async () => {
   const { app, queries, setStatus } = withApp();
 

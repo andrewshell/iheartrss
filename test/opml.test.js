@@ -14,11 +14,22 @@ import assert from 'node:assert/strict';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 
 import { createApp } from '../src/app.js';
+import { renderFeed } from '../src/blog/feed.js';
 import { createDb } from '../src/db/index.js';
 import { seedSelfListing } from '../src/db/seed.js';
 import { createOpmlDocument, renderOpml } from '../src/lib/opml.js';
+import { parseFeed } from '../src/verify/feed.js';
 
-const config = { siteUrl: 'https://iheartrss.com/' };
+// The rssCloud settings are `config.js`'s defaults. They matter here because the
+// self-listing seed now derives its feature flags by rendering `/feed.xml` and
+// parsing it — see the "Member #1" tests below.
+const config = {
+  siteUrl: 'https://iheartrss.com/',
+  rsscloudDomain: 'rpc.rsscloud.io',
+  rsscloudPort: 80,
+  rsscloudPath: '/pleaseNotify',
+  rsscloudProtocol: 'http-post',
+};
 
 function outline(overrides = {}) {
   return {
@@ -611,19 +622,126 @@ test('the self-listing seed is a direct INSERT, since /submit refuses it', async
   assert.equal(only['@title'], 'I ♥ RSS');
 });
 
+/**
+ * Both sides of this are *derived*, never restated: the left from the seed, the
+ * right from running our own renderer through our own validator. That is the point
+ * — the seed used to assert `has_rsscloud: false` in a literal, which silently went
+ * stale the moment the feed grew a `<cloud>`. Written this way, a feed that gains or
+ * loses a feature moves this test and the seed together.
+ */
+test('the seeded row carries the features our own feed actually declares', () => {
+  const { queries } = withDb();
+  seedSelfListing({ queries, config });
+
+  const parsed = parseFeed(renderFeed({ config, posts: [] }));
+  assert.equal(parsed.ok, true, 'our own feed must satisfy our own validator');
+
+  const row = queries.getSiteByUrl('https://iheartrss.com/');
+  assert.equal(Boolean(row.has_source_ns), parsed.features.has_source_ns);
+  assert.equal(Boolean(row.has_rsscloud), parsed.features.has_rsscloud);
+  assert.equal(row.rsscloud_style, parsed.features.rsscloud_style ?? null);
+
+  // An anchor from outside the code: production's /feed.xml carries both `<cloud>`
+  // and `<source:cloud>`, so today those derived values are these.
+  assert.equal(row.has_source_ns, 1);
+  assert.equal(row.has_rsscloud, 1);
+  assert.equal(row.rsscloud_style, 'both');
+});
+
+/**
+ * The same class of bug as the feature flags, one field over. §8's `passColumns`
+ * writes `title`/`description` straight from the parsed feed on any non-304 Pass, so
+ * a hardcoded pair here is not "the value" — it is a value that survives exactly
+ * until the first successful revalidation and then changes under the operator. Both
+ * sides derived, for the same reason as above.
+ */
+test('the seeded row takes its title and description from our own channel', () => {
+  const { queries } = withDb();
+  seedSelfListing({ queries, config });
+
+  const parsed = parseFeed(renderFeed({ config, posts: [] }));
+  const row = queries.getSiteByUrl('https://iheartrss.com/');
+
+  assert.equal(row.title, parsed.title);
+  assert.equal(row.description, parsed.description);
+});
+
+/** The row the pre-rssCloud seed wrote, and what production is still serving. */
+function staleSelfListing() {
+  return {
+    url: 'https://iheartrss.com/',
+    submitted_url: 'https://iheartrss.com/',
+    host: 'iheartrss.com',
+    path: '/',
+    feed_url: 'https://iheartrss.com/feed.xml',
+    title: 'I ♥ RSS',
+    description: 'A directory for people who love RSS.',
+    has_source_ns: true,
+    has_rsscloud: false,
+    rsscloud_style: undefined,
+    cloud_json: undefined,
+  };
+}
+
+test('an existing self-listing whose features went stale is refreshed on boot', () => {
+  const { db, queries } = withDb();
+  const id = queries.insertSite(staleSelfListing());
+
+  // The revalidation state machine owns these. A deploy must not look like a check.
+  db.prepare(
+    `UPDATE sites SET status = 'failing', failure_count = 2,
+       last_checked_at = '2020-01-01T00:00:00.000Z',
+       last_verified_at = '2020-01-02T00:00:00.000Z',
+       created_at = '2019-01-01T00:00:00.000Z',
+       feed_etag = 'W/"seeded"', feed_last_modified = 'Wed, 01 Jan 2020 00:00:00 GMT'
+     WHERE id = ?`,
+  ).run(id);
+
+  const events = [];
+  const refreshed = seedSelfListing({
+    queries,
+    config,
+    log: (event) => events.push(event),
+  });
+
+  assert.equal(refreshed, true, 'a stale row is a write, not a no-op');
+  assert.deepEqual(events, ['seed.self_listing_refreshed']);
+
+  const row = queries.getSiteById(id);
+  // Healed to what our feed actually declares — without waiting up to six days for
+  // the §8 revalidation cadence to notice.
+  assert.equal(row.has_rsscloud, 1);
+  assert.equal(row.rsscloud_style, 'both');
+  assert.equal(JSON.parse(row.cloud_json).cloud.domain, 'rpc.rsscloud.io');
+
+  // Scope: features only. Everything below belongs to the revalidation state machine.
+  assert.equal(row.status, 'failing');
+  assert.equal(row.failure_count, 2);
+  assert.equal(row.created_at, '2019-01-01T00:00:00.000Z');
+  assert.equal(row.last_checked_at, '2020-01-01T00:00:00.000Z');
+  assert.equal(row.last_verified_at, '2020-01-02T00:00:00.000Z');
+  assert.equal(row.feed_etag, 'W/"seeded"');
+  assert.equal(row.feed_last_modified, 'Wed, 01 Jan 2020 00:00:00 GMT');
+});
+
 test('seeding is idempotent, so every boot can run it', () => {
   const { queries } = withDb();
 
   assert.equal(seedSelfListing({ queries, config }), true);
   const afterFirst = queries.getDirectoryVersion().version;
 
-  assert.equal(seedSelfListing({ queries, config }), false);
-  assert.equal(seedSelfListing({ queries, config }), false);
+  const events = [];
+  const log = (event) => events.push(event);
+  assert.equal(seedSelfListing({ queries, config, log }), false);
+  assert.equal(seedSelfListing({ queries, config, log }), false);
 
   assert.equal(queries.countSites(), 1);
   // A no-op seed must not bump `version` either — otherwise every restart
   // invalidates every subscriber's cached copy for nothing.
   assert.equal(queries.getDirectoryVersion().version, afterFirst);
+  // …and it must not log either: a refresh line on every restart is noise that
+  // trains the operator to ignore the line that matters.
+  assert.deepEqual(events, []);
 });
 
 test('the seed follows SITE_URL rather than hardcoding the domain', () => {
