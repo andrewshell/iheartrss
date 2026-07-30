@@ -1,6 +1,6 @@
 import { html } from 'hono/html';
 
-import { layout } from './layout.js';
+import { layout, wordmark } from './layout.js';
 import { rejectionMessage } from './messages.js';
 
 /**
@@ -51,8 +51,6 @@ export function submitForm({ action = '/submit', value = '', autofocus = false }
  * rejection is here to read it, not to re-read the instructions.
  */
 export function submitPage({ config, result = null, submitted = '' }) {
-  const badgeImg = '/iheartrss.svg';
-
   const body = html`
 <section class="submit">
   <h1>Submit your site</h1>
@@ -71,7 +69,7 @@ export function submitPage({ config, result = null, submitted = '' }) {
         both count &mdash; we look at the link, not the picture.
       </p>
       <p>
-        <a href="/"><img src="${badgeImg}" alt="I love RSS" width="88" height="31"></a>
+        <a href="/">${wordmark({ width: 88, height: 31, alt: 'I love RSS' })}</a>
       </p>
       <p><a href="/badge">Get the badge and copy-paste snippets &rarr;</a></p>
     </li>
