@@ -69,6 +69,10 @@ test('every response carries the four §6 security headers', async () => {
     assert.match(csp, /(?:^|;\s*)script-src 'self'/, path);
     assert.match(csp, /frame-ancestors 'none'/, path);
     assert.match(csp, /base-uri 'none'/, path);
+    // Every page links /site.webmanifest, and manifests do not fall back to
+    // img-src or anything else — omit this and `default-src 'none'` blocks the
+    // manifest on every page load, which is how the omission was found.
+    assert.match(csp, /(?:^|;\s*)manifest-src 'self'/, path);
   }
 });
 

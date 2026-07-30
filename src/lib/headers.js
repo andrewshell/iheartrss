@@ -24,6 +24,10 @@
  *    self-hosted precisely so this line does not have to name anyone else.
  *  * `style-src 'self'`: one stylesheet, ours. No inline `style=` anywhere.
  *  * `img-src 'self'`: the only images are our own badge SVGs and the favicons.
+ *  * `manifest-src 'self'`: every page links `/site.webmanifest`. Without this
+ *    line the manifest inherits `default-src 'none'` and the browser refuses to
+ *    load it — the exact fail-safe described above, doing its job on a fetch type
+ *    we did in fact think about, just not when the list was written.
  *  * `connect-src 'self' https://feedland.com`: the feed reader runs in the
  *    visitor's browser and calls FeedLand's `getfeedlistfromopml` and
  *    `getfeeditems` from there. One host, https only, and no wildcard — a
@@ -47,6 +51,7 @@ const CSP = [
   "style-src 'self'",
   "img-src 'self'",
   "font-src 'self'",
+  "manifest-src 'self'",
   "connect-src 'self' https://feedland.com",
   "form-action 'self'",
   "frame-ancestors 'none'",
