@@ -433,8 +433,14 @@ export function passColumns(row, result) {
   };
 }
 
-/** `verify/feed.js`'s feature shape → the `sites` columns, as in §5 Step 7. */
-function featureColumns(features = {}) {
+/**
+ * `verify/feed.js`'s feature shape → the `sites` columns, as in §5 Step 7.
+ *
+ * Exported so `db/seed.js` maps member #1's features through the *same* function a
+ * Pass does. A second copy of this mapping is how the seed and this job come to
+ * disagree about a row they both write.
+ */
+export function featureColumns(features = {}) {
   const cloud =
     features.cloud === undefined && features.cloud_url === undefined
       ? undefined

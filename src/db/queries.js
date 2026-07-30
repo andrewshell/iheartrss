@@ -265,6 +265,26 @@ export function createQueries(db) {
        WHERE id = :id
     `),
 
+    /**
+     * The feature columns and nothing else, for `db/seed.js`'s self-listing refresh.
+     *
+     * A deliberately narrower statement than `updateSite`, which also zeroes
+     * `failure_count`, clears `optout_seen_at`/`last_error` and stamps both
+     * `last_verified_at` and `last_checked_at`. Those are the §8 state machine's, and
+     * a *deploy* must not read back as a successful check — that would silently
+     * restart the 3-strike grace period and push the next real revalidation out by a
+     * full interval. `feed_etag`/`feed_last_modified` are left alone for the same
+     * reason: they describe a document we fetched, and the seed fetched nothing.
+     */
+    refreshSiteFeatures: db.prepare(`
+      UPDATE sites
+         SET has_source_ns  = :has_source_ns,
+             has_rsscloud   = :has_rsscloud,
+             rsscloud_style = :rsscloud_style,
+             cloud_json     = :cloud_json
+       WHERE id = :id
+    `),
+
     reviveSite: db.prepare(
       "UPDATE sites SET status = 'active' WHERE id = :id AND status <> 'hidden'",
     ),
@@ -666,6 +686,26 @@ export function createQueries(db) {
       });
 
       if (revive) statements.reviveSite.run({ id });
+
+      statements.bumpDirectoryVersion.run();
+    },
+
+    /**
+     * Rewrite just the feature columns. Bumps `directory_version` like every other
+     * write helper: the OPML carries no badges, but `/sites` does and the row's
+     * identity is part of what we publish about a member.
+     *
+     * The caller is expected to have established that something actually differs —
+     * an unconditional call on every boot would bump `version` for nothing.
+     */
+    refreshSiteFeatures(id, features) {
+      statements.refreshSiteFeatures.run({
+        id,
+        has_source_ns: bool(features.has_source_ns),
+        has_rsscloud: bool(features.has_rsscloud),
+        rsscloud_style: opt(features.rsscloud_style),
+        cloud_json: opt(features.cloud_json),
+      });
 
       statements.bumpDirectoryVersion.run();
     },
