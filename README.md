@@ -99,22 +99,35 @@ picked up too, not only a new file.
 ## Deploying
 
 The stack runs under [dockge](https://github.com/louislam/dockge) behind an
-existing reverse proxy. Dockge builds from the stack directory, so the repo is
-cloned to the stack path and `docker-compose.yml` is picked up from the clone.
+existing reverse proxy.
 
-### 1. Clone into the stack directory
+**There is no clone of this repo on the box.** Dockge is a web UI over compose: you
+create a stack in the UI, paste in a compose file and a `.env`, and dockge writes
+them to `/opt/stacks/iheartrss/`. It then _pulls_ the published image. Three things
+follow from that, and they are the whole shape of this deployment:
 
-```sh
-sudo git clone https://github.com/andrewshell/iheartrss.git /opt/stacks/iheartrss
-cd /opt/stacks/iheartrss
-```
+- **The image is pulled, never built on the server.** Publish it from a workstation
+  with `pnpm docker:build-push` (see below).
+- **Blog posts ship inside the image.** There is no `content/` to bind-mount, so
+  publishing a post is: commit it, publish an image, redeploy. There is no
+  `./content` volume — mounting one would mask the posts with an empty directory.
+- **`./data` and `./secrets` are relative to the stack directory** that dockge
+  created, so the two prerequisites below are run there.
+
+### 1. Create the stack in dockge
+
+In dockge, **+ Compose** → name it `iheartrss` → paste the contents of
+[`docker-compose.yml`](docker-compose.yml) into the compose editor and the values
+from step 4 into the `.env` editor. **Do not deploy yet** — steps 2 and 3 have to
+happen first.
 
 ### 2. Create the data directory and chown it to uid 1000
 
-**Do this before the first `up`, not after it fails.**
+**Do this before the first deploy, not after it fails.** Use dockge's built-in
+terminal, or ssh, in `/opt/stacks/iheartrss`:
 
 ```sh
-mkdir -p data content
+mkdir -p data
 sudo chown 1000:1000 data
 ```
 
@@ -159,24 +172,35 @@ ADMIN_TOKEN=$(head -c 32 /dev/urandom | base64)
 # discovered from a member's email. healthchecks.io or self-hosted.
 HEALTHCHECK_PING_URL=
 
-# Optional overrides; the compose file passes these through with their defaults.
+# The published version to run. Pin an exact version rather than leaving it at
+# `latest` — "the previous latest" is not something you can name at 2am, and
+# being able to name it is the entire point of publishing images.
+IHEARTRSS_TAG=0.2.0
+
+# The public URL. Everything absolute (OPML htmlUrl, badge snippets, the feed's
+# own links, the rssCloud ping) is built from this.
+SITE_URL=https://iheartrss.com
+
+# Optional overrides; see .env.example for the full list with defaults.
 # REVALIDATE_BATCH=20
 # BACKUP_RETENTION_DAYS=14
-# IHEARTRSS_TAG=1.2.3         # only when deploying by image — see step 7
 ```
 
 No admin UI is served at all while `ADMIN_TOKEN` is unset, and hide/ban are the
 only way to take a listing down — set it.
 
-### 5. Start the stack
+### 5. Deploy
 
-In dockge: add the existing stack at `/opt/stacks/iheartrss`, then **Deploy**.
-Or from the shell:
+In dockge, hit **Deploy** on the stack. It pulls the image named by
+`IHEARTRSS_TAG` and starts it; the log pane is right there. Equivalently, from
+`/opt/stacks/iheartrss`:
 
 ```sh
-docker compose up -d --build
+docker compose up -d
 docker compose logs -f
 ```
+
+Note there is no `--build`: nothing is built on this box.
 
 Expect `{"msg":"listening","port":3000,...}` and a healthy container within
 about 15 seconds. Check it directly:
@@ -211,12 +235,11 @@ TLS is terminated at the proxy. It must:
 One proxy in front means `TRUSTED_PROXY_HOPS=0`, not 1. See `.env.example` for
 the worked example of why.
 
-### 7. Decide how the image gets built (do this before you need it)
+### 7. Publishing an image (do this before you need to deploy)
 
-Out of the box the compose file uses `build: .`, which builds this working tree on
-the box. That is fine until a deploy goes wrong — and then **there is no previous
-version to roll back to**, because none was ever published. Recovery becomes
-`git checkout` and a rebuild on the production box with the site down.
+The stack pulls `ghcr.io/andrewshell/iheartrss:$IHEARTRSS_TAG`, so a version has to
+exist before it can be deployed — and pinning a version is what makes rollback a
+one-line edit rather than a rebuild on the production box with the site down.
 
 Publishing is a **manual, deliberate act**, run from a workstation:
 
@@ -241,17 +264,14 @@ ghcr.io/andrewshell/iheartrss:1
 ghcr.io/andrewshell/iheartrss:latest
 ```
 
-To deploy those instead of building on the box:
-
-1. In `docker-compose.yml`, comment out `build: .` and uncomment the `image:` line.
-2. Put `IHEARTRSS_TAG=1.2.3` in `.env` — an exact version, not `latest`, because
-   "the previous latest" is not something you can name at 2am.
-3. `docker compose up -d`.
+To deploy one: set `IHEARTRSS_TAG=1.2.3` in the stack's `.env` and redeploy. Pin the
+exact version rather than `latest` — "the previous latest" is not something you can
+name at 2am, and being able to name it is the point.
 
 You can also publish without cutting a release — `pnpm docker:build-push beta` adds
 a custom tag alongside the version and `latest`.
 
-Rollback is then editing one line in `.env` and redeploying. See `RUNBOOK.md`,
+Rollback is then editing that one line and redeploying. See `RUNBOOK.md`,
 "Roll back to a previous image".
 
 ### 8. Set up an off-box backup copy
@@ -274,22 +294,30 @@ have done it before the night you need it.
 
 ### Redeploying
 
-`docker compose up -d --build` after a `git pull` (or a new `IHEARTRSS_TAG` and
-`docker compose up -d`, if you did step 7). The app handles `SIGTERM`, so stops take
-a fraction of a second rather than the full 10-second kill timeout — which matters
-with a WAL to checkpoint.
+Bump `IHEARTRSS_TAG` in the stack's `.env` and hit **Deploy** (or
+`docker compose up -d`). Nothing is built on the box, so there is no `--build` and
+no `git pull`.
+
+**Publishing a blog post is a redeploy.** Posts live in `content/` and ship inside
+the image, so the sequence is: commit the post, `pnpm docker:build-push`, bump the
+tag, deploy. The app pings rpc.rsscloud.io on start, so subscribers are notified as
+soon as the new container is up.
+
+The app handles `SIGTERM`, so stops take a fraction of a second rather than the full
+10-second kill timeout — which matters with a WAL to checkpoint.
 
 ### Troubleshooting
 
 `RUNBOOK.md` is the long form. The short version:
 
-| Symptom                                               | Cause                                                                                     |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Exits at boot: "database directory … is not writable" | Step 2 was skipped. `sudo chown 1000:1000 data`.                                          |
-| Exits at boot naming an environment variable          | Config validates at boot and fails fast. Fix the value it names.                          |
-| Exits at boot: missing `/run/secrets/ip_hmac_key`     | Step 3 was skipped, or Docker created a _directory_ at that path.                         |
-| Container healthy, site unreachable                   | Proxy is not pointed at `127.0.0.1:3000`.                                                 |
-| `docker stop` takes 10 seconds                        | The SIGTERM handler is not running — check you are on the current image.                  |
-| Compose warns about `ADMIN_TOKEN`                     | No `.env` beside the compose file (step 4).                                               |
-| `/healthz` `overdue_count` growing                    | Past the ~2,880-member ceiling. Raise `REVALIDATE_BATCH`.                                 |
-| `data/backups/` is empty on a fresh deploy            | The first backup lands about a minute after boot; check for `backup.started` in the logs. |
+| Symptom                                               | Cause                                                                                         |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Exits at boot: "database directory … is not writable" | Step 2 was skipped. `sudo chown 1000:1000 data`.                                              |
+| Exits at boot naming an environment variable          | Config validates at boot and fails fast. Fix the value it names.                              |
+| Exits at boot: missing `/run/secrets/ip_hmac_key`     | Step 3 was skipped, or Docker created a _directory_ at that path.                             |
+| Container healthy, site unreachable                   | Proxy is not pointed at `127.0.0.1:3000`.                                                     |
+| `docker stop` takes 10 seconds                        | The SIGTERM handler is not running — check you are on the current image.                      |
+| `/blog` empty, `/feed.xml` has no items               | Running an image built before posts were baked in, or a stray `./content` mount masking them. |
+| Compose warns about `ADMIN_TOKEN`                     | No `.env` beside the compose file (step 4).                                                   |
+| `/healthz` `overdue_count` growing                    | Past the ~2,880-member ceiling. Raise `REVALIDATE_BATCH`.                                     |
+| `data/backups/` is empty on a fresh deploy            | The first backup lands about a minute after boot; check for `backup.started` in the logs.     |

@@ -1,6 +1,12 @@
 # Keep the build context small and keep host state out of the image.
-# The repo is a live clone on the server, so `data/`, `secrets/` and `.env` are
-# all real files there — none of them may ever be baked into a layer.
+#
+# `data/`, `secrets/` and `.env` are real files on a workstation that publishes
+# images, so none of them may ever be baked into a layer.
+#
+# `content/` is deliberately NOT excluded: dockge deploys a published image with no
+# repo on the box, so posts have to be in the image or the blog is empty. Verified
+# the hard way — with content/ ignored, a dockge-shaped run logged posts: 0 and
+# served a feed with zero items.
 
 .git
 .gitignore
@@ -10,7 +16,6 @@ node_modules
 !.env.example
 data
 secrets
-content
 *.local.md
 test
 Dockerfile
