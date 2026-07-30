@@ -200,7 +200,15 @@ test('start schedules an unrefd nightly tick that stop clears, and BACKUP_ENABLE
 
   const started = job.start({
     setInterval: (fn, ms) => {
-      const handle = { fn, ms, unrefd: false, unref() { this.unrefd = true; return this; } };
+      const handle = {
+        fn,
+        ms,
+        unrefd: false,
+        unref() {
+          this.unrefd = true;
+          return this;
+        },
+      };
       scheduled.push(handle);
       return handle;
     },

@@ -6,7 +6,7 @@ import { resolveCanonicalUrl, checkFeedProvenance } from '../src/verify/canonica
 // Plan §5 Step 4 — the canonical URL and the ABSOLUTE mutual-provenance rule, per
 // §11's `canonical.test.js`.
 
-test('the feed\'s `<channel><link>` becomes the canonical URL, normalized', () => {
+test("the feed's `<channel><link>` becomes the canonical URL, normalized", () => {
   // §5 Step 4: this is the URL the OPML's `htmlUrl` will point at, so it's the URL
   // that must carry the link-back. Someone can submit `example.com/blog/` while their
   // feed's channel link is `example.com/` — the OPML sends readers to the root.

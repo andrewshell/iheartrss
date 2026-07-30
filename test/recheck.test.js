@@ -50,7 +50,16 @@ function setup({ verify, config = {}, at = NOW } = {}) {
   return { app, db, queries, clock };
 }
 
-function seedSite(db, { host = 'member.example', status = 'active', failureCount = 0, optoutSeenAt = null, checkedDaysAgo = 3 } = {}) {
+function seedSite(
+  db,
+  {
+    host = 'member.example',
+    status = 'active',
+    failureCount = 0,
+    optoutSeenAt = null,
+    checkedDaysAgo = 3,
+  } = {},
+) {
   const url = `https://${host}/`;
   const { lastInsertRowid } = db
     .prepare(
@@ -106,7 +115,9 @@ test('a pass applies normally: failing goes back to active', async () => {
 });
 
 test('a transient failure is a no-op: /recheck can never advance failure_count', async () => {
-  const { app, db, clock } = setup({ verify: async () => ({ ok: false, reason: 'timeout' }) });
+  const { app, db, clock } = setup({
+    verify: async () => ({ ok: false, reason: 'timeout' }),
+  });
   const id = seedSite(db, { failureCount: 0 });
   const before = rowOf(db, id);
 
@@ -142,7 +153,9 @@ test('a blocked outcome is a no-op, logged and shown but never written', async (
 });
 
 test('/recheck may record a FIRST opt-out sighting but never the confirming one', async () => {
-  const { app, db, clock } = setup({ verify: async () => ({ ok: false, reason: 'no_linkback' }) });
+  const { app, db, clock } = setup({
+    verify: async () => ({ ok: false, reason: 'no_linkback' }),
+  });
   const id = seedSite(db);
 
   await post(app, `/recheck/${id}`);
@@ -161,7 +174,11 @@ test('/recheck may record a FIRST opt-out sighting but never the confirming one'
   // and a member intermittently serving a Cloudflare JS interstitial (200, no badge,
   // an innocent cause this plan itself lists) is exactly who'd get caught."
   assert.equal(second.status, 'active');
-  assert.equal(second.optout_seen_at, iso(NOW), 'the first sighting is not even refreshed');
+  assert.equal(
+    second.optout_seen_at,
+    iso(NOW),
+    'the first sighting is not even refreshed',
+  );
 });
 
 test('a hidden row is excluded outright and answered neutrally', async () => {

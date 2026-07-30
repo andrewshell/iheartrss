@@ -106,8 +106,7 @@ export function createLoginBackoff({
   const perIp = new Map();
   const global = { failures: 0, lockedUntil: 0 };
 
-  const delay = (failures, cap) =>
-    Math.min(cap, baseMs * 2 ** Math.max(0, failures - 1));
+  const delay = (failures, cap) => Math.min(cap, baseMs * 2 ** Math.max(0, failures - 1));
 
   return {
     /**
@@ -120,7 +119,11 @@ export function createLoginBackoff({
       const entry = perIp.get(key);
 
       if (entry !== undefined && entry.lockedUntil > t) {
-        return { ok: false, scope: 'ip', retryAfterSeconds: seconds(entry.lockedUntil - t) };
+        return {
+          ok: false,
+          scope: 'ip',
+          retryAfterSeconds: seconds(entry.lockedUntil - t),
+        };
       }
       if (global.lockedUntil > t) {
         return {
@@ -141,8 +144,7 @@ export function createLoginBackoff({
 
       global.failures += 1;
       if (global.failures > globalFreeFailures) {
-        global.lockedUntil =
-          t + delay(global.failures - globalFreeFailures, globalMaxMs);
+        global.lockedUntil = t + delay(global.failures - globalFreeFailures, globalMaxMs);
       }
 
       sweep(t);

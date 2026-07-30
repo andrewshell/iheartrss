@@ -55,7 +55,13 @@ export function registerAdmin(
       return c.html(adminLoginPage({ config }), 401);
     }
 
-    return c.html(adminDashboard({ config, csrf: sessions.csrfFor(sessionId(c)), ...dashboardData() }));
+    return c.html(
+      adminDashboard({
+        config,
+        csrf: sessions.csrfFor(sessionId(c)),
+        ...dashboardData(),
+      }),
+    );
   });
 
   app.post('/admin/logout', async (c) => {
@@ -176,7 +182,10 @@ export function registerAdmin(
       // `last_error`, not `last_checked_at`. Otherwise the admin's own unhide starts
       // the 3-strike clock and delists the site again a fortnight later; the
       // scheduler will reach it on its own cadence.
-      log('admin.unhide_unverified', { site_id: id, reason: verified?.reason ?? 'error' });
+      log('admin.unhide_unverified', {
+        site_id: id,
+        reason: verified?.reason ?? 'error',
+      });
     }
 
     return done(c, { id, status: 'active', verified: verified?.ok === true });

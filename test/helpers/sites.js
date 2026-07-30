@@ -38,7 +38,9 @@ export async function withSites(buildRoutes, run) {
   let routes = {};
 
   const server = createServer((req, res) => {
-    const host = String(req.headers.host ?? '').split(':')[0].toLowerCase();
+    const host = String(req.headers.host ?? '')
+      .split(':')[0]
+      .toLowerCase();
     const path = req.url;
     state.hits.push(`${host}${path}`);
 
@@ -80,7 +82,9 @@ export async function withSites(buildRoutes, run) {
 /** A minimal RSS 2.0 feed. `channelLink: null` omits `<channel><link>` entirely. */
 export function rss({ title = 'A blog', channelLink, extra = '' } = {}) {
   const link =
-    channelLink === null || channelLink === undefined ? '' : `<link>${channelLink}</link>`;
+    channelLink === null || channelLink === undefined
+      ? ''
+      : `<link>${channelLink}</link>`;
   return (
     '<?xml version="1.0" encoding="UTF-8"?>\n' +
     '<rss version="2.0">' +

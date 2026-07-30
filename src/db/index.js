@@ -76,9 +76,10 @@ export function migrate(db) {
     db.exec('BEGIN');
     try {
       db.exec(migration.sql);
-      db.prepare(
-        'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
-      ).run(migration.version, new Date().toISOString());
+      db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+        migration.version,
+        new Date().toISOString(),
+      );
       db.exec('COMMIT');
     } catch (err) {
       db.exec('ROLLBACK');
@@ -108,13 +109,15 @@ function appliedVersions(db) {
 }
 
 function loadMigrations() {
-  return readdirSync(MIGRATIONS_DIR)
-    .filter((name) => /^\d+_.*\.sql$/.test(name))
-    .map((name) => ({
-      name,
-      version: Number.parseInt(name, 10),
-      sql: readFileSync(join(MIGRATIONS_DIR, name), 'utf8'),
-    }))
-    // Numeric, not lexicographic: `10_` must sort after `9_`.
-    .sort((a, b) => a.version - b.version);
+  return (
+    readdirSync(MIGRATIONS_DIR)
+      .filter((name) => /^\d+_.*\.sql$/.test(name))
+      .map((name) => ({
+        name,
+        version: Number.parseInt(name, 10),
+        sql: readFileSync(join(MIGRATIONS_DIR, name), 'utf8'),
+      }))
+      // Numeric, not lexicographic: `10_` must sort after `9_`.
+      .sort((a, b) => a.version - b.version)
+  );
 }

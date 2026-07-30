@@ -66,8 +66,14 @@ body {
   background: var(--bg);
   color: var(--text);
   /* >=16px, or iOS Safari zooms the submit form on focus (§6.3). */
-  font: var(--step-0) / 1.6 system-ui, -apple-system, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+  font:
+    var(--step-0) / 1.6 system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
   /* Fluid by default — a centred column with a max-width, never a fixed one. */
   max-width: var(--page-max);
   margin-inline: auto;

@@ -29,7 +29,8 @@ test('an Atom feed is refused with `feed_not_rss2`, not `feed_invalid`', () => {
 test('rejects `<rss version="0.91">` but accepts `2.00` and a missing version', () => {
   // §5 Step 3: requiring exactly `2.0` is stricter than the wild — `2.00` and a
   // missing attribute both occur, and neither is Atom or 0.9x.
-  const channel = '<channel><title>A blog</title><link>https://a.example/</link></channel>';
+  const channel =
+    '<channel><title>A blog</title><link>https://a.example/</link></channel>';
 
   assert.deepEqual(parseFeed(`<rss version="0.91">${channel}</rss>`), {
     ok: false,
@@ -65,9 +66,9 @@ test('tolerates a UTF-8 BOM and a blank line before the XML declaration', () => 
     '<rss version="2.0"><channel><title>Buffered</title>' +
     '<link>https://b.example/</link></channel></rss>';
 
-  assert.equal(parseFeed(`﻿${body}`).ok, true, 'BOM');
+  assert.equal(parseFeed(`\uFEFF${body}`).ok, true, 'BOM');
   assert.equal(parseFeed(`\n\n  ${body}`).ok, true, 'leading whitespace');
-  assert.equal(parseFeed(`﻿\n${body}`).ok, true, 'BOM then blank line');
+  assert.equal(parseFeed(`\uFEFF\n${body}`).ok, true, 'BOM then blank line');
 });
 
 test('rejects a DOCTYPE placed AFTER the root element, where a prolog scan is blind', () => {
@@ -159,7 +160,9 @@ test('a channel with exactly one `<item>` and no `<link>` is accepted, not crash
 });
 
 test('a channel with neither `<link>` nor any `<item>` is `feed_invalid`', () => {
-  const result = parseFeed('<rss version="2.0"><channel><title>Empty</title></channel></rss>');
+  const result = parseFeed(
+    '<rss version="2.0"><channel><title>Empty</title></channel></rss>',
+  );
 
   assert.deepEqual(result, { ok: false, reason: 'feed_invalid' });
 });
@@ -292,8 +295,7 @@ test('strips lone surrogates, C0/C1 controls and bidi overrides from the title',
   // character, so one such member makes /subscriptions.opml NOT WELL-FORMED for every
   // subscriber until an admin notices — a whole-directory denial of service from a
   // single submission.
-  const hostile =
-    `Evil${'\u{D800}'}${'\u{202E}'}Blog${'\u{FFFE}'}${'\u{0007}'}${'\u{0085}'}`;
+  const hostile = `Evil${'\u{D800}'}${'\u{202E}'}Blog${'\u{FFFE}'}${'\u{0007}'}${'\u{0085}'}`;
   const feed =
     '<rss version="2.0"><channel>' +
     `<title>${hostile}</title>` +

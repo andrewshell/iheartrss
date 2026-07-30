@@ -107,7 +107,12 @@ test('a successful POST /submit lists the site and shows both published URLs', a
 test('every attempt is logged with a hashed IP and never a raw one', async () => {
   const { app, db } = appWith({ verify: async () => PASS });
 
-  await post(app, '/submit', { url: 'alice.example/blog' }, { 'x-forwarded-for': '203.0.113.9' });
+  await post(
+    app,
+    '/submit',
+    { url: 'alice.example/blog' },
+    { 'x-forwarded-for': '203.0.113.9' },
+  );
 
   const row = db.prepare('SELECT * FROM submissions').get();
   assert.equal(row.submitted_url, 'alice.example/blog');
@@ -122,7 +127,11 @@ test('every attempt is logged with a hashed IP and never a raw one', async () =>
 
 test('a rejected submission writes NOTHING to the site row', async () => {
   const { app, db, queries } = appWith({
-    verify: async () => ({ ok: false, reason: 'no_linkback', url: 'https://alice.example/' }),
+    verify: async () => ({
+      ok: false,
+      reason: 'no_linkback',
+      url: 'https://alice.example/',
+    }),
   });
 
   // A listed, healthy member.
@@ -326,7 +335,12 @@ test('concurrent verifications are capped by the global semaphore', async () => 
   // endpoints can fan out against a third party").
   await Promise.all(
     [1, 2, 3, 4, 5].map((n) =>
-      post(app, '/submit', { url: 'alice.example' }, { 'x-forwarded-for': `203.0.113.${n}` }),
+      post(
+        app,
+        '/submit',
+        { url: 'alice.example' },
+        { 'x-forwarded-for': `203.0.113.${n}` },
+      ),
     ),
   );
 
@@ -392,7 +406,9 @@ test('/status on an unknown URL says so without erroring', async () => {
 test('/status with a junk URL is a 400, not a 500', async () => {
   const { app } = appWith();
 
-  const res = await app.request('/status?url=' + encodeURIComponent('javascript:alert(1)'));
+  const res = await app.request(
+    '/status?url=' + encodeURIComponent('javascript:alert(1)'),
+  );
   assert.equal(res.status, 400);
 });
 
@@ -467,7 +483,11 @@ test('every reason code the pipeline can produce has its own message', async () 
   const headings = new Set();
   for (const reason of reasons) {
     const { heading } = rejectionMessage({
-      result: { reason, url: 'https://alice.example/', feedUrl: 'https://alice.example/rss.xml' },
+      result: {
+        reason,
+        url: 'https://alice.example/',
+        feedUrl: 'https://alice.example/rss.xml',
+      },
       config: CONFIG,
     });
 

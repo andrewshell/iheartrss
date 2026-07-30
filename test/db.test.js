@@ -127,10 +127,7 @@ test('a path-scoped ban catches one account, not the whole instance', (t) => {
   // Plan §4: SQL binds AND tighter than OR, so a predicate written without the
   // outer parentheses evaluates as `A OR (B AND C)` — the exact-host arm ignores
   // path_prefix and this ban silently takes out every account on the instance.
-  assert.equal(
-    queries.findBan({ host: 'mastodon.social', path: '/@victim' }),
-    undefined,
-  );
+  assert.equal(queries.findBan({ host: 'mastodon.social', path: '/@victim' }), undefined);
 });
 
 test('a host_suffix ban catches wildcard subdomains in one row', (t) => {
@@ -144,10 +141,7 @@ test('a host_suffix ban catches wildcard subdomains in one row', (t) => {
 
   assert.ok(queries.findBan({ host: 'a1.attacker.example', path: '/' }));
   assert.ok(queries.findBan({ host: 'a500.attacker.example', path: '/blog' }));
-  assert.equal(
-    queries.findBan({ host: 'notattacker.example', path: '/' }),
-    undefined,
-  );
+  assert.equal(queries.findBan({ host: 'notattacker.example', path: '/' }), undefined);
 });
 
 test('domain_limits exempts the multi-tenant hosts and falls back otherwise', (t) => {

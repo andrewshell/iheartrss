@@ -106,8 +106,14 @@ export function sanitizeText(text, maxLength) {
 
   const cleaned = String(text)
     // Lone surrogates only: a well-formed pair (any astral-plane emoji) survives.
-    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
+    .replace(
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
+      '',
+    )
     // C0 minus tab/LF/CR, then DEL and the C1 block.
+    // Matching control characters is the entire point of this sanitiser;
+    // §7 requires them stripped.
+    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
     .replace(/[\u007F-\u009F]/g, '')
     // Bidi marks, embeddings, overrides and isolates — U+202E is the one §7 names.
@@ -158,7 +164,14 @@ function detectCloud({ channel, prefix }) {
   const sourceCloud = prefix === null ? undefined : read(channel, `${prefix}:cloud`);
   const hasSource = sourceCloud !== undefined;
 
-  const style = hasElement && hasSource ? 'both' : hasElement ? 'element' : hasSource ? 'source' : null;
+  const style =
+    hasElement && hasSource
+      ? 'both'
+      : hasElement
+        ? 'element'
+        : hasSource
+          ? 'source'
+          : null;
 
   const attributes = hasElement
     ? Object.fromEntries(
@@ -259,7 +272,9 @@ function escapeRegExp(text) {
  * document", rejecting an otherwise-fine feed as `feed_invalid`.
  */
 function stripLeadingNoise(text) {
-  return String(text ?? '').replace(/^﻿/, '').replace(/^\s+/, '');
+  return String(text ?? '')
+    .replace(/^\uFEFF/, '')
+    .replace(/^\s+/, '');
 }
 
 /**

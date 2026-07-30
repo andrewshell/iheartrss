@@ -77,11 +77,13 @@ export function resultPanel({ config, result }) {
 <div class="panel panel--ok">
   <h2>${result.outcome === 'added' ? "You're listed" : 'Updated'}</h2>
   <p>
-    ${result.outcome === 'added'
-      ? html`Welcome. You&rsquo;ll show up in
+    ${
+      result.outcome === 'added'
+        ? html`Welcome. You&rsquo;ll show up in
           <a href="/subscriptions.opml">the subscription list</a> and on
           <a href="/sites">the members page</a>.`
-      : html`We re-checked your site and refreshed what we had.`}
+        : html`We re-checked your site and refreshed what we had.`
+    }
   </p>
   ${publishedUrls(result)}
 </div>`;
@@ -118,11 +120,13 @@ export function resultPanel({ config, result }) {
 <div class="panel panel--error">
   <h2>${message.heading}</h2>
   ${message.body}
-  ${result.rateLimited
-    ? ''
-    : html`<p class="panel__foot">
+  ${
+    result.rateLimited
+      ? ''
+      : html`<p class="panel__foot">
         Fixed it? Submit again &mdash; re-submitting is safe and just re-checks you.
-      </p>`}
+      </p>`
+  }
 </div>`;
 }
 

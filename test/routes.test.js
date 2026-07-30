@@ -124,11 +124,7 @@ test('GET /badge offers the snippets with absolute URLs from SITE_URL', async ()
 test('the badge SVGs are served and are hotlinkable', async () => {
   const app = createApp({ config });
 
-  for (const path of [
-    '/iheartrss.svg',
-    '/iheartrss-dark.svg',
-    '/iheartrss-icon.svg',
-  ]) {
+  for (const path of ['/iheartrss.svg', '/iheartrss-dark.svg', '/iheartrss-icon.svg']) {
     const res = await app.request(path);
 
     assert.equal(res.status, 200, `${path} should be served`);
@@ -137,11 +133,7 @@ test('the badge SVGs are served and are hotlinkable', async () => {
     // Plan §6: "Long cache, permissive CORS — hotlinking is the point", plus
     // Cross-Origin-Resource-Policy: cross-origin on these three files.
     assert.equal(res.headers.get('access-control-allow-origin'), '*', path);
-    assert.equal(
-      res.headers.get('cross-origin-resource-policy'),
-      'cross-origin',
-      path,
-    );
+    assert.equal(res.headers.get('cross-origin-resource-policy'), 'cross-origin', path);
 
     const svg = await res.text();
     assert.match(svg, /<svg/, path);

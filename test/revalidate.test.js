@@ -41,17 +41,20 @@ const iso = (t) => new Date(t).toISOString();
  * A site row in a chosen state. `checkedDaysAgo` is what the selection query reads,
  * so it is the one field every scheduling test has to set.
  */
-function seedSite(db, {
-  host = 'member.example',
-  path = '/',
-  status = 'active',
-  checkedDaysAgo = 7,
-  verifiedDaysAgo = checkedDaysAgo,
-  failureCount = 0,
-  optoutSeenAt = null,
-  feedUrl = null,
-  at = T0,
-} = {}) {
+function seedSite(
+  db,
+  {
+    host = 'member.example',
+    path = '/',
+    status = 'active',
+    checkedDaysAgo = 7,
+    verifiedDaysAgo = checkedDaysAgo,
+    failureCount = 0,
+    optoutSeenAt = null,
+    feedUrl = null,
+    at = T0,
+  } = {},
+) {
   const url = `https://${host}${path}`;
   const { lastInsertRowid } = db
     .prepare(
@@ -174,7 +177,10 @@ test('a 2xx page with the link-back gone records the sighting and stays listed',
   // and a parked billing-lapse page are all 200-without-a-badge, and with no
   // accounts and no email there is nothing to notify the member with.
   assert.equal(row.status, 'active');
-  assert.deepEqual(queries.listOutlines().map((o) => o.id), [id]);
+  assert.deepEqual(
+    queries.listOutlines().map((o) => o.id),
+    [id],
+  );
   // Not a failure either: the 3-strike counter is for outages, not for opt-outs.
   assert.equal(row.failure_count, 0);
 });
@@ -278,7 +284,10 @@ test('an already-removed row is not re-sighted, and a pass reactivates it', asyn
 
   row = rowOf(db, id);
   assert.equal(row.status, 'active');
-  assert.deepEqual(queries.listOutlines().map((o) => o.id), [id]);
+  assert.deepEqual(
+    queries.listOutlines().map((o) => o.id),
+    [id],
+  );
 });
 
 // ── The transient branch (§8's fourth row) ────────────────────────────────────────
@@ -330,7 +339,11 @@ test('a timeout, a 500, a broken feed and a size cap each take the 3-strike path
     assert.equal(row.status, 'dropped', `${failure.reason}: strike 3`);
     assert.equal(row.failure_count, 3, `${failure.reason}: strike 3`);
     assert.equal(row.last_error, failure.reason, `${failure.reason} is recorded`);
-    assert.deepEqual(queries.listOutlines(), [], `${failure.reason}: dropped is delisted`);
+    assert.deepEqual(
+      queries.listOutlines(),
+      [],
+      `${failure.reason}: dropped is delisted`,
+    );
   }
 });
 
@@ -375,14 +388,25 @@ test('a persistent 403 goes to blocked and stays in the OPML', async () => {
   assert.equal(row.status, 'blocked');
   assert.equal(row.failure_count, 0, 'a 403 is not a strike');
   assert.equal(row.optout_seen_at, null, 'and never an opt-out');
-  assert.deepEqual(queries.listOutlines().map((o) => o.id), [id]);
+  assert.deepEqual(
+    queries.listOutlines().map((o) => o.id),
+    [id],
+  );
 });
 
 test('a 403 never promotes a dropped or removed row into the OPML', async () => {
   const { db, queries } = createDb(':memory:');
   // §4: `blocked` is "only reachable from active/failing, never at submission".
-  const dropped = seedSite(db, { host: 'dropped.example', status: 'dropped', checkedDaysAgo: 31 });
-  const removed = seedSite(db, { host: 'removed.example', status: 'removed', checkedDaysAgo: 91 });
+  const dropped = seedSite(db, {
+    host: 'dropped.example',
+    status: 'dropped',
+    checkedDaysAgo: 31,
+  });
+  const removed = seedSite(db, {
+    host: 'removed.example',
+    status: 'removed',
+    checkedDaysAgo: 91,
+  });
 
   const { revalidator } = harness(db, queries, blockedBySite);
   await revalidator.runOnce();
@@ -451,7 +475,11 @@ test('the live arm gets the whole batch when nothing dormant is due', async () =
   for (let i = 0; i < 6; i += 1) {
     seedSite(db, { host: `live${i}.example`, checkedDaysAgo: 7 });
   }
-  seedSite(db, { host: 'recentlydropped.example', status: 'dropped', checkedDaysAgo: 10 });
+  seedSite(db, {
+    host: 'recentlydropped.example',
+    status: 'dropped',
+    checkedDaysAgo: 10,
+  });
 
   const { revalidator, asked } = harness(db, queries, passResult, {
     config: { revalidateBatch: 6 },
@@ -480,7 +508,10 @@ test('a row on the opt-out follow-up cadence outranks everything else', async ()
 
   // The removal clock is the tightest promise the site makes, and 24 hours is the
   // budget it has (§8). A row 300 days overdue does not get to spend it.
-  assert.deepEqual(asked.map((a) => a.url), ['https://pending.example/']);
+  assert.deepEqual(
+    asked.map((a) => a.url),
+    ['https://pending.example/'],
+  );
   assert.equal(rowOf(db, pending).status, 'removed');
   assert.equal(rowOf(db, active).status, 'active');
 });
@@ -490,7 +521,9 @@ test('a slow batch does not overlap the next tick', async () => {
   const id = seedSite(db, { checkedDaysAgo: 7 });
 
   let release;
-  const hang = new Promise((resolve) => { release = resolve; });
+  const hang = new Promise((resolve) => {
+    release = resolve;
+  });
 
   const { revalidator, logged } = harness(db, queries, async () => {
     await hang;
@@ -507,7 +540,9 @@ test('a slow batch does not overlap the next tick', async () => {
   // fetch as the first one.
   const overlapping = await Promise.race([
     revalidator.runOnce(),
-    new Promise((resolve) => { setTimeout(() => resolve({ skipped: 'test_timeout' }), 500); }),
+    new Promise((resolve) => {
+      setTimeout(() => resolve({ skipped: 'test_timeout' }), 500);
+    }),
   ]);
 
   assert.equal(overlapping.skipped, 'already_running');
@@ -525,9 +560,14 @@ test('one host is not hit twice within a few minutes', async () => {
   // §8: "a batch containing 20 members on mastodon.social or micro.blog would
   // otherwise hammer one host 20 times in ~40 seconds and trip its rate limiter,
   // which then reads back as a transient failure for all of them."
-  const a = seedSite(db, { host: 'mastodon.social', path: '/@alice/', checkedDaysAgo: 7 });
+  const a = seedSite(db, {
+    host: 'mastodon.social',
+    path: '/@alice/',
+    checkedDaysAgo: 7,
+  });
   const b = seedSite(db, { host: 'mastodon.social', path: '/@bob/', checkedDaysAgo: 8 });
-  const elsewhere = seedSite(db, { host: 'other.example', checkedDaysAgo: 7 });
+  // Seeded for its side effect only — this row is asserted on by URL below.
+  seedSite(db, { host: 'other.example', checkedDaysAgo: 7 });
 
   const { revalidator, clock, asked } = harness(db, queries, passResult);
   await revalidator.runOnce();
@@ -571,7 +611,9 @@ test('a UNIQUE feed_url collision mid-batch is logged and skipped, not fatal', a
   assert.equal(rowOf(db, last).last_checked_at, iso(T0), 'and the batch continues');
   assert.equal(rowOf(db, first).last_checked_at, iso(T0));
   assert.ok(
-    logged.some((entry) => entry.msg === 'revalidate.site_failed' && entry.site_id === collider),
+    logged.some(
+      (entry) => entry.msg === 'revalidate.site_failed' && entry.site_id === collider,
+    ),
   );
 });
 
@@ -610,7 +652,12 @@ test('the tick purges old submissions and year-old dropped rows', async () => {
   // foreign_keys = ON, deleting a site that was ever reported raises FOREIGN KEY
   // constraint failed — inside the revalidation tick that runs the year-old-
   // dropped-row purge, aborting the rest of the batch."
-  queries.insertReport({ site_id: stale, url: 'https://gone.example/', reason: 'spam', ip_hash: 'h' });
+  queries.insertReport({
+    site_id: stale,
+    url: 'https://gone.example/',
+    reason: 'spam',
+    ip_hash: 'h',
+  });
 
   const { revalidator } = harness(db, queries, passResult);
   await revalidator.runOnce();
@@ -618,7 +665,10 @@ test('the tick purges old submissions and year-old dropped rows', async () => {
   // §4: "A salted IP hash is still personal data; purge rows older than 90 days on
   // the revalidation tick, and say so in the privacy note on /about."
   const kept = db.prepare('SELECT created_at FROM submissions').all();
-  assert.deepEqual(kept.map((r) => r.created_at), [iso(T0 - 89 * DAY)]);
+  assert.deepEqual(
+    kept.map((r) => r.created_at),
+    [iso(T0 - 89 * DAY)],
+  );
 
   assert.equal(rowOf(db, stale), undefined);
   assert.ok(rowOf(db, recent), 'a recently dropped row is still retried');
@@ -641,7 +691,8 @@ test('each batch pings HEALTHCHECK_PING_URL, and a failed ping is not a failed b
     config: { ...CONFIG, healthcheckPingUrl: 'https://hc-ping.com/uuid' },
     now: () => new Date(T0),
     sleep: async () => {},
-    verifySite: async (url) => passResult(db.prepare('SELECT * FROM sites WHERE url = ?').get(url)),
+    verifySite: async (url) =>
+      passResult(db.prepare('SELECT * FROM sites WHERE url = ?').get(url)),
     pingFetch: async (url) => {
       pings.push(url);
       throw new Error('hc-ping.com is down');
@@ -681,7 +732,16 @@ test("start schedules a boot run and an hourly unref'd tick that stop clears", a
   const scheduled = [];
   const cleared = [];
   const handle = (kind, fn, ms) => {
-    const h = { kind, fn, ms, unrefd: false, unref() { this.unrefd = true; return this; } };
+    const h = {
+      kind,
+      fn,
+      ms,
+      unrefd: false,
+      unref() {
+        this.unrefd = true;
+        return this;
+      },
+    };
     scheduled.push(h);
     return h;
   };
@@ -736,8 +796,11 @@ test('a disabled scheduler schedules nothing', async () => {
 test('the stored validators are sent, and a 304 keeps the metadata it cannot see', async () => {
   const { db, queries } = createDb(':memory:');
   const id = seedSite(db, { checkedDaysAgo: 7 });
-  db.prepare('UPDATE sites SET feed_etag = ?, feed_last_modified = ? WHERE id = ?')
-    .run('"v1"', 'Wed, 01 Jul 2026 10:00:00 GMT', id);
+  db.prepare('UPDATE sites SET feed_etag = ?, feed_last_modified = ? WHERE id = ?').run(
+    '"v1"',
+    'Wed, 01 Jul 2026 10:00:00 GMT',
+    id,
+  );
 
   const before = rowOf(db, id);
   const { revalidator, asked } = harness(db, queries, (row) => ({
@@ -819,7 +882,10 @@ test('a re-added link plus a resubmit reactivates a removed row immediately', as
   assert.equal(outcome.outcome, 'updated');
   assert.equal(rowOf(db, id).status, 'active');
   assert.equal(rowOf(db, id).optout_seen_at, null);
-  assert.deepEqual(queries.listOutlines().map((o) => o.id), [id]);
+  assert.deepEqual(
+    queries.listOutlines().map((o) => o.id),
+    [id],
+  );
 });
 
 test('a verifier that throws does not abort the rest of the batch', async () => {
@@ -839,5 +905,9 @@ test('a verifier that throws does not abort the rest of the batch', async () => 
 
   assert.equal(summary.checked, 1);
   assert.equal(rowOf(db, after).last_checked_at, iso(T0));
-  assert.ok(logged.some((entry) => entry.msg === 'revalidate.site_failed' && entry.site_id === boom));
+  assert.ok(
+    logged.some(
+      (entry) => entry.msg === 'revalidate.site_failed' && entry.site_id === boom,
+    ),
+  );
 });

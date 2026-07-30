@@ -135,10 +135,7 @@ function resolve(href, baseUrl) {
  */
 function hasAlternateRel(rel) {
   if (rel === undefined || rel === null || String(rel).trim() === '') return true;
-  return String(rel)
-    .toLowerCase()
-    .split(/\s+/)
-    .includes('alternate');
+  return String(rel).toLowerCase().split(/\s+/).includes('alternate');
 }
 
 /** Case-insensitive, and tolerating a `; charset=` suffix on the type. */

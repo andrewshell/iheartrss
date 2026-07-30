@@ -58,26 +58,30 @@ test('/healthz is 200 when every dependency answers', async () => {
   assert.equal((await res.json()).ok, true);
 });
 
-test('the data-directory probe is what the deployed healthcheck reports on', {
-  skip: process.getuid?.() === 0 ? 'root ignores mode bits' : false,
-}, (t) => {
-  const root = mkdtempSync(join(tmpdir(), 'iheartrss-healthz-'));
-  t.after(() => {
-    chmodSync(root, 0o755);
-    rmSync(root, { recursive: true, force: true });
-  });
+test(
+  'the data-directory probe is what the deployed healthcheck reports on',
+  {
+    skip: process.getuid?.() === 0 ? 'root ignores mode bits' : false,
+  },
+  (t) => {
+    const root = mkdtempSync(join(tmpdir(), 'iheartrss-healthz-'));
+    t.after(() => {
+      chmodSync(root, 0o755);
+      rmSync(root, { recursive: true, force: true });
+    });
 
-  const databasePath = join(root, 'iheartrss.db');
-  assert.deepEqual(probeDataDirectory({ databasePath }), { ok: true });
+    const databasePath = join(root, 'iheartrss.db');
+    assert.deepEqual(probeDataDirectory({ databasePath }), { ok: true });
 
-  // A `chown -R root:root data` during a botched restore is exactly the state
-  // that should restart the container rather than serve 200s.
-  chmodSync(root, 0o555);
-  const unhealthy = probeDataDirectory({ databasePath });
+    // A `chown -R root:root data` during a botched restore is exactly the state
+    // that should restart the container rather than serve 200s.
+    chmodSync(root, 0o555);
+    const unhealthy = probeDataDirectory({ databasePath });
 
-  assert.equal(unhealthy.ok, false);
-  assert.match(unhealthy.reason, /not writable/i);
-});
+    assert.equal(unhealthy.ok, false);
+    assert.match(unhealthy.reason, /not writable/i);
+  },
+);
 
 // Plan §8's capacity ceiling: "20 sites/hour × 24 = 480 checks/day; at a 6-day
 // interval the steady state is ~2,880 members. Past that, `last_checked_at` slides

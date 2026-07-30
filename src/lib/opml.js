@@ -122,8 +122,11 @@ export function createOpmlDocument({ queries, config, now = () => new Date() }) 
 
   return {
     render() {
-      const { version, outline_hash: storedHash, updated_at: storedAt } =
-        queries.getDirectoryVersion();
+      const {
+        version,
+        outline_hash: storedHash,
+        updated_at: storedAt,
+      } = queries.getDirectoryVersion();
 
       if (memo !== null && memo.version === version) return memo.rendered;
 

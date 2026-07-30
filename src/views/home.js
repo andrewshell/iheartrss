@@ -63,7 +63,8 @@ export function homePage({ config, memberCount = 0, latestPost = null }) {
   </ol>
 </section>
 
-${latestPost === null
+${
+  latestPost === null
     ? ''
     : html`<section class="latest prose" aria-labelledby="latest-post">
   <h2 id="latest-post">Latest post</h2>
@@ -71,15 +72,18 @@ ${latestPost === null
     <h3 class="post__title">
       <a href="${latestPost.path}">${heading(latestPost)}</a>
     </h3>
-    ${latestPost.title === null
+    ${
+      latestPost.title === null
         ? ''
-        : html`<p class="post__date"><time datetime="${latestPost.date}">${formatPostDate(latestPost)}</time></p>`}
+        : html`<p class="post__date"><time datetime="${latestPost.date}">${formatPostDate(latestPost)}</time></p>`
+    }
     <div class="post__body">
 ${raw(latestPost.html)}
     </div>
   </article>
   <p><a href="/blog">All posts &rarr;</a> &middot; <a href="/feed.xml">Subscribe</a></p>
-</section>`}
+</section>`
+}
 `;
 
   return layout({

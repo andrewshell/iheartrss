@@ -116,7 +116,5 @@ function pubDateFor(date, time) {
   const valid = hours <= 23 && minutes <= 59 && seconds <= 59;
   const clock = valid ? [hours, minutes, seconds] : [12, 0, 0];
 
-  return new Date(
-    `${date}T${clock.map((n) => String(n).padStart(2, '0')).join(':')}Z`,
-  );
+  return new Date(`${date}T${clock.map((n) => String(n).padStart(2, '0')).join(':')}Z`);
 }

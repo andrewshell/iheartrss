@@ -73,7 +73,11 @@ export function createVerifier({ safeFetch, config, isBanned = () => false }) {
     if (!submitted.ok) return { ...submitted, url: normalized.url };
 
     // ── Step 2 — find the feed ───────────────────────────────────────────────────
-    const start = await startFromSubmitted(submitted, { budget, fixedCanonical, conditional });
+    const start = await startFromSubmitted(submitted, {
+      budget,
+      fixedCanonical,
+      conditional,
+    });
     if (!start.ok) return start;
 
     const { submittedResourceWasFeed, feed } = start;
@@ -113,7 +117,10 @@ export function createVerifier({ safeFetch, config, isBanned = () => false }) {
       canonicalUrl = page.url; // the final post-redirect URL becomes `sites.url`
       canonicalHtml = page.body;
 
-      const rediscovered = await rediscoverOnCanonical(page, { budget, alreadyValidated: { feedUrl, feed } });
+      const rediscovered = await rediscoverOnCanonical(page, {
+        budget,
+        alreadyValidated: { feedUrl, feed },
+      });
       if (!rediscovered.ok) {
         return { ...rediscovered, url: canonicalUrl, submittedUrl: submitted.url };
       }
@@ -256,7 +263,10 @@ export function createVerifier({ safeFetch, config, isBanned = () => false }) {
     return { ok: true, feedUrl: discovered.feedUrl, feed: fetched.feed };
   }
 
-  async function fetchAndParseFeed(feedUrl, { budget, failure, parseFailure, conditional = null }) {
+  async function fetchAndParseFeed(
+    feedUrl,
+    { budget, failure, parseFailure, conditional = null },
+  ) {
     const response = await fetchOk(safeFetch, feedUrl, {
       budget,
       kind: 'feed',
@@ -280,7 +290,12 @@ export function createVerifier({ safeFetch, config, isBanned = () => false }) {
 
     const parsed = parseFeed(response.body);
     if (!parsed.ok) {
-      return { ok: false, reason: parseFailure ?? parsed.reason, feedUrl, feedReason: parsed.reason };
+      return {
+        ok: false,
+        reason: parseFailure ?? parsed.reason,
+        feedUrl,
+        feedReason: parsed.reason,
+      };
     }
 
     return {
@@ -320,7 +335,10 @@ export function createBudget(config) {
  * link" — while the author stares at a perfectly good
  * `<link rel="alternate" type="application/atom+xml">` and concludes we're broken.
  */
-function discoverFeed(response, { noneReason = 'no_feed_link', otherFormatReason = 'feed_not_rss2' } = {}) {
+function discoverFeed(
+  response,
+  { noneReason = 'no_feed_link', otherFormatReason = 'feed_not_rss2' } = {},
+) {
   const page = parsePage(response.body, response.url);
 
   if (page.feedUrl !== null) {
@@ -348,14 +366,22 @@ function discoverFeed(response, { noneReason = 'no_feed_link', otherFormatReason
  * carefully-worded refusal rather than "we couldn't find a feed on your page".
  */
 function looksLikeFeed({ body, contentType }) {
-  const type = String(contentType ?? '').split(';')[0].trim().toLowerCase();
+  const type = String(contentType ?? '')
+    .split(';')[0]
+    .trim()
+    .toLowerCase();
   if (type === 'text/html' || type === 'application/xhtml+xml') return false;
   if (/(^|\/|\+)(rss|atom|rdf)(\+xml)?$/.test(type) || type === 'application/feed+json') {
     return true;
   }
 
-  const head = String(body ?? '').slice(0, 2048).replace(/^﻿/, '').trimStart();
-  const withoutProlog = head.replace(/^<\?xml[^>]*\?>\s*/i, '').replace(/^<!--[\s\S]*?-->\s*/, '');
+  const head = String(body ?? '')
+    .slice(0, 2048)
+    .replace(/^\uFEFF/, '')
+    .trimStart();
+  const withoutProlog = head
+    .replace(/^<\?xml[^>]*\?>\s*/i, '')
+    .replace(/^<!--[\s\S]*?-->\s*/, '');
   return /^<(rss|feed|rdf:RDF)\b/i.test(withoutProlog);
 }
 

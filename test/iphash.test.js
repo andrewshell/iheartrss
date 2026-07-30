@@ -32,13 +32,19 @@ test('two addresses in the same IPv6 /64 hash to the same value', () => {
 
 test('the hash rotates daily so yesterday cannot be linked to today', () => {
   const today = createIpHasher({ key: KEY, now: () => new Date('2026-07-29T23:59:59Z') });
-  const tomorrow = createIpHasher({ key: KEY, now: () => new Date('2026-07-30T00:00:01Z') });
+  const tomorrow = createIpHasher({
+    key: KEY,
+    now: () => new Date('2026-07-30T00:00:01Z'),
+  });
 
   assert.notEqual(today('203.0.113.7'), tomorrow('203.0.113.7'));
 
   // Same calendar day, different times, must still bucket together — otherwise
   // the daily rate-limit counters keyed on this hash reset every request.
-  const earlier = createIpHasher({ key: KEY, now: () => new Date('2026-07-29T00:00:01Z') });
+  const earlier = createIpHasher({
+    key: KEY,
+    now: () => new Date('2026-07-29T00:00:01Z'),
+  });
   assert.equal(today('203.0.113.7'), earlier('203.0.113.7'));
 });
 
@@ -101,5 +107,8 @@ test('a hex-encoded key file is accepted, since an operator will write text', (t
   const path = join(dir, 'ip_hmac_key');
   writeFileSync(path, `${'ab'.repeat(32)}\n`);
 
-  assert.deepEqual(loadIpHmacKey({ path, production: true }), Buffer.from('ab'.repeat(32), 'hex'));
+  assert.deepEqual(
+    loadIpHmacKey({ path, production: true }),
+    Buffer.from('ab'.repeat(32), 'hex'),
+  );
 });

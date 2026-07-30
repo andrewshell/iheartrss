@@ -291,8 +291,10 @@ export function createRevalidator({
       const age = at.getTime() - seenAt;
 
       // ≥24h and ≤14 days: the confirming sighting.
-      if (age >= config.optoutFollowupHours * HOUR_MS
-          && age <= config.optoutExpiryDays * DAY_MS) {
+      if (
+        age >= config.optoutFollowupHours * HOUR_MS &&
+        age <= config.optoutExpiryDays * DAY_MS
+      ) {
         queries.recordOptoutConfirmed(row.id, { now: stamp });
         return 'removed';
       }
@@ -436,7 +438,10 @@ function featureColumns(features = {}) {
   const cloud =
     features.cloud === undefined && features.cloud_url === undefined
       ? undefined
-      : JSON.stringify({ cloud: features.cloud ?? null, cloud_url: features.cloud_url ?? null });
+      : JSON.stringify({
+          cloud: features.cloud ?? null,
+          cloud_url: features.cloud_url ?? null,
+        });
 
   return {
     has_source_ns: features.has_source_ns,

@@ -24,18 +24,22 @@ export function blogIndexPage({ config, posts }) {
   </p>
 </section>
 
-${posts.length === 0
+${
+  posts.length === 0
     ? html`<p class="blog-index__empty">No posts yet.</p>`
     : html`<ol class="blog-index">
 ${posts.map(
-      (post) => html`  <li class="blog-index__item">
+  (post) => html`  <li class="blog-index__item">
     <h2 class="blog-index__title"><a href="${post.path}">${heading(post)}</a></h2>
-    ${post.title === null
+    ${
+      post.title === null
         ? ''
-        : html`<p class="blog-index__date"><time datetime="${post.date}">${formatPostDate(post)}</time></p>`}
+        : html`<p class="blog-index__date"><time datetime="${post.date}">${formatPostDate(post)}</time></p>`
+    }
   </li>
 `,
-    )}</ol>`}
+)}</ol>`
+}
 `;
 
   return layout({
@@ -51,9 +55,11 @@ export function blogPostPage({ config, post }) {
 <article class="prose post">
   <header class="post__header">
     <h1 class="post__title">${heading(post)}</h1>
-    ${post.title === null
-      ? ''
-      : html`<p class="post__date"><time datetime="${post.date}">${formatPostDate(post)}</time></p>`}
+    ${
+      post.title === null
+        ? ''
+        : html`<p class="post__date"><time datetime="${post.date}">${formatPostDate(post)}</time></p>`
+    }
   </header>
   <div class="post__body">
 ${raw(post.html)}
@@ -84,8 +90,18 @@ export function heading(post) {
 }
 
 const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 /** `2026-07-29` → `29 July 2026`. Read off the date string, so it never drifts by a timezone. */

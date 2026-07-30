@@ -80,8 +80,7 @@ export function loadConfig(env = process.env) {
   // 'removed within a week'"): at 7 the worst case is 7 days plus however long
   // until the site's turn comes round, which makes /about's promise false by a few
   // hours. 6 gives a full day of margin and costs nothing.
-  const revalidateEnabled =
-    env.REVALIDATE_ENABLED !== 'false' && env.NODE_ENV !== 'test';
+  const revalidateEnabled = env.REVALIDATE_ENABLED !== 'false' && env.NODE_ENV !== 'test';
   const revalidateBatch = parsePositiveInt(
     env.REVALIDATE_BATCH,
     20,
@@ -340,8 +339,7 @@ function parseDatabasePath(raw, errors) {
 }
 
 function parseLinkbackHosts(raw, errors) {
-  const value =
-    raw === undefined || raw === '' ? 'iheartrss.com,www.iheartrss.com' : raw;
+  const value = raw === undefined || raw === '' ? 'iheartrss.com,www.iheartrss.com' : raw;
 
   const hosts = value
     .split(',')

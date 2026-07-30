@@ -76,7 +76,12 @@ test('the fetch budget knobs are taken from the environment and validated', () =
 test('ADMIN_TOKEN must be at least 32 bytes of hex or base64', () => {
   // §6: an operator will otherwise pick a passphrase, and nothing else here is a
   // shorter path to full control.
-  for (const raw of ['hunter2', 'correct horse battery staple', 'abcd', 'ab'.repeat(15)]) {
+  for (const raw of [
+    'hunter2',
+    'correct horse battery staple',
+    'abcd',
+    'ab'.repeat(15),
+  ]) {
     assert.throws(() => loadConfig({ ADMIN_TOKEN: raw }), /ADMIN_TOKEN/, raw);
   }
 
@@ -122,7 +127,10 @@ test('IP_HMAC_KEY_FILE defaults to the mounted secret path', () => {
     loadConfig({ NODE_ENV: 'production' }).ipHmacKeyFile,
     '/run/secrets/ip_hmac_key',
   );
-  assert.equal(loadConfig({ IP_HMAC_KEY_FILE: './data/key' }).ipHmacKeyFile, './data/key');
+  assert.equal(
+    loadConfig({ IP_HMAC_KEY_FILE: './data/key' }).ipHmacKeyFile,
+    './data/key',
+  );
   assert.throws(() => loadConfig({ IP_HMAC_KEY_FILE: '  ' }), /IP_HMAC_KEY_FILE/);
 });
 
@@ -203,7 +211,10 @@ test('the revalidation knobs are taken from the environment and validated', () =
   assert.equal(config.healthcheckPingUrl, 'https://hc-ping.com/abc');
 
   assert.throws(() => loadConfig({ REVALIDATE_BATCH: '0' }), /REVALIDATE_BATCH/);
-  assert.throws(() => loadConfig({ OPTOUT_EXPIRY_DAYS: 'two weeks' }), /OPTOUT_EXPIRY_DAYS/);
+  assert.throws(
+    () => loadConfig({ OPTOUT_EXPIRY_DAYS: 'two weeks' }),
+    /OPTOUT_EXPIRY_DAYS/,
+  );
 });
 
 // §9: "Off in dev/tests." Nothing in the test suite boots `server.js`, but the
@@ -226,7 +237,10 @@ test('the backup knobs default to §9 values and are validated', () => {
   assert.equal(custom.backupRetentionDays, 30);
 
   // Zero-day retention would delete tonight's copy on the tick that wrote it.
-  assert.throws(() => loadConfig({ BACKUP_RETENTION_DAYS: '0' }), /BACKUP_RETENTION_DAYS/);
+  assert.throws(
+    () => loadConfig({ BACKUP_RETENTION_DAYS: '0' }),
+    /BACKUP_RETENTION_DAYS/,
+  );
 });
 
 test('BACKUP_ENABLED is off under NODE_ENV=test', () => {

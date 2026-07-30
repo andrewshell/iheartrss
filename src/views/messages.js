@@ -21,8 +21,7 @@ export function rejectionMessage({ result, config }) {
   return build({ result, config, url: result.url ?? result.submittedUrl ?? '' });
 }
 
-const guide = (fragment = '') =>
-  html`<a href="/guide${fragment}">the guide</a>`;
+const guide = (fragment = '') => html`<a href="/guide${fragment}">the guide</a>`;
 
 const MESSAGES = {
   invalid_url: () => ({
@@ -60,9 +59,9 @@ const MESSAGES = {
   page_fetch_failed: ({ url, result }) => ({
     heading: "We couldn't fetch your page",
     body: html`<p>
-      We asked for <code>${url}</code>${result.status
-        ? html` and got HTTP ${result.status}`
-        : ' and the request failed'}.
+      We asked for <code>${url}</code>${
+        result.status ? html` and got HTTP ${result.status}` : ' and the request failed'
+      }.
       Nothing here needs fixing on our side, so it's worth loading that exact URL in a
       private window to see what a stranger sees.
     </p>`,
@@ -111,7 +110,7 @@ const MESSAGES = {
   }),
 
   blocked_by_site: ({ url }) => ({
-    heading: "Your host is blocking us",
+    heading: 'Your host is blocking us',
     body: html`<p>
       <code>${url}</code> answered <strong>403 Forbidden</strong>. That is almost always
       bot protection &mdash; Cloudflare, a WAF, or a host-level rule &mdash; and not
@@ -137,12 +136,14 @@ const MESSAGES = {
   // §1: RSS-2.0-only is our decision, so the cost of it is ours to carry. This
   // message is the site's pitch, not a validator complaint.
   feed_not_rss2: ({ result }) => ({
-    heading: "We found a feed, just not an RSS 2.0 one",
+    heading: 'We found a feed, just not an RSS 2.0 one',
     body: html`<p>
-      ${result.otherFormatUrl
-        ? html`Your page points at <code>${result.otherFormatUrl}</code>, which is
+      ${
+        result.otherFormatUrl
+          ? html`Your page points at <code>${result.otherFormatUrl}</code>, which is
             ${result.otherFormatType === 'json' ? 'a JSON feed' : 'an Atom feed'}.`
-        : 'The feed your page points at is not RSS 2.0.'}
+          : 'The feed your page points at is not RSS 2.0.'
+      }
       That's a perfectly good feed &mdash; we're the narrow ones here.
     </p>
     <p>
@@ -256,18 +257,20 @@ const MESSAGES = {
       <code>href</code>, not the picture. <a href="/badge">Grab a snippet</a>, put it on
       that page, and submit again.
     </p>
-    ${result.submittedUrl && result.submittedUrl !== result.url
-      ? html`<p class="panel__aside">
+    ${
+      result.submittedUrl && result.submittedUrl !== result.url
+        ? html`<p class="panel__aside">
           Note we checked <code>${result.url}</code>, not
           <code>${result.submittedUrl}</code> &mdash; your feed's
           <code>&lt;channel&gt;&lt;link&gt;</code> names the first one, so that's the page
           we'd list, and that's the page the link has to be on.
         </p>`
-      : ''}`,
+        : ''
+    }`,
   }),
 
   ambiguous_identity: ({ result }) => ({
-    heading: "That feed is already listed under a different page",
+    heading: 'That feed is already listed under a different page',
     body: html`<p>
       <code>${result.feedUrl}</code> is on the list already, under another URL, and that
       page still looks live to us. One feed gets one listing &mdash; the list we publish
@@ -304,9 +307,11 @@ const MESSAGES = {
     body: html`<p>
       Every submission means we fetch someone else's server a few times, so there's a
       limit on how often. Try again
-      ${result.retryAfterSeconds
-        ? html`in about ${Math.max(1, Math.ceil(result.retryAfterSeconds / 60))} minute(s)`
-        : 'shortly'}.
+      ${
+        result.retryAfterSeconds
+          ? html`in about ${Math.max(1, Math.ceil(result.retryAfterSeconds / 60))} minute(s)`
+          : 'shortly'
+      }.
     </p>`,
   }),
 

@@ -43,12 +43,14 @@ export function statusPage({
     <button type="submit">Look it up</button>
   </form>
 
-  ${invalid
-    ? html`<div class="panel panel--error">
+  ${
+    invalid
+      ? html`<div class="panel panel--error">
         <h2>That doesn&rsquo;t look like a URL</h2>
         <p>Try the full address, like <code>https://example.com</code>.</p>
       </div>`
-    : ''}
+      : ''
+  }
 
   ${site === undefined ? '' : site === null ? notListed({ url }) : listed({ site })}
 </section>`;
@@ -105,9 +107,11 @@ function listed({ site }) {
     <dd>${site.last_checked_at}</dd>
     <dt>Consecutive failures</dt>
     <dd>${site.failure_count}</dd>
-    ${site.last_error
-      ? html`<dt>Last error</dt><dd><code>${site.last_error}</code></dd>`
-      : ''}
+    ${
+      site.last_error
+        ? html`<dt>Last error</dt><dd><code>${site.last_error}</code></dd>`
+        : ''
+    }
   </dl>
   <p>
     Something look wrong? Re-check it now &mdash; a failed check from here never counts
@@ -133,21 +137,25 @@ export function reportPage({
 <section class="report">
   <h1>Report a listed site</h1>
 
-  ${filed
-    ? html`<div class="panel panel--ok">
+  ${
+    filed
+      ? html`<div class="panel panel--ok">
         <h2>Thank you</h2>
         <p>Filed. A person reads these.</p>
       </div>`
-    : ''}
+      : ''
+  }
 
-  ${error === 'incomplete'
-    ? html`<div class="panel panel--error">
+  ${
+    error === 'incomplete'
+      ? html`<div class="panel panel--error">
         <h2>We need both fields</h2>
         <p>The URL of the listing, and what&rsquo;s wrong with it.</p>
       </div>`
-    : error
-      ? panelFor({ config, error, retryAfterSeconds })
-      : ''}
+      : error
+        ? panelFor({ config, error, retryAfterSeconds })
+        : ''
+  }
 
   <p>
     We publish this list as an OPML file that other people subscribe to, so

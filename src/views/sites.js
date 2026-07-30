@@ -31,9 +31,9 @@ export function sitesPage({ config, members = [] }) {
   <h1>Members</h1>
   <p class="lede">
     Every site in our <a href="/subscriptions.opml">OPML subscription list</a>,
-    newest first. ${members.length === 1
-      ? html`One member so far.`
-      : html`${members.length} members.`}
+    newest first. ${
+      members.length === 1 ? html`One member so far.` : html`${members.length} members.`
+    }
   </p>
   <p>
     Not here, or here and you&rsquo;d rather not be? Look yourself up on
@@ -43,9 +43,11 @@ export function sitesPage({ config, members = [] }) {
 
   ${legend()}
 
-  ${members.length === 0
-    ? html`<p class="sites__empty">No members yet. <a href="/submit">Be the first.</a></p>`
-    : html`<ul class="site-list">${members.map(row)}</ul>`}
+  ${
+    members.length === 0
+      ? html`<p class="sites__empty">No members yet. <a href="/submit">Be the first.</a></p>`
+      : html`<ul class="site-list">${members.map(row)}</ul>`
+  }
 </section>
 `;
 

@@ -29,11 +29,7 @@ const DEFAULT_HEADERS = Object.freeze({
  * @param {Function} [deps.isAddressAllowed] - the classifier. Injected only so the
  *   test fixture server on 127.0.0.1 is reachable without weakening production.
  */
-export function createFetcher({
-  lookup,
-  config,
-  isAddressAllowed = isAllowedAddress,
-}) {
+export function createFetcher({ lookup, config, isAddressAllowed = isAllowedAddress }) {
   if (typeof lookup !== 'function') {
     throw new TypeError('createFetcher requires a `lookup` function');
   }
@@ -106,7 +102,10 @@ export function createFetcher({
           signal,
         });
       } catch (error) {
-        return { result: { ok: false, reason: classifyFetchError(error) }, receivedResponse };
+        return {
+          result: { ok: false, reason: classifyFetchError(error) },
+          receivedResponse,
+        };
       }
 
       receivedResponse = true;
@@ -117,7 +116,10 @@ export function createFetcher({
         try {
           bytes = await readCapped(response, config.maxResponseBytes);
         } catch (error) {
-          return { result: { ok: false, reason: classifyFetchError(error) }, receivedResponse };
+          return {
+            result: { ok: false, reason: classifyFetchError(error) },
+            receivedResponse,
+          };
         }
 
         // The cap is an error, never a truncation: a truncated page parses fine
@@ -341,7 +343,9 @@ async function readCapped(response, maxBytes) {
 }
 
 function isRedirect(status) {
-  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+  return (
+    status === 301 || status === 302 || status === 303 || status === 307 || status === 308
+  );
 }
 
 function ssrfBlocked(hostname) {

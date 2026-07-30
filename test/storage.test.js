@@ -48,25 +48,29 @@ test('an existing database directory is accepted on a second boot', (t) => {
   assert.equal(statSync(root).isDirectory(), true);
 });
 
-test('a directory the process cannot write fails fast, naming the fix', {
-  skip: process.getuid?.() === 0 ? 'root ignores mode bits' : false,
-}, (t) => {
-  const root = scratch(t);
+test(
+  'a directory the process cannot write fails fast, naming the fix',
+  {
+    skip: process.getuid?.() === 0 ? 'root ignores mode bits' : false,
+  },
+  (t) => {
+    const root = scratch(t);
 
-  // Stand in for the root-owned bind mount: present, but not writable by us.
-  chmodSync(root, 0o555);
+    // Stand in for the root-owned bind mount: present, but not writable by us.
+    chmodSync(root, 0o555);
 
-  assert.throws(
-    () => ensureDataDirectory({ databasePath: join(root, 'iheartrss.db') }),
-    (err) => {
-      assert.match(err.message, /not writable/i);
-      // The operator needs the command, not a bare EACCES.
-      assert.match(err.message, /chown 1000:1000/);
-      assert.ok(err.message.includes(root), 'names the offending directory');
-      return true;
-    },
-  );
-});
+    assert.throws(
+      () => ensureDataDirectory({ databasePath: join(root, 'iheartrss.db') }),
+      (err) => {
+        assert.match(err.message, /not writable/i);
+        // The operator needs the command, not a bare EACCES.
+        assert.match(err.message, /chown 1000:1000/);
+        assert.ok(err.message.includes(root), 'names the offending directory');
+        return true;
+      },
+    );
+  },
+);
 
 test('the write probe leaves nothing behind', (t) => {
   const root = scratch(t);

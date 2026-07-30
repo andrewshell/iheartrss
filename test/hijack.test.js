@@ -75,7 +75,7 @@ test('(a) an attacker feed whose `<channel><link>` targets its own steal page is
   );
 });
 
-test('(b) an attacker page declaring the VICTIM\'S channel-link-less feed is refused', async () => {
+test("(b) an attacker page declaring the VICTIM'S channel-link-less feed is refused", async () => {
   // §5 Step 4: "the channel-link-less case is the hole in this rule, so it gets its own
   // row". The victim's feed legitimately omits `<channel><link>`; the attacker publishes
   // a page with the badge and a `<link rel="alternate">` naming the victim's feed. No
@@ -177,7 +177,7 @@ test('an attacker naming a victim as canonical only re-verifies the victim', asy
   );
 });
 
-test('an attacker page on the victim\'s own origin cannot repoint the feed', async () => {
+test("an attacker page on the victim's own origin cannot repoint the feed", async () => {
   // §5 Step 4's "why there is no fallback": the attacker uploads one valid RSS file to a
   // writable path on the victim's origin, whose `<channel><link>` is the victim's
   // homepage, and submits it directly. Canonical origin == submitted origin, feed origin
@@ -365,7 +365,7 @@ test('an unreachable incumbent fails CLOSED, on every unreachable shape there is
 
 test('an exhausted budget is ambiguous_identity, not a free move', async () => {
   await withSites(
-    (url) => ({
+    (_url) => ({
       'victim.com': {
         '/': { body: html({ feedHref: '/feed.xml' }) },
       },

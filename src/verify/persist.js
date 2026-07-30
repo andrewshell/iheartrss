@@ -126,7 +126,10 @@ export function createPersister({
       return { ok: false, detail: { incumbent: incumbent.url, why: response.reason } };
     }
     if (response.status < 200 || response.status >= 300) {
-      return { ok: false, detail: { incumbent: incumbent.url, why: `status_${response.status}` } };
+      return {
+        ok: false,
+        detail: { incumbent: incumbent.url, why: `status_${response.status}` },
+      };
     }
 
     // A conclusive 2xx. Does it still declare the feed?
@@ -215,7 +218,10 @@ function featureColumns(features = {}) {
   const cloud =
     features.cloud === undefined && features.cloud_url === undefined
       ? undefined
-      : JSON.stringify({ cloud: features.cloud ?? null, cloud_url: features.cloud_url ?? null });
+      : JSON.stringify({
+          cloud: features.cloud ?? null,
+          cloud_url: features.cloud_url ?? null,
+        });
 
   return {
     has_source_ns: features.has_source_ns,

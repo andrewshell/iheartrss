@@ -108,6 +108,7 @@ function loadPosts(dir, log) {
   // defined order rather than whatever readdir happened to return.
   return posts.sort(
     (a, b) =>
-      b.pubDate - a.pubDate || (a.filename < b.filename ? 1 : a.filename > b.filename ? -1 : 0),
+      b.pubDate - a.pubDate ||
+      (a.filename < b.filename ? 1 : a.filename > b.filename ? -1 : 0),
   );
 }

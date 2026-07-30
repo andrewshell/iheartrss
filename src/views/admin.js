@@ -18,15 +18,19 @@ export function adminLoginPage({ config, error = null, retryAfterSeconds = null 
   const body = html`
 <section class="panel">
   <h1>Admin</h1>
-  ${error === 'unauthorized'
-    ? html`<p class="panel__error">That token was not accepted.</p>`
-    : ''}
-  ${error === 'throttled'
-    ? html`<p class="panel__error">
+  ${
+    error === 'unauthorized'
+      ? html`<p class="panel__error">That token was not accepted.</p>`
+      : ''
+  }
+  ${
+    error === 'throttled'
+      ? html`<p class="panel__error">
         Too many attempts. Try again in about ${Math.ceil((retryAfterSeconds ?? 60) / 60)}
         minute(s).
       </p>`
-    : ''}
+      : ''
+  }
   <form class="submit-form" method="post" action="/admin/login">
     <label for="token">Admin token</label>
     <input id="token" name="token" type="password" autocomplete="off" required>
@@ -97,9 +101,10 @@ function histogramSection(rows) {
   return html`
 <section class="panel">
   <h2>Why submissions are failing</h2>
-  ${rows.length === 0
-    ? html`<p>No rejections recorded.</p>`
-    : html`<ul class="admin-histogram">
+  ${
+    rows.length === 0
+      ? html`<p>No rejections recorded.</p>`
+      : html`<ul class="admin-histogram">
         ${rows.map(
           (row) => html`<li data-reason="${row.reason}" data-count="${row.n}">
             <code>${row.reason}</code>
@@ -107,7 +112,8 @@ function histogramSection(rows) {
             <span class="admin-meta">${Math.round((row.n / total) * 100)}%</span>
           </li>`,
         )}
-      </ul>`}
+      </ul>`
+  }
 </section>
 `;
 }
@@ -116,9 +122,10 @@ function reportsSection(rows, csrf) {
   return html`
 <section class="panel">
   <h2>Reports</h2>
-  ${rows.length === 0
-    ? html`<p>No reports.</p>`
-    : html`<ul class="admin-list">
+  ${
+    rows.length === 0
+      ? html`<p>No reports.</p>`
+      : html`<ul class="admin-list">
         ${rows.map(
           (row) => html`<li>
             <a href="${row.url}">${row.url}</a>
@@ -129,18 +136,21 @@ function reportsSection(rows, csrf) {
             </span>
             <p class="admin-report-reason">${row.reason}</p>
             ${row.contact ? html`<p class="admin-meta">contact: ${row.contact}</p>` : ''}
-            ${row.handled_at === null
-              ? html`<form class="admin-inline" method="post"
+            ${
+              row.handled_at === null
+                ? html`<form class="admin-inline" method="post"
                             action="/admin/reports/${row.id}/handle">
                   ${csrfField(csrf)}
                   <input name="reason" type="text" placeholder="what was done"
                          aria-label="what was done">
                   <button type="submit">Mark handled</button>
                 </form>`
-              : ''}
+                : ''
+            }
           </li>`,
         )}
-      </ul>`}
+      </ul>`
+  }
 </section>
 `;
 }
@@ -149,9 +159,10 @@ function submissionsSection(rows) {
   return html`
 <section class="panel">
   <h2>Recent submissions</h2>
-  ${rows.length === 0
-    ? html`<p>None yet.</p>`
-    : html`<ul class="admin-list">
+  ${
+    rows.length === 0
+      ? html`<p>None yet.</p>`
+      : html`<ul class="admin-list">
         ${rows.map(
           (row) => html`<li>
             <code>${row.submitted_url}</code>
@@ -159,7 +170,8 @@ function submissionsSection(rows) {
               ${row.reason ? html`<code>${row.reason}</code>` : ''} ${row.created_at}</span>
           </li>`,
         )}
-      </ul>`}
+      </ul>`
+  }
 </section>
 `;
 }
@@ -185,16 +197,18 @@ function bansSection(rows, csrf) {
     <input id="ban-reason" name="reason" type="text">
     <button type="submit">Ban</button>
   </form>
-  ${rows.length === 0
-    ? html`<p>No bans.</p>`
-    : html`<ul class="admin-list">
+  ${
+    rows.length === 0
+      ? html`<p>No bans.</p>`
+      : html`<ul class="admin-list">
         ${rows.map(
           (row) => html`<li>
             <code>${row.host || row.host_suffix}${row.path_prefix}</code>
             <span class="admin-meta">${row.reason ?? ''} ${row.created_at}</span>
           </li>`,
         )}
-      </ul>`}
+      </ul>`
+  }
 </section>
 `;
 }
@@ -217,9 +231,10 @@ function domainLimitsSection(rows, csrf) {
     <input id="limit-note" name="note" type="text">
     <button type="submit">Save</button>
   </form>
-  ${rows.length === 0
-    ? html`<p>No overrides.</p>`
-    : html`<ul class="admin-list">
+  ${
+    rows.length === 0
+      ? html`<p>No overrides.</p>`
+      : html`<ul class="admin-list">
         ${rows.map(
           (row) => html`<li>
             <code>${row.domain}</code>
@@ -227,7 +242,8 @@ function domainLimitsSection(rows, csrf) {
             <span class="admin-meta">${row.note ?? ''}</span>
           </li>`,
         )}
-      </ul>`}
+      </ul>`
+  }
 </section>
 `;
 }
@@ -240,9 +256,10 @@ function sitesSection(heading, rows, csrf) {
   return html`
 <section class="panel">
   <h2>${heading}</h2>
-  ${rows.length === 0
-    ? html`<p>Nothing here.</p>`
-    : html`<ul class="admin-list">
+  ${
+    rows.length === 0
+      ? html`<p>Nothing here.</p>`
+      : html`<ul class="admin-list">
         ${rows.map(
           (row) => html`<li>
             <a href="${row.url}">${row.title}</a>
@@ -256,7 +273,8 @@ function sitesSection(heading, rows, csrf) {
             </form>
           </li>`,
         )}
-      </ul>`}
+      </ul>`
+  }
 </section>
 `;
 }

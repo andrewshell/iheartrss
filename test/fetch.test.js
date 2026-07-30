@@ -29,8 +29,7 @@ function reachableFetcher(overrides = {}) {
     lookup: loopbackLookup,
     config: { ...CONFIG, ...overrides },
     // Test-only: 127.0.0.1 is where the fixture server lives.
-    isAddressAllowed: (address) =>
-      address === '127.0.0.1' || isAllowedAddress(address),
+    isAddressAllowed: (address) => address === '127.0.0.1' || isAllowedAddress(address),
   });
 }
 
@@ -73,7 +72,8 @@ test('safeFetch returns the decoded body of a 200 response', async () => {
 
 test('guardedLookup answers in the shape the caller asked for (§5 Step 1)', async () => {
   const guardedLookup = createGuardedLookup({
-    lookup: (hostname, options, cb) => cb(null, [{ address: '93.184.216.34', family: 4 }]),
+    lookup: (hostname, options, cb) =>
+      cb(null, [{ address: '93.184.216.34', family: 4 }]),
   });
 
   // undici's autoSelectFamily path calls the hook as `{ hints: 1024, all: true }`.
@@ -389,7 +389,10 @@ test('safeFetch shares one deadline across redirect hops', async () => {
       const result = await safeFetch(`${origin}/0`);
 
       assert.deepEqual(result, { ok: false, reason: 'timeout' });
-      assert.ok(hits.length <= 3, `expected the chain to be cut short, got ${hits.length}`);
+      assert.ok(
+        hits.length <= 3,
+        `expected the chain to be cut short, got ${hits.length}`,
+      );
     },
   );
 });
@@ -416,7 +419,9 @@ test('safeFetch treats the size cap as an error, never a truncation', async () =
     (req, res) => {
       res.writeHead(200, { 'content-type': 'text/html' });
       // A page with a real link-back, only bigger than the cap.
-      res.end(`<html>${'x'.repeat(20_000)}<a href="https://iheartrss.com/">us</a></html>`);
+      res.end(
+        `<html>${'x'.repeat(20_000)}<a href="https://iheartrss.com/">us</a></html>`,
+      );
     },
     async ({ origin }) => {
       const safeFetch = reachableFetcher({ maxResponseBytes: 1024 });
@@ -501,7 +506,10 @@ test('safeFetch falls back to the XML declaration encoding for feeds', async () 
       // here; decoding as UTF-8 mangles every title we publish.
       const result = await reachableFetcher()(`${origin}/feed.xml`, { kind: 'feed' });
 
-      assert.equal(result.body, '<?xml version="1.0" encoding="ISO-8859-1"?><rss><title>é</title></rss>');
+      assert.equal(
+        result.body,
+        '<?xml version="1.0" encoding="ISO-8859-1"?><rss><title>é</title></rss>',
+      );
     },
   );
 });

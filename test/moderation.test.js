@@ -11,7 +11,13 @@ import { createApp } from '../src/app.js';
 import { createDb } from '../src/db/index.js';
 import { createVerifier } from '../src/verify/index.js';
 import { createPersister } from '../src/verify/persist.js';
-import { CONFIG as FIXTURE_CONFIG, FEED_TYPE, html, rss, withSites } from './helpers/sites.js';
+import {
+  CONFIG as FIXTURE_CONFIG,
+  FEED_TYPE,
+  html,
+  rss,
+  withSites,
+} from './helpers/sites.js';
 
 const CONFIG = Object.freeze({
   ...FIXTURE_CONFIG,
@@ -90,7 +96,7 @@ test('a hidden row that is later revived by a normal resubmit stays hidden', asy
   const { db, queries, persist } = setup();
   const { siteId } = await persist(verified());
   queries.hideSite(siteId, 'spam');
-  db.prepare("UPDATE sites SET failure_count = 3 WHERE id = ?").run(siteId);
+  db.prepare('UPDATE sites SET failure_count = 3 WHERE id = ?').run(siteId);
 
   await persist(verified());
 
@@ -162,7 +168,8 @@ test('a ban hides the sites it covers, and only those', async () => {
 
   queries.insertBan({ host: 'mastodon.social', path_prefix: '/@spammer' });
 
-  const status = (id) => db.prepare('SELECT status FROM sites WHERE id = ?').get(id).status;
+  const status = (id) =>
+    db.prepare('SELECT status FROM sites WHERE id = ?').get(id).status;
   assert.equal(status(spammer.siteId), 'hidden');
   assert.equal(status(innocent.siteId), 'active');
 });
@@ -298,7 +305,10 @@ test('POST /admin/sites/:id/hide takes a site down', async () => {
   const res = await adminPost(app, `/admin/sites/${id}/hide`, { reason: 'spam' });
 
   assert.equal(res.status, 200);
-  assert.equal(db.prepare('SELECT status FROM sites WHERE id = ?').get(id).status, 'hidden');
+  assert.equal(
+    db.prepare('SELECT status FROM sites WHERE id = ?').get(id).status,
+    'hidden',
+  );
   assert.equal(db.prepare('SELECT action FROM moderation_log').get().action, 'hide');
 });
 
@@ -308,7 +318,14 @@ test('a wrong-LENGTH admin token is a 401, not a 500', async () => {
   // §6: raw crypto.timingSafeEqual throws ERR_CRYPTO_TIMING_SAFE_EQUAL_LENGTH on
   // unequal lengths (verified), so a wrong-length guess 500s instead of 401-ing — a
   // crash per attempt AND a length oracle. Hashing both sides makes them 32 bytes.
-  for (const token of ['x', 'short', 'a'.repeat(63), 'a'.repeat(65), 'b'.repeat(64), '']) {
+  for (const token of [
+    'x',
+    'short',
+    'a'.repeat(63),
+    'a'.repeat(65),
+    'b'.repeat(64),
+    '',
+  ]) {
     const res = await adminPost(app, `/admin/sites/${id}/hide`, {}, token);
     assert.equal(res.status, 401, `token ${JSON.stringify(token)} must be a 401`);
   }
@@ -316,7 +333,10 @@ test('a wrong-LENGTH admin token is a 401, not a 500', async () => {
   const missing = await adminPost(app, `/admin/sites/${id}/hide`, {}, null);
   assert.equal(missing.status, 401);
 
-  assert.equal(db.prepare('SELECT status FROM sites WHERE id = ?').get(id).status, 'active');
+  assert.equal(
+    db.prepare('SELECT status FROM sites WHERE id = ?').get(id).status,
+    'active',
+  );
 });
 
 test('no admin routes exist at all when ADMIN_TOKEN is unset', async () => {
@@ -353,7 +373,10 @@ test('POST /admin/ban bans a host and hides its sites in one request', async () 
 
   assert.equal(res.status, 200);
   assert.ok(queries.findBan({ host: 'spammer.example', path: '/' }));
-  assert.equal(db.prepare('SELECT status FROM sites WHERE id = ?').get(id).status, 'hidden');
+  assert.equal(
+    db.prepare('SELECT status FROM sites WHERE id = ?').get(id).status,
+    'hidden',
+  );
 });
 
 test('POST /admin/ban accepts a host_suffix and a path_prefix', async () => {
@@ -505,7 +528,12 @@ test('a cookie-authenticated admin POST without the CSRF token is rejected', asy
   // admin POST." The dashboard's own forms have to carry it, or the UI can't work.
   assert.ok(csrf, 'the dashboard must carry a CSRF token for its forms');
 
-  const missing = await sessionPost(app, `/admin/sites/${id}/hide`, { reason: 'spam' }, cookie);
+  const missing = await sessionPost(
+    app,
+    `/admin/sites/${id}/hide`,
+    { reason: 'spam' },
+    cookie,
+  );
   assert.equal(missing.status, 403);
 
   const wrong = await sessionPost(
@@ -517,7 +545,12 @@ test('a cookie-authenticated admin POST without the CSRF token is rejected', asy
   assert.equal(wrong.status, 403);
   assert.equal(statusOf(db, id), 'active', 'a CSRF-less POST must write nothing');
 
-  const ok = await sessionPost(app, `/admin/sites/${id}/hide`, { reason: 'spam', csrf }, cookie);
+  const ok = await sessionPost(
+    app,
+    `/admin/sites/${id}/hide`,
+    { reason: 'spam', csrf },
+    cookie,
+  );
   assert.equal(ok.status, 303);
   assert.equal(statusOf(db, id), 'hidden');
 });
@@ -563,7 +596,10 @@ test('every mutating admin action leaves a moderation_log row', async () => {
   await adminPost(app, `/admin/sites/${id}/unhide`, { reason: 'r2' });
   await adminPost(app, '/admin/ban', { host: 'other.example', reason: 'r3' });
   await adminPost(app, `/admin/reports/${reportId}/handle`, { reason: 'r4' });
-  await adminPost(app, '/admin/domain-limits', { domain: 'tenants.com', max_listings: '-1' });
+  await adminPost(app, '/admin/domain-limits', {
+    domain: 'tenants.com',
+    max_listings: '-1',
+  });
 
   // §4: "Every admin action, so there's a record of what was done and why." The log
   // is the only account of a moderation decision that survives the operator.
@@ -618,7 +654,16 @@ test('no public page links to /admin', async () => {
 
   // §6/§12: the dashboard is disallowed in robots.txt AND never linked. A link in the
   // shared footer would put it in every crawler's queue and in every referrer log.
-  for (const path of ['/', '/about', '/sites', '/submit', '/badge', '/guide', '/status', '/report']) {
+  for (const path of [
+    '/',
+    '/about',
+    '/sites',
+    '/submit',
+    '/badge',
+    '/guide',
+    '/status',
+    '/report',
+  ]) {
     const body = await (await app.request(path)).text();
     assert.ok(!body.includes('/admin'), `${path} must not link to /admin`);
   }
@@ -643,7 +688,9 @@ test('the dashboard carries the rejection histogram, both queues and the backlog
   attempt('feed_not_rss2');
   attempt(undefined, 'added');
 
-  db.prepare("UPDATE sites SET status = 'failing', last_error = 'timeout' WHERE id = ?").run(id);
+  db.prepare(
+    "UPDATE sites SET status = 'failing', last_error = 'timeout' WHERE id = ?",
+  ).run(id);
   queries.insertReport({
     site_id: id,
     url: 'https://spammer.example/',
@@ -721,7 +768,9 @@ test('POST /admin/domain-limits refuses a limit that is not a number', async () 
 
   assert.equal(res.status, 400);
   assert.equal(
-    db.prepare('SELECT count(*) AS n FROM domain_limits WHERE domain = ?').get('tenants.com').n,
+    db
+      .prepare('SELECT count(*) AS n FROM domain_limits WHERE domain = ?')
+      .get('tenants.com').n,
     0,
   );
 });

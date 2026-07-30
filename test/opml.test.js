@@ -79,7 +79,10 @@ const HOSTILE = [
   ['a lone high surrogate', '\uD800 unpaired'],
   ['a lone low surrogate', 'trailing \uDFFF'],
   ['the non-characters U+FFFE / U+FFFF', 'noncharacters \uFFFE\uFFFF here'],
-  ['an attribute break-out', '"><script xmlns="http://www.w3.org/1999/xhtml">alert(1)</script>'],
+  [
+    'an attribute break-out',
+    '"><script xmlns="http://www.w3.org/1999/xhtml">alert(1)</script>',
+  ],
   ['a CDATA terminator', 'end of section ]]> and on'],
   ['an RTL override', 'gnp.exe\u202Egpj.txt'],
   ['C0 and C1 controls', '\u0007bell and \u0085next-line'],
@@ -256,7 +259,7 @@ test('a banned host is excluded by the backstop join even while its status is ac
   // `insertBan`'s hide-the-matching-sites step. That is the backstop's whole job:
   // a ban can remove members without touching a `sites` row.
   db.prepare(
-    "INSERT INTO banned_hosts (host, host_suffix, path_prefix, reason, created_at)" +
+    'INSERT INTO banned_hosts (host, host_suffix, path_prefix, reason, created_at)' +
       " VALUES ('mastodon.social', '', '/@spammer', 'spam', '2026-07-29T00:00:00.000Z')",
   ).run();
 
@@ -297,7 +300,7 @@ test('a host_suffix ban excludes every subdomain from the outline set', () => {
   );
 
   db.prepare(
-    "INSERT INTO banned_hosts (host, host_suffix, path_prefix, reason, created_at)" +
+    'INSERT INTO banned_hosts (host, host_suffix, path_prefix, reason, created_at)' +
       " VALUES ('', '.attacker.example', '', 'flood', '2026-07-29T00:00:00.000Z')",
   ).run();
 

@@ -30,7 +30,8 @@ export function renderSitemap({ config, posts = [] }) {
   const urls = entries
     .map(({ path, lastmod }) => {
       const loc = escapeXml(new URL(path, config.siteUrl).href);
-      const modified = lastmod === null ? '' : `\n    <lastmod>${escapeXml(lastmod)}</lastmod>`;
+      const modified =
+        lastmod === null ? '' : `\n    <lastmod>${escapeXml(lastmod)}</lastmod>`;
       return `  <url>\n    <loc>${loc}</loc>${modified}\n  </url>`;
     })
     .join('\n');

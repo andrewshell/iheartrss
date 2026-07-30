@@ -27,10 +27,15 @@ import { normalizeUrl } from './url.js';
  * an RSS document where a CDATA-wrapped link in a post body would pass and an
  * entity-escaped one wouldn't.
  */
-export function resolveCanonicalUrl({ submittedUrl, channelLink, submittedResourceWasFeed }) {
-  const declared = channelLink === null || channelLink === undefined || String(channelLink).trim() === ''
-    ? null
-    : normalizeUrl(channelLink);
+export function resolveCanonicalUrl({
+  submittedUrl,
+  channelLink,
+  submittedResourceWasFeed,
+}) {
+  const declared =
+    channelLink === null || channelLink === undefined || String(channelLink).trim() === ''
+      ? null
+      : normalizeUrl(channelLink);
 
   if (declared !== null && declared.ok) {
     return { ok: true, canonicalUrl: declared.url, hasChannelLink: true };
@@ -61,7 +66,11 @@ export function checkFeedProvenance({ canonicalUrl, feedUrl, feedChannelLink }) 
   // Row 3: a feed making no claim of its own is accepted only when it is self-hosted
   // on the canonical host. Without this the second direction is vacuous — an attacker
   // page declaring the victim's channel-link-less feed passes every other test.
-  if (feedChannelLink === null || feedChannelLink === undefined || String(feedChannelLink).trim() === '') {
+  if (
+    feedChannelLink === null ||
+    feedChannelLink === undefined ||
+    String(feedChannelLink).trim() === ''
+  ) {
     return hostOf(feedUrl) === canonicalHost
       ? { ok: true }
       : { ok: false, reason: 'feed_not_owned_by_canonical' };

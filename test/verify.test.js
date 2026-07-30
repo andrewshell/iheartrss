@@ -236,7 +236,7 @@ test('the final post-redirect URL of the canonical page becomes the listed URL',
   );
 });
 
-test('a canonical page declaring a DIFFERENT feed: the canonical page\'s feed wins', async () => {
+test("a canonical page declaring a DIFFERENT feed: the canonical page's feed wins", async () => {
   // §5 Step 4: "the feed we publish must come from the page we publish". The feed recorded
   // against `example.com/` is the one `example.com/` itself declares — never one asserted
   // by a third party's page.
@@ -481,7 +481,7 @@ test('a 304 on the feed is a pass that keeps the stored metadata', async () => {
   const seen = [];
 
   await withSites(
-    (url) => ({
+    (_url) => ({
       'example.com': {
         '/': { body: html({ feedHref: '/feed.xml' }) },
         '/feed.xml': (req, res) => {
@@ -506,10 +506,12 @@ test('a 304 on the feed is a pass that keeps the stored metadata', async () => {
       });
 
       // §8: "a 304 is the cheapest possible way to honour the 'good citizen' claim."
-      assert.deepEqual(seen, [{
-        ifNoneMatch: '"v1"',
-        ifModifiedSince: 'Wed, 01 Jul 2026 10:00:00 GMT',
-      }]);
+      assert.deepEqual(seen, [
+        {
+          ifNoneMatch: '"v1"',
+          ifModifiedSince: 'Wed, 01 Jul 2026 10:00:00 GMT',
+        },
+      ]);
       // Byte-identical to the document we already validated, so the feed still
       // validates — but there is no body to take a title from, and overwriting
       // `title` with nothing would violate its NOT NULL.

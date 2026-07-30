@@ -73,9 +73,7 @@ function renderItem({ post, config }) {
   // newline is meaningful. The attribute-value filter normalises newlines to spaces
   // — right for the title above, and fatal here, where it would flatten a fenced code
   // block into one unparseable line.
-  lines.push(
-    `      <description>${escapeXml(xmlSafeContent(post.html))}</description>`,
-  );
+  lines.push(`      <description>${escapeXml(xmlSafeContent(post.html))}</description>`);
   lines.push(
     `      <source:markdown>${escapeXml(xmlSafeContent(post.markdown))}</source:markdown>`,
   );
@@ -85,8 +83,18 @@ function renderItem({ post, config }) {
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 /**

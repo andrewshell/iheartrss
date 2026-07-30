@@ -143,7 +143,9 @@ test('same-date, same-time posts are ordered by filename rather than by readdir'
     '2026-07-29-beta.md': 'Beta.\n',
   });
 
-  const first = createBlog({ dir }).posts().map((p) => p.slug);
+  const first = createBlog({ dir })
+    .posts()
+    .map((p) => p.slug);
   assert.deepEqual(first, ['beta', 'alpha']);
 });
 
@@ -187,7 +189,10 @@ test('a titled post keeps its title, and HTML in the body is entity-encoded', ()
   // document non-well-formed for every subscriber.
   assert.match(item, /<description>[\s\S]*&lt;em&gt;note&lt;\/em&gt;/);
   assert.match(item, /<source:markdown>[\s\S]*&lt;em&gt;note&lt;\/em&gt;/);
-  assert.doesNotMatch(item.replace(/<\/?(title|link|guid|pubDate|description|source:markdown)[^>]*>/g, ''), /<em>/);
+  assert.doesNotMatch(
+    item.replace(/<\/?(title|link|guid|pubDate|description|source:markdown)[^>]*>/g, ''),
+    /<em>/,
+  );
 });
 
 test('the feed lists posts newest first with RFC 822 pubDates', async () => {
@@ -368,7 +373,17 @@ test('<source:markdown> round-trips the source text, newlines and all', async ()
   // through the attribute-value filter — which normalises every newline to a space,
   // correctly, for attributes — silently turns a fenced code block and a bulleted
   // list into one unparseable line.
-  const source = ['# Heading', '', '- one', '- two', '', '```', 'code & <tags>', '```', ''].join('\n');
+  const source = [
+    '# Heading',
+    '',
+    '- one',
+    '- two',
+    '',
+    '```',
+    'code & <tags>',
+    '```',
+    '',
+  ].join('\n');
   const post = parsePost({ filename: '2026-07-29.md', source });
 
   const xml = renderFeed({ config, posts: [post] });
@@ -394,6 +409,8 @@ test('a lone surrogate or a control character in a post still yields a well-form
 
   assert.equal(XMLValidator.validate(xml), true);
   assert.doesNotMatch(xml, /[\uD800-\uDFFF]/);
+  // Asserting a control character was stripped requires naming it.
+  // eslint-disable-next-line no-control-regex
   assert.doesNotMatch(xml, /\u0007/);
   // The legal characters around them survive.
   assert.match(xml, /Body\s+with a half pair\s+too/);

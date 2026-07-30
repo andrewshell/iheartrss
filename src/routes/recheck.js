@@ -59,8 +59,8 @@ export function registerRecheck(app, deps) {
             kind: 'error',
             heading: 'Too many checks',
             body: html`<p>
-              Every check costs somebody else&rsquo;s server a request. Try again in
-              about ${Math.ceil(gate.retryAfterSeconds / 60)} minutes.
+              Every check costs somebody else&rsquo;s server a request. Try again in about
+              ${Math.ceil(gate.retryAfterSeconds / 60)} minutes.
             </p>`,
           },
         }),
@@ -80,12 +80,16 @@ export function registerRecheck(app, deps) {
     // The neutral answer, identical to `/submit`'s for a hidden row: true, and not an
     // oracle. Before the cooldown check, so even the 429 can't be used to probe.
     if (row.status === 'hidden') {
-      return c.html(submitPage({ config, result: { outcome: 'already_submitted', url: row.url } }));
+      return c.html(
+        submitPage({ config, result: { outcome: 'already_submitted', url: row.url } }),
+      );
     }
 
     const cooldownMs = config.recheckCooldownMin * 60 * 1000;
     const since =
-      row.last_recheck_at === null ? Infinity : now().getTime() - Date.parse(row.last_recheck_at);
+      row.last_recheck_at === null
+        ? Infinity
+        : now().getTime() - Date.parse(row.last_recheck_at);
 
     if (since < cooldownMs) {
       const wait = Math.ceil((cooldownMs - since) / 1000);
@@ -99,9 +103,8 @@ export function registerRecheck(app, deps) {
             kind: 'error',
             heading: 'Just checked',
             body: html`<p>
-              We re-checked this site recently. Try again in about
-              ${Math.ceil(wait / 60)} minutes &mdash; or leave it to us; we come round
-              on our own every few days.
+              We re-checked this site recently. Try again in about ${Math.ceil(wait / 60)}
+              minutes &mdash; or leave it to us; we come round on our own every few days.
             </p>`,
           },
         }),
@@ -184,10 +187,9 @@ export function registerRecheck(app, deps) {
           heading: "We couldn't find the link back to us",
           body: html`<p>
             Your page and feed both loaded, but there is no link to
-            <code>iheartrss.com</code> on
-            <a href="${row.url}">${row.url}</a>. If you meant to leave, nothing more is
-            needed &mdash; we confirm it on a later check and then remove you. If you
-            didn&rsquo;t, put the link back and
+            <code>iheartrss.com</code> on <a href="${row.url}">${row.url}</a>. If you
+            meant to leave, nothing more is needed &mdash; we confirm it on a later check
+            and then remove you. If you didn&rsquo;t, put the link back and
             <a href="/badge">check the badge snippets</a>.
           </p>`,
         };
@@ -214,8 +216,7 @@ export function registerRecheck(app, deps) {
         kind: 'error',
         heading: "We couldn't record that",
         body: html`<p>
-          Something about this listing needs a person to look at it. Nothing was
-          changed.
+          Something about this listing needs a person to look at it. Nothing was changed.
         </p>`,
       };
     }
@@ -249,7 +250,10 @@ function passColumns(row, result) {
   const cloud =
     features.cloud === undefined && features.cloud_url === undefined
       ? undefined
-      : JSON.stringify({ cloud: features.cloud ?? null, cloud_url: features.cloud_url ?? null });
+      : JSON.stringify({
+          cloud: features.cloud ?? null,
+          cloud_url: features.cloud_url ?? null,
+        });
 
   return {
     title: result.title,

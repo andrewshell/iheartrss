@@ -71,7 +71,12 @@ export function registerSubmit(app, deps) {
     const gate = limiter.take(ip);
     if (!gate.ok) {
       return c.html(
-        reportPage({ config, url: '', error: 'rate_limited', retryAfterSeconds: gate.retryAfterSeconds }),
+        reportPage({
+          config,
+          url: '',
+          error: 'rate_limited',
+          retryAfterSeconds: gate.retryAfterSeconds,
+        }),
         429,
         { 'Retry-After': String(gate.retryAfterSeconds) },
       );
@@ -87,16 +92,24 @@ export function registerSubmit(app, deps) {
     if (queries === null) return c.html(reportPage({ config, url, error: 'error' }), 503);
 
     const normalized = normalizeUrl(url);
-    const match = normalized.ok ? queries.getSiteBySubmittedUrl(normalized.url) : undefined;
+    const match = normalized.ok
+      ? queries.getSiteBySubmittedUrl(normalized.url)
+      : undefined;
 
     queries.insertReport({
       site_id: match?.id,
       url: normalized.ok ? normalized.url : url,
       reason: reason.slice(0, 2000),
-      contact: String(form.contact ?? '').trim().slice(0, 200) || undefined,
+      contact:
+        String(form.contact ?? '')
+          .trim()
+          .slice(0, 200) || undefined,
       ip_hash: hashIp(ip),
     });
-    log('report.filed', { url: normalized.ok ? normalized.url : url, site_id: match?.id ?? null });
+    log('report.filed', {
+      url: normalized.ok ? normalized.url : url,
+      site_id: match?.id ?? null,
+    });
 
     return c.html(reportPage({ config, url, filed: true }));
   });
