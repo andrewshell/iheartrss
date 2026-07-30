@@ -40,7 +40,19 @@ export function submitForm({ action = '/submit', value = '', autofocus = false }
 </form>`;
 }
 
+/**
+ * The three "how to join" steps live here rather than on the homepage.
+ *
+ * They used to be on `/`, which meant explaining what to do in one place and asking
+ * for the URL in another — and they pushed §10's feed reader well below the fold.
+ * The steps end in the form, so the form is where they belong.
+ *
+ * A result panel, when there is one, stays above everything: someone who just got a
+ * rejection is here to read it, not to re-read the instructions.
+ */
 export function submitPage({ config, result = null, submitted = '' }) {
+  const badgeImg = '/iheartrss.svg';
+
   const body = html`
 <section class="submit">
   <h1>Submit your site</h1>
@@ -50,7 +62,33 @@ export function submitPage({ config, result = null, submitted = '' }) {
     <a href="${config.siteUrl}">iheartrss.com</a>, and it advertises an
     <a href="/guide">RSS 2.0 feed</a> in its <code>&lt;head&gt;</code>.
   </p>
-  ${submitForm({ value: submitted, autofocus: result !== null })}
+
+  <ol class="steps">
+    <li>
+      <h2>Put the badge on your homepage</h2>
+      <p>
+        Link to <code>${config.siteUrl}</code>. An image badge or a plain text link
+        both count &mdash; we look at the link, not the picture.
+      </p>
+      <p>
+        <a href="/"><img src="${badgeImg}" alt="I love RSS" width="88" height="31"></a>
+      </p>
+      <p><a href="/badge">Get the badge and copy-paste snippets &rarr;</a></p>
+    </li>
+    <li>
+      <h2>Make sure your feed is discoverable</h2>
+      <p>
+        We look for an RSS 2.0 feed advertised in your page&rsquo;s
+        <code>&lt;head&gt;</code>.
+      </p>
+      <p><a href="/guide">How to publish an RSS 2.0 feed &rarr;</a></p>
+    </li>
+    <li>
+      <h2>Submit your URL</h2>
+      ${submitForm({ value: submitted, autofocus: result !== null })}
+    </li>
+  </ol>
+
   <p>
     Not sure what&rsquo;s wrong? <a href="/guide">The guide</a> covers the three
     rejections we see most, per platform.

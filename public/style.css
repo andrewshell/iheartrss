@@ -228,10 +228,17 @@ section {
   margin-block: 1rem;
 }
 
+/* h2 and h3 both, because the heading level is a property of where the steps are.
+   On /submit they sit directly under the page's h1, so they are h2s. Sized here
+   rather than inheriting, so a step heading stays a step heading and does not
+   render at full h2 scale inside its own card. */
+.steps > li > h2,
 .steps > li > h3 {
   margin-top: 0;
+  font-size: var(--step-1);
 }
 
+.steps > li > h2::before,
 .steps > li > h3::before {
   content: counter(step) '. ';
   color: var(--brand-text);
@@ -405,6 +412,13 @@ pre.code code,
   resize: vertical;
 }
 
+.hero__cta {
+  margin-top: 1.5rem;
+}
+
+/* The homepage's one call to action. Same shape as the submit button so a link and
+   a button that mean "do the thing" do not look like two different controls. */
+.button,
 .submit-form button {
   min-height: var(--tap);
   padding: 0.6rem 1.1rem;
@@ -416,6 +430,15 @@ pre.code code,
   font-family: inherit;
   font-weight: 600;
   cursor: pointer;
+}
+
+.button {
+  display: inline-block;
+  text-decoration: none;
+}
+
+.button:hover {
+  text-decoration: underline;
 }
 
 .submit-form .button-secondary {
@@ -684,11 +707,12 @@ pre.code code,
   max-width: var(--measure);
 }
 
-.prose h1 {
-  font-size: var(--step-3);
-  line-height: 1.2;
-  margin-bottom: 0.25rem;
-}
+/* No `.prose h1` size override here.
+   There used to be one at --step-3, meant for post titles — but it also hit
+   /blog's own `<h1>Blog</h1>`, which sits inside .prose too, rendering the blog
+   index heading a step smaller than the h1 on every other page. Post titles carry
+   `.post__title`, which sets --step-3 on its own, so the override was both
+   redundant where it was wanted and wrong where it wasn't. */
 
 .blog-index {
   list-style: none;
@@ -767,16 +791,6 @@ pre.code code,
   margin-top: 2rem;
   padding-top: 0.9rem;
   border-top: 1px solid var(--border);
-}
-
-.latest {
-  margin-top: 2.5rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border);
-}
-
-.latest .post__title {
-  font-size: var(--step-2);
 }
 
 /* ── /admin (§6, phase 8b) ───────────────────────────────────────────────────

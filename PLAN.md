@@ -1143,7 +1143,7 @@ signals with `AbortSignal.any([...])`; `SUBMIT_BUDGET_MS` is the only real ceili
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/` | Pitch, how to join, submit form, a single member **count**, and the **latest blog post** inline. **No member list** — the feed reader will own this space (§10). |
+| GET | `/` | Pitch, a single member **count**, and a link to `/submit`. **No member list, no how-to-join steps, no blog post** — see §10. |
 | GET | `/blog` | All posts, newest first. |
 | GET | `/blog/:yyyy/:mm/:dd/:slug?` | A single post. (`{/:slug}?` is Express-5 syntax and throws at request time in Hono with an unhelpful `undefined is not iterable` — verified.) Resolution is an **index lookup, never a `path.join`** on route params. |
 | GET | `/feed.xml` | **Our own** RSS 2.0 feed (§6.4). Alias: `/rss.xml` → 301. |
@@ -2085,7 +2085,23 @@ recovery and a rebuild from nothing.
 **The homepage does not list members.** The feed reader coming after launch is the
 discovery surface — a list of names is a worse version of the same thing, and shipping one
 now means building something to delete. So v1's homepage is: what this is, how to join, the
-submit form, a member count, and an explicitly reserved slot where the reader will go.
+a member count, a link to `/submit`, and an explicitly reserved slot where the reader
+will go.
+
+**Trimmed further during implementation, once it could be looked at.** An earlier draft
+also put the three "how to join" steps and the latest blog post on `/`. Rendered, that
+was three screens before the reader would begin — the reader would have launched below
+the fold on a laptop, which defeats the point of giving it this page.
+
+- **The how-to-join steps moved to `/submit`.** They end in the submit form, and the form
+  was already on `/submit`, so the arrangement had the explanation on one page and the
+  field on another. They are one thing and now live in one place.
+- **The latest post is gone from `/` entirely.** It was there to give the homepage
+  something to say *before* the reader landed. Once the reader is there, it is the thing
+  with something to say.
+- **The `<h1>` no longer reads "I ♥ RSS".** The masthead directly above it is the wordmark
+  saying exactly that, so the page opened with the same words twice. It states what the
+  site *is* instead — which is also the more useful thing for a search result to carry.
 
 `/sites` still exists, for a different job: letting someone confirm they actually got
 listed, and showing publicly what's in the OPML. That need doesn't go away when the reader

@@ -384,26 +384,26 @@ test('/rss.xml is a 301 to /feed.xml, because people will guess it', async () =>
   assert.equal(res.headers.get('location'), '/feed.xml');
 });
 
-test('the homepage carries the latest post inline and only the latest', async () => {
-  // §6: the homepage shows "the latest blog post inline" — it gives the page
-  // something to say before §10's reader lands.
+test('the homepage carries NO post body, however many there are', async () => {
+  // §10: the homepage used to render the latest post in full. It was there to give
+  // the page something to say before the feed reader landed — but the reader is the
+  // point of this page, and a whole post above it is just distance. Posts live on
+  // /blog now; the homepage does not repeat them.
   const dir = await contentDir({
-    '2026-07-28.md': 'An older note nobody should see on the homepage.\n',
+    '2026-07-28.md': 'An older note.\n',
     '2026-07-30-why-rss.md': '---\ntitle: Why RSS\n---\nThe newest thing we wrote.\n',
   });
   const app = createApp({ config, blog: createBlog({ dir }) });
 
   const html = await (await app.request('/')).text();
 
-  assert.match(html, /The newest thing we wrote/);
-  assert.match(html, /\/blog\/2026\/07\/30\/why-rss/);
-  assert.doesNotMatch(html, /An older note nobody should see/);
-});
-
-test('a homepage with no posts at all says nothing about the blog', async () => {
-  const html = await (await createApp({ config }).request('/')).text();
-
+  assert.doesNotMatch(html, /The newest thing we wrote/);
+  assert.doesNotMatch(html, /An older note/);
   assert.doesNotMatch(html, /Latest post/i);
+
+  // And the posts are still there, one click away.
+  const blog = await (await app.request('/blog')).text();
+  assert.match(blog, /Why RSS/);
 });
 
 test('<source:markdown> round-trips the source text, newlines and all', async () => {

@@ -143,7 +143,6 @@ export function createApp({
       homePage({
         config,
         memberCount: queries === null ? 0 : queries.countSites(),
-        latestPost: blog.latest(),
       }),
     ),
   );
