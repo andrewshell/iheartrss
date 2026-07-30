@@ -32,14 +32,14 @@ jobs:
         # does not exist on 22 — so 22 is not in this list and must not be.
         node: ['24', '26']
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # Provides the pnpm version pinned in package.json's `packageManager`,
       # and must run before setup-node so `cache: 'pnpm'` can find pnpm.
       - name: Enable corepack
         run: corepack enable
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
           cache: 'pnpm'
@@ -60,15 +60,15 @@ jobs:
     name: Docker build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # Build only — no push. This exists so a broken Dockerfile fails CI on the
       # PR instead of at release time, when the tag has already been cut.
       - name: Build image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: false
