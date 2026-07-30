@@ -49,6 +49,11 @@ COPY public ./public
 # demand and to verify one — `node:24-alpine` ships no `sqlite3`, so without this
 # there is no way to answer "is that file actually a database" from the box.
 COPY bin ./bin
+# Blog posts ship IN the image. Deploying via dockge means pulling a published
+# image with no repo on the box, so there is nothing to bind-mount from — with
+# content/ left out, the blog renders empty and /feed.xml carries zero items.
+# Publishing a post is therefore: commit it, publish an image, redeploy.
+COPY content ./content
 
 # Runs unprivileged. The image ships uid/gid 1000 as `node`, which is the uid the
 # bind-mounted ./data on the host must be owned by — see README, "Deploying".

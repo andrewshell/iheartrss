@@ -224,24 +224,18 @@ docker compose up -d
 docker compose logs --tail 20 iheartrss
 ```
 
-### If the stack is still on `build: .`
+### If the tag you want was never published
 
-Then there is no previous version on this box and this is the 2am rebuild §9 warned
-about. Do the one-time switch instead — it takes two minutes and you only do it once:
-
-1. In `docker-compose.yml`, comment out `build: .` and uncomment the `image:` line.
-2. Put `IHEARTRSS_TAG=<the version you want>` in `.env`.
-3. `docker compose up -d`.
-
-From then on rollback is the three commands above.
-
-Failing that, the pure-git escape hatch, which requires a working build on the box:
+There is nothing to roll back to, because the stack only ever pulls published
+images and no repo exists on the box to build from. Publish it from a workstation:
 
 ```sh
-git log --oneline -10
-git checkout <good-sha>
-docker compose up -d --build
+git checkout <the good tag or sha>
+pnpm docker:build-push
 ```
+
+Then set `IHEARTRSS_TAG` to that version and redeploy as above. This is why §9 wants
+images published at each release rather than only when you need one.
 
 `data/` is untouched by any of this. Roll the image back before restoring a database
 if you're doing both.
