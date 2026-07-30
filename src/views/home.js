@@ -1,89 +1,50 @@
-import { html, raw } from 'hono/html';
+import { html } from 'hono/html';
 
-import { formatPostDate, heading } from './blog.js';
 import { layout } from './layout.js';
-import { submitForm } from './submit.js';
 
 /**
- * `memberCount` is §6's "single member **count**" — the homepage carries the number
- * and deliberately **no member list**, because §10's feed reader will own that space.
- * The list itself lives on /sites.
+ * The homepage is deliberately short (plan §10).
  *
- * `latestPost` is §6's "**latest blog post** inline" — one post, rendered in full,
- * which is what gives the homepage something to say before §10's reader lands. With
- * no posts the section is absent entirely rather than empty: a "Latest post" heading
- * over nothing is worse than no heading.
+ * `memberCount` is §6's "single member **count**" — the number, and deliberately
+ * **no member list**, because §10's feed reader will own that space. The list
+ * itself lives on /sites.
  *
- * `raw()` on the post body, and no sanitizer — see the note in views/blog.js.
+ * Two things that used to be here have moved, both for the same reason: the reader
+ * is the point of this page, and anything above it pushes it below the fold.
+ *
+ *   * **The "how to join" steps moved to /submit**, where the form they end in
+ *     already lived. Explaining three steps on one page and then asking for the URL
+ *     on another was the odd arrangement; the explanation and the field belong
+ *     together.
+ *   * **The latest post moved out entirely.** It was here to give the homepage
+ *     something to say before the reader landed. Once the reader is here, it is the
+ *     thing with something to say, and a full post above it is just distance.
+ *
+ * The heading does NOT repeat the wordmark. The masthead immediately above it already
+ * reads "I ♥ RSS", so an `<h1>` saying the same words was the same thing twice —
+ * it says what the site *is* instead.
  */
-export function homePage({ config, memberCount = 0, latestPost = null }) {
-  const badgeImg = new URL('/iheartrss.svg', config.siteUrl).href;
-
+export function homePage({ config, memberCount = 0 }) {
   const body = html`
 <section class="hero">
-  <h1>I &hearts; RSS</h1>
+  <h1>A directory of people who love RSS</h1>
   <p class="lede">
-    A directory of people who love RSS. Put the badge on your homepage, submit your
-    URL, and — once we&rsquo;ve checked the link back and found your feed — you&rsquo;re
-    on the list, and in an OPML subscription list any reader can subscribe to.
+    Put the badge on your homepage and submit your URL. Once we&rsquo;ve checked the
+    link back and found your feed, you&rsquo;re on the list &mdash; and in an OPML
+    subscription list any reader can subscribe to in one action.
   </p>
   <p class="hero__count">
     ${memberCount === 1 ? html`1 member` : html`${memberCount} members`} so far &mdash;
     <a href="/sites">see them all</a>, or
     <a href="/subscriptions.opml">subscribe to the whole list</a>.
   </p>
+  <p class="hero__cta">
+    <a class="button" href="/submit">Add your site</a>
+  </p>
 </section>
 
-<section class="how">
-  <h2>How to join</h2>
-  <ol class="steps">
-    <li>
-      <h3>Put the badge on your homepage</h3>
-      <p>
-        Link to <code>https://iheartrss.com/</code>. An image badge or a plain text
-        link both count &mdash; we look at the link, not the picture.
-      </p>
-      <p>
-        <a href="/"><img src="${badgeImg}" alt="I love RSS" width="88" height="31"></a>
-      </p>
-      <p><a href="/badge">Get the badge and copy-paste snippets &rarr;</a></p>
-    </li>
-    <li>
-      <h3>Make sure your feed is discoverable</h3>
-      <p>
-        We look for an RSS 2.0 feed advertised in your page&rsquo;s
-        <code>&lt;head&gt;</code>.
-      </p>
-      <p><a href="/guide">How to publish an RSS 2.0 feed &rarr;</a></p>
-    </li>
-    <li>
-      <h3>Submit your URL</h3>
-      ${submitForm()}
-    </li>
-  </ol>
-</section>
-
-${
-  latestPost === null
-    ? ''
-    : html`<section class="latest prose" aria-labelledby="latest-post">
-  <h2 id="latest-post">Latest post</h2>
-  <article class="post">
-    <h3 class="post__title">
-      <a href="${latestPost.path}">${heading(latestPost)}</a>
-    </h3>
-    ${
-      latestPost.title === null
-        ? ''
-        : html`<p class="post__date"><time datetime="${latestPost.date}">${formatPostDate(latestPost)}</time></p>`
-    }
-    <div class="post__body">
-${raw(latestPost.html)}
-    </div>
-  </article>
-  <p><a href="/blog">All posts &rarr;</a> &middot; <a href="/feed.xml">Subscribe</a></p>
-</section>`
-}
+<!-- §10: the feed reader lands here. Everything above it is deliberately short so
+     that it starts at or near the fold rather than three screens down. -->
 `;
 
   return layout({

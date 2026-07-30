@@ -62,13 +62,29 @@ test('GET /submit renders a form built for a phone', async () => {
   assert.match(html, /<label[^>]+for="url"/);
 });
 
-test('the submit form is on the homepage too', async () => {
+test('the homepage points at /submit rather than embedding the form', async () => {
+  // §10: the form and the three "how to join" steps that end in it now live
+  // together on /submit. The homepage used to embed the form and explain the steps
+  // above it, which put the explanation on one page and the field on another — and
+  // pushed the feed reader below the fold.
   const { app } = appWith();
-  const html = await (await app.request('/')).text();
+  const home = await (await app.request('/')).text();
 
-  // §6's route table: "GET /submit — the form on its own page (the homepage embeds
-  // it too)."
-  assert.match(html, /action="\/submit"/);
+  assert.doesNotMatch(home, /<form[^>]*action="\/submit"/);
+  assert.doesNotMatch(home, /How to join/i);
+  assert.match(home, /href="\/submit"/);
+});
+
+test('the how-to-join steps and the form are together on /submit', async () => {
+  const { app } = appWith();
+  const html = await (await app.request('/submit')).text();
+
+  assert.match(html, /<form[^>]*action="\/submit"/);
+  assert.match(html, /Put the badge on your homepage/);
+  assert.match(html, /Make sure your feed is discoverable/);
+  // The badge preview is a same-origin path, not an absolute SITE_URL — otherwise
+  // it 404s in dev and makes a pointless external request in production.
+  assert.match(html, /<img src="\/iheartrss\.svg"/);
 });
 
 const PASS = Object.freeze({
