@@ -116,12 +116,12 @@ iheartrss/
 ├─ Dockerfile
 ├─ docker-compose.yml           # for dockge
 ├─ .dockerignore
-├─ .gitignore                   # .env, data/, secrets/, *.local.md — the repo is a live
+├─ .gitignore                   # .env, data/, secrets/, *.local.* — the repo is a live
 │                               #   clone on the server, so this one matters
 ├─ secrets/                     # ip_hmac_key, chmod 600, NOT in the backup set (§9)
 ├─ .env.example
 ├─ RUNBOOK.md                   # restore, rollback, "it's 2am and X is broken"
-├─ PLAN.local.md
+├─ PLAN.md
 ├─ README.md
 ├─ src/
 │  ├─ server.js                 # entry: config, db init, scheduler start, listen
@@ -1990,7 +1990,7 @@ recovery and a rebuild from nothing.
   a user email.
 - **`/healthz` must return 503 when unhealthy.** The healthcheck as written only inspects
   HTTP status, so `{ok: false}` with a 200 passes and the container is never restarted.
-- `.gitignore` covering `.env`, `data/`, `*.local.md` — the repo is a live clone on the
+- `.gitignore` covering `.env`, `data/`, `secrets/`, `*.local.*` — the repo is a live clone on the
   server, and §3 listed no `.gitignore` at all.
 
 **Environment variables** (`.env.example`, validated at boot, fail fast if wrong):
