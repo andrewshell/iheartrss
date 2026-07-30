@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A minimal, complete, valid RSS 2.0 feed (iheartrss.com/guide).
+
+  Replace the five values below and you have a working feed. Two of them decide
+  whether you can be listed here:
+
+    <channel><link>  the site the feed belongs to. This is the page we list, and it
+                     is the page that has to carry the link back to iheartrss.com
+                     and the autodiscovery <link> tag below.
+    <item><pubDate>  RFC 822, e.g. Mon, 27 Jul 2026 09:00:00 +0000. `date -R` prints
+                     it. This is the one format people get wrong.
+
+  And on the page named by <channel><link>, in its <head>:
+
+    <link rel="alternate" type="application/rss+xml" title="Your site"
+          href="https://example.com/rss.xml">
+
+  A valid channel with no <item> elements at all is fine — you can publish the feed
+  before you have posts.
+-->
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Your site name</title>
+    <link>https://example.com/</link>
+    <description>What you write about.</description>
+    <language>en</language>
+    <lastBuildDate>Mon, 27 Jul 2026 09:00:00 +0000</lastBuildDate>
+    <atom:link href="https://example.com/rss.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>My first post</title>
+      <link>https://example.com/first-post</link>
+      <guid isPermaLink="true">https://example.com/first-post</guid>
+      <pubDate>Mon, 27 Jul 2026 09:00:00 +0000</pubDate>
+      <description>A sentence or two, or the whole post.</description>
+    </item>
+  </channel>
+</rss>

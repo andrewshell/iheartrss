@@ -92,7 +92,7 @@ invitation with a link, never like a validator complaining.
 | Frontmatter | hand-rolled, ~15 lines | Only `title:` is needed, and optional at that. `gray-matter` drags in `js-yaml` to parse one flat key/value block. Documented limit: flat `key: value` only, no nesting or lists. Swap in `gray-matter` if post metadata ever grows. |
 | CSS | One hand-written `public/style.css` | No build step, no framework. **Mobile-first** — see §6.3. |
 | Tests | `node:test` + `node:assert` | Built in, zero dependencies. |
-| Lint/format | Biome (optional) | Single binary, replaces eslint+prettier. Skip if you'd rather. |
+| Lint/format | ~~Biome (optional)~~ → **ESLint + Prettier** | ~~Single binary, replaces eslint+prettier.~~ **SUPERSEDED:** adopted ESLint (flat config) + Prettier instead, to match the rsscloud project's conventions so both repos are maintained the same way. Prettier owns formatting, ESLint owns correctness (no overlapping rules). |
 
 **Total production dependencies: 7** (`hono`, `@hono/node-server`, `fast-xml-parser`,
 `node-html-parser`, `marked`, `undici`, `tldts`). No build step for the server — plain ESM,
@@ -116,12 +116,12 @@ iheartrss/
 ├─ Dockerfile
 ├─ docker-compose.yml           # for dockge
 ├─ .dockerignore
-├─ .gitignore                   # .env, data/, secrets/, *.local.md — the repo is a live
+├─ .gitignore                   # .env, data/, secrets/, *.local.* — the repo is a live
 │                               #   clone on the server, so this one matters
 ├─ secrets/                     # ip_hmac_key, chmod 600, NOT in the backup set (§9)
 ├─ .env.example
 ├─ RUNBOOK.md                   # restore, rollback, "it's 2am and X is broken"
-├─ PLAN.local.md
+├─ PLAN.md
 ├─ README.md
 ├─ src/
 │  ├─ server.js                 # entry: config, db init, scheduler start, listen
@@ -244,7 +244,9 @@ CREATE TABLE submissions (
   --   * A daily-rotating date component, so hashes older than the abuse window can't be
   --     linked to today's.
   ip_hash       TEXT NOT NULL,
-  result        TEXT NOT NULL,   -- 'added' | 'updated' | 'rejected' | 'error'
+  result        TEXT NOT NULL,   -- 'added' | 'updated' | 'rejected' | 'error' | 'checked'
+                                 -- 'checked' is a POST /check dry run. Folding those into the
+                                 -- other values would make the abuse trail lie about what happened.
   reason        TEXT,            -- machine code, e.g. 'no_linkback'
   created_at    TEXT NOT NULL
 );
@@ -687,6 +689,22 @@ Verified; a UTF-8 BOM alone is tolerated, leading whitespace is not.
      a `>= 4.5` pin — a 112 KB body produced a **500,000,000-character string** with no
      throw; under §9's `mem_limit: 512m` that is a remote, unauthenticated OOM-kill via
      `/submit`. 4.5.4 through 4.5.7 all reject it safely. Re-verify before moving to 5.x.
+
+     **But 4.5.4's default `maxTotalExpansions: 1000` rejects honest feeds** — found during
+     implementation, not review. scripting.com's real feed contains **2,193 entity
+     references** (700 `&lt;`, 700 `&gt;`, 554 `&quot;`, 234 `&#10;`, 5 `&amp;`) across 50
+     items, so `parse()` threw `Entity expansion limit exceeded: 1020 > 1000` and the
+     reference feed for this entire project came back `feed_invalid`. Every full-content
+     WordPress feed hits the same wall. Use the object form:
+     `processEntities: { maxTotalExpansions: 2_000_000, maxEntitySize: 10000,
+     maxEntityCount: 1000, maxExpandedLength: 100000 }` — raising only the total, keeping the
+     three per-entity bounds at their 4.5.4 defaults. Both halves of the defence survive:
+     those three bound *DTD-declared* entities, and the DOCTYPE scan below rejects any
+     document that declares one before `parse()` ever runs, so what remains is 1:1 character
+     references whose count is linear in body size and already capped by
+     `MAX_RESPONSE_BYTES`. Verified defence-in-depth: with the DOCTYPE scan deliberately
+     bypassed, a 20,000 × 100 KB bomb still throws on `maxEntitySize` with a 3.3 MB heap
+     delta.
   2. **Reject `<!DOCTYPE` / `<!ENTITY` anywhere outside CDATA — not just the prolog.**
      A prolog-only scan is bypassed by placement: a DOCTYPE *after* the root element still
      declares and expands entities, and `XMLValidator.validate()` returns `true` on it —
@@ -1349,11 +1367,25 @@ enclosed inside it, so it holds up against both light and dark browser chrome �
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 ```
 
-`favicon.ico` and `apple-touch-icon.png` are generated **once, by hand, and committed** —
-not built at deploy time. Rasterising would mean adding a headless-browser or librsvg
-dependency to the Docker image to produce two files that change roughly never. The
-apple-touch PNG needs an **opaque** background (white); iOS composites transparent icons
-onto black.
+The raster set is generated **once, by hand, and committed** — not built at deploy time.
+Rasterising would mean adding a headless-browser or librsvg dependency to the Docker image
+to produce files that change roughly never.
+
+**Shipped** (generated with favicon.io, committed to `public/`): `favicon.ico`,
+`favicon-16x16.png`, `favicon-32x32.png`, `apple-touch-icon.png` (180×180),
+`android-chrome-192x192.png`, `android-chrome-512x512.png`, `site.webmanifest`.
+
+**The apple-touch icon is the one asset with no alpha channel**, and it had to be fixed
+after generation. favicon.io emits it transparent — verified alpha 0 in all four corners —
+and iOS composites a transparent home-screen icon onto **black**, so it would have shipped
+as an orange heart on a black tile. It is flattened onto opaque white and re-encoded as
+RGB with no alpha channel at all, so there is nothing left to composite. Every other PNG
+keeps its transparency, which is correct for browser tabs and for non-maskable Android icons.
+
+A `site.webmanifest` now exists, which makes the deferred maskable-icon item in §13.1 live
+rather than hypothetical: the manifest declares no `purpose: "maskable"` icon, so Android
+adaptive icons will letterbox the transparent PNGs rather than crop the heart's shoulders
+flat. Acceptable; the numbers for a proper maskable variant are in §6.1 above when wanted.
 
 **Known limit: the tight crop is not maskable-safe.** Verified by rendering it under a
 circular mask — the heart's left and right shoulders get sliced flat. That's fine for
@@ -1958,7 +1990,7 @@ recovery and a rebuild from nothing.
   a user email.
 - **`/healthz` must return 503 when unhealthy.** The healthcheck as written only inspects
   HTTP status, so `{ok: false}` with a 200 passes and the container is never restarted.
-- `.gitignore` covering `.env`, `data/`, `*.local.md` — the repo is a live clone on the
+- `.gitignore` covering `.env`, `data/`, `secrets/`, `*.local.*` — the repo is a live clone on the
   server, and §3 listed no `.gitignore` at all.
 
 **Environment variables** (`.env.example`, validated at boot, fail fast if wrong):
@@ -1981,7 +2013,8 @@ recovery and a rebuild from nothing.
 | `OPTOUT_FOLLOWUP_HOURS` | `24` | Cadence once `optout_seen_at` is set. |
 | `OPTOUT_EXPIRY_DAYS` | `14` | A stale first sighting is discarded. |
 | `RECHECK_COOLDOWN_MIN` | `60` | Per-site, on its own `last_recheck_at` clock. |
-| `MAX_LISTINGS_PER_DOMAIN` | `5` | Anti-flood cap; admin-overridable. |
+| `MAX_LISTINGS_PER_DOMAIN` | `5` | Anti-flood cap; per-domain overrides live in `domain_limits` (§4). |
+| `MAX_NEW_LISTINGS_PER_DAY` | `50` | The global daily new-listing cap §5 Step 7 requires. |
 | `CONTENT_DIR` | `./content` | Blog posts. |
 | `CONTENT_POLL_MS` | `30000` | Mtime poll for hot-publishing. |
 | `FETCH_TIMEOUT_MS` | `8000` | Per-request sanity cap. Effective timeout is `min(this, budgetRemaining)` — see §5. |

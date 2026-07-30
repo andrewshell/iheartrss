@@ -1,0 +1,43 @@
+{
+  "name": "iheartrss",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A webring-style directory for people who love RSS.",
+  "type": "module",
+  "packageManager": "pnpm@10.26.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "verify": "node bin/verify.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "docker:build-push": "./scripts/docker-build-push.sh",
+    "docker:dry-run": "./scripts/docker-build-push.sh --dry-run",
+    "prepare": "husky"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@hono/node-server": "^2.0.12",
+    "fast-xml-parser": "^4.5.7",
+    "hono": "^4.12.32",
+    "marked": "^18.0.7",
+    "node-html-parser": "^9.0.1",
+    "tldts": "^7.4.9",
+    "undici": "^8.9.0"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.1",
+    "@commitlint/config-conventional": "^21.2.0",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.0",
+    "globals": "^17.8.0",
+    "husky": "^9.1.7",
+    "prettier": "^3.9.6"
+  }
+}
