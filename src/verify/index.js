@@ -30,8 +30,23 @@ export function createVerifier({ safeFetch, config, isBanned = () => false }) {
    *   incumbent re-check spends the same clock as Steps 1–6 (§5, "Fetch budget").
    * @returns {Promise<object>} `{ ok: true, url, feedUrl, title, description, features,
    *   … }` or `{ ok: false, reason, … }`.
+   * @param {boolean} [options.fixedCanonical] - §8's revalidation mode: the URL
+   *   passed in **is** the canonical page. Step 4 does not run, so `sites.url` cannot
+   *   move and cannot oscillate between two pages that name each other's feed;
+   *   discovery still re-runs on that page, so a moved feed is picked up. The
+   *   feed-shortcut in `startFromSubmitted` is skipped too: `sites.url` is a page by
+   *   construction (a channel-link-less feed is `no_channel_link` at submission), and
+   *   running an HTML link-back parser over an RSS document is how a member gets read
+   *   as an opt-out for serving XML.
+   * @param {object} [options.conditional] - `{ feedUrl, etag, lastModified }` from the
+   *   row. Sent as `If-None-Match`/`If-Modified-Since` **only** when discovery lands
+   *   on the same `feedUrl`: a validator belongs to one URL, and sent for another it
+   *   would produce a 304 for a document we have never seen.
    */
-  return async function verifySite(submittedUrl, { budget: sharedBudget } = {}) {
+  return async function verifySite(
+    submittedUrl,
+    { budget: sharedBudget, fixedCanonical = false, conditional = null } = {},
+  ) {
     // ── Step 0 — normalize and pre-screen ────────────────────────────────────────
     const normalized = normalizeUrl(submittedUrl);
     if (!normalized.ok) return { ok: false, reason: normalized.reason };
@@ -58,18 +73,22 @@ export function createVerifier({ safeFetch, config, isBanned = () => false }) {
     if (!submitted.ok) return { ...submitted, url: normalized.url };
 
     // ── Step 2 — find the feed ───────────────────────────────────────────────────
-    const start = await startFromSubmitted(submitted, { budget });
+    const start = await startFromSubmitted(submitted, { budget, fixedCanonical, conditional });
     if (!start.ok) return start;
 
     const { submittedResourceWasFeed, feed } = start;
     let feedUrl = start.feedUrl;
 
     // ── Step 4 — resolve the canonical URL from `<channel><link>` ────────────────
-    const canonical = resolveCanonicalUrl({
-      submittedUrl: submitted.url,
-      channelLink: feed.channelLink,
-      submittedResourceWasFeed,
-    });
+    // §8: skipped entirely on revalidation. The page we fetched is the page we
+    // publish, full stop.
+    const canonical = fixedCanonical
+      ? { ok: true, canonicalUrl: submitted.url, hasChannelLink: true }
+      : resolveCanonicalUrl({
+          submittedUrl: submitted.url,
+          channelLink: feed.channelLink,
+          submittedResourceWasFeed,
+        });
     if (!canonical.ok) {
       return { ok: false, reason: canonical.reason, url: submitted.url, feedUrl };
     }
@@ -106,11 +125,20 @@ export function createVerifier({ safeFetch, config, isBanned = () => false }) {
     // The mutual half of the provenance rule, run in every case — including the one
     // where canonical fell back to the submitted URL, which is where the
     // channel-link-less hijack lives (§5 Step 4).
-    const provenance = checkFeedProvenance({
-      canonicalUrl,
-      feedUrl,
-      feedChannelLink: winningFeed.channelLink,
-    });
+    //
+    // Except behind a 304, where there is no document to read a `<channel><link>`
+    // from: the bytes are the ones that already passed this check, at the same feed
+    // URL (a validator is only ever sent for the feed we stored it against). Running
+    // it on an empty body would fail every member whose feed is hosted off their own
+    // host — a FeedBurner or Substack feed — for answering a conditional GET
+    // correctly.
+    const provenance = start.feedUnchanged
+      ? { ok: true }
+      : checkFeedProvenance({
+          canonicalUrl,
+          feedUrl,
+          feedChannelLink: winningFeed.channelLink,
+        });
     if (!provenance.ok) {
       return {
         ok: false,
@@ -146,6 +174,13 @@ export function createVerifier({ safeFetch, config, isBanned = () => false }) {
       description: winningFeed.description,
       linkBack,
       features: winningFeed.features,
+      // §8's conditional GETs. `feedUnchanged` means the feed answered 304: it is
+      // byte-identical to the document we already validated, so it still validates —
+      // but there is no body, and `title`/`description`/`features` are therefore
+      // absent rather than empty. A caller must keep what it already stored.
+      feedUnchanged: start.feedUnchanged,
+      feedEtag: start.feedEtag,
+      feedLastModified: start.feedLastModified,
     };
   };
 
@@ -154,8 +189,8 @@ export function createVerifier({ safeFetch, config, isBanned = () => false }) {
    * `example.com/feed.xml` into the box; without this they get "we couldn't find an RSS
    * feed on your page" about a page that *is* an RSS feed.
    */
-  async function startFromSubmitted(submitted, { budget }) {
-    if (looksLikeFeed(submitted)) {
+  async function startFromSubmitted(submitted, { budget, fixedCanonical, conditional }) {
+    if (!fixedCanonical && looksLikeFeed(submitted)) {
       const parsed = parseFeed(submitted.body);
       if (!parsed.ok) {
         return { ok: false, reason: parsed.reason, feedUrl: submitted.url };
@@ -174,6 +209,11 @@ export function createVerifier({ safeFetch, config, isBanned = () => false }) {
     const fetched = await fetchAndParseFeed(discovered.feedUrl, {
       budget,
       failure: 'feed_fetch_failed',
+      // Only for the feed we already have a validator for (see `conditional` above).
+      conditional:
+        conditional !== null && conditional?.feedUrl === discovered.feedUrl
+          ? conditional
+          : null,
     });
     if (!fetched.ok) return { ...fetched, url: submitted.url };
 
@@ -182,6 +222,9 @@ export function createVerifier({ safeFetch, config, isBanned = () => false }) {
       submittedResourceWasFeed: false,
       feedUrl: discovered.feedUrl,
       feed: fetched.feed,
+      feedUnchanged: fetched.feedUnchanged,
+      feedEtag: fetched.etag,
+      feedLastModified: fetched.lastModified,
     };
   }
 
@@ -213,17 +256,50 @@ export function createVerifier({ safeFetch, config, isBanned = () => false }) {
     return { ok: true, feedUrl: discovered.feedUrl, feed: fetched.feed };
   }
 
-  async function fetchAndParseFeed(feedUrl, { budget, failure, parseFailure }) {
-    const response = await fetchOk(safeFetch, feedUrl, { budget, kind: 'feed', failure });
+  async function fetchAndParseFeed(feedUrl, { budget, failure, parseFailure, conditional = null }) {
+    const response = await fetchOk(safeFetch, feedUrl, {
+      budget,
+      kind: 'feed',
+      failure,
+      headers: conditionalHeaders(conditional),
+    });
     if (!response.ok) return { ...response, feedUrl };
+
+    // A 304 is the cheapest possible way to honour the "good citizen" claim (§8):
+    // the bytes are the ones we validated, so Step 3 has already been run on them.
+    // `feed` carries no metadata, which is what `feedUnchanged` warns the caller of.
+    if (response.status === 304) {
+      return {
+        ok: true,
+        feed: { channelLink: undefined, features: {} },
+        feedUnchanged: true,
+        etag: response.etag ?? conditional?.etag,
+        lastModified: response.lastModified ?? conditional?.lastModified,
+      };
+    }
 
     const parsed = parseFeed(response.body);
     if (!parsed.ok) {
       return { ok: false, reason: parseFailure ?? parsed.reason, feedUrl, feedReason: parsed.reason };
     }
 
-    return { ok: true, feed: parsed };
+    return {
+      ok: true,
+      feed: parsed,
+      etag: response.etag,
+      lastModified: response.lastModified,
+    };
   }
+}
+
+/** §8's conditional GET headers, or nothing at all. */
+function conditionalHeaders(conditional) {
+  if (conditional === null || conditional === undefined) return undefined;
+
+  const headers = {};
+  if (conditional.etag) headers['if-none-match'] = conditional.etag;
+  if (conditional.lastModified) headers['if-modified-since'] = conditional.lastModified;
+  return Object.keys(headers).length === 0 ? undefined : headers;
 }
 
 /**
@@ -291,8 +367,8 @@ function looksLikeFeed({ body, contentType }) {
  * message has to say plainly that bot protection is the usual cause and offer the human
  * path, so it needs its own reason code (§5 Step 4).
  */
-async function fetchOk(safeFetch, url, { budget, kind, failure }) {
-  const response = await safeFetch(url, { budget, kind });
+async function fetchOk(safeFetch, url, { budget, kind, failure, headers }) {
+  const response = await safeFetch(url, { budget, kind, headers });
 
   if (!response.ok) {
     return { ok: false, reason: response.reason, fetchedUrl: url };
@@ -302,7 +378,9 @@ async function fetchOk(safeFetch, url, { budget, kind, failure }) {
     return { ok: false, reason: 'blocked_by_site', status: 403, fetchedUrl: url };
   }
 
-  if (response.status < 200 || response.status >= 300) {
+  // A 304 answers a conditional GET we sent on purpose (§8): "unchanged", not a
+  // failure. Only the caller that supplied the validators can see one.
+  if (response.status !== 304 && (response.status < 200 || response.status >= 300)) {
     return { ok: false, reason: failure, status: response.status, fetchedUrl: url };
   }
 

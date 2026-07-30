@@ -74,6 +74,57 @@ export function loadConfig(env = process.env) {
     errors,
   );
 
+  // §8/§9, phase 8a — the revalidation scheduler.
+  //
+  // `REVALIDATE_INTERVAL_DAYS` is **6, not 7**, on purpose (§8, "Honouring
+  // 'removed within a week'"): at 7 the worst case is 7 days plus however long
+  // until the site's turn comes round, which makes /about's promise false by a few
+  // hours. 6 gives a full day of margin and costs nothing.
+  const revalidateEnabled =
+    env.REVALIDATE_ENABLED !== 'false' && env.NODE_ENV !== 'test';
+  const revalidateBatch = parsePositiveInt(
+    env.REVALIDATE_BATCH,
+    20,
+    'REVALIDATE_BATCH',
+    errors,
+  );
+  const revalidateIntervalDays = parsePositiveInt(
+    env.REVALIDATE_INTERVAL_DAYS,
+    6,
+    'REVALIDATE_INTERVAL_DAYS',
+    errors,
+  );
+  // The follow-up cadence once `optout_seen_at` is set. Without this arm the
+  // removal promise is arithmetically false: the first sighting lands by day 6 and
+  // the confirming one, at the ordinary cadence, by day 12 (§8).
+  const optoutFollowupHours = parsePositiveInt(
+    env.OPTOUT_FOLLOWUP_HOURS,
+    24,
+    'OPTOUT_FOLLOWUP_HOURS',
+    errors,
+  );
+  // §6: a first sighting that never expires collapses the 24h floor to "one bad
+  // moment, ever" — an attacker rechecks a victim during any innocent
+  // 200-without-badge window and the next bad scheduler tick removes them.
+  const optoutExpiryDays = parsePositiveInt(
+    env.OPTOUT_EXPIRY_DAYS,
+    14,
+    'OPTOUT_EXPIRY_DAYS',
+    errors,
+  );
+  // /recheck/:id's own clock, so a third party cannot reset the scheduler's (§6).
+  const recheckCooldownMin = parsePositiveInt(
+    env.RECHECK_COOLDOWN_MIN,
+    60,
+    'RECHECK_COOLDOWN_MIN',
+    errors,
+  );
+  const healthcheckPingUrl = parseOptionalUrl(
+    env.HEALTHCHECK_PING_URL,
+    'HEALTHCHECK_PING_URL',
+    errors,
+  );
+
   // §6.4, phase 7: the blog's markdown lives in a directory that is a read-only bind
   // mount in production (§9), and the cache is invalidated by polling max(mtime)
   // across it — a poll interval, never a directory watch.
@@ -105,6 +156,13 @@ export function loadConfig(env = process.env) {
     trustedProxyHops,
     maxListingsPerDomain,
     maxNewListingsPerDay,
+    revalidateEnabled,
+    revalidateBatch,
+    revalidateIntervalDays,
+    optoutFollowupHours,
+    optoutExpiryDays,
+    recheckCooldownMin,
+    healthcheckPingUrl,
     contentDir,
     contentPollMs,
     // Only the IP-HMAC key file's read-or-generate rule branches on this, and it
@@ -120,6 +178,31 @@ function parseNonEmpty(raw, fallback, name, errors) {
   if (value === '') {
     errors.push(`${name} must not be empty`);
     return fallback;
+  }
+  return value;
+}
+
+/**
+ * An optional absolute http(s) URL — §9's `HEALTHCHECK_PING_URL`. Unset is the
+ * normal case, so it returns `null` rather than failing; a *malformed* one stops
+ * the boot, because a monitoring ping that silently never fires is worse than no
+ * monitoring at all.
+ */
+function parseOptionalUrl(raw, name, errors) {
+  if (raw === undefined || String(raw).trim() === '') return null;
+
+  const value = String(raw).trim();
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    errors.push(`${name} must be an absolute URL, got "${value}"`);
+    return null;
+  }
+
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    errors.push(`${name} must be http or https, got "${value}"`);
+    return null;
   }
   return value;
 }

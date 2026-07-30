@@ -23,10 +23,19 @@ const STATUS_WORDS = {
  * moderated member sees the same "not listed" page as a stranger. That neutrality is
  * the point — anything else is the oracle `/submit` and `/recheck` avoid.
  */
-export function statusPage({ config, query = '', url = '', site = undefined, invalid = false }) {
+export function statusPage({
+  config,
+  query = '',
+  url = '',
+  site = undefined,
+  invalid = false,
+  notice = null,
+}) {
   const body = html`
 <section class="status">
   <h1>Check a site&rsquo;s status</h1>
+
+  ${notice === null ? '' : noticePanel(notice)}
   <form class="submit-form" method="get" action="/status">
     <label for="url">Site URL</label>
     <input id="url" name="url" type="url" value="${query}" inputmode="url"
@@ -45,6 +54,21 @@ export function statusPage({ config, query = '', url = '', site = undefined, inv
 </section>`;
 
   return layout({ title: 'Status', body, config });
+}
+
+/**
+ * The outcome of a `POST /recheck/:id`, above the row's current state.
+ *
+ * §6 requires a transient failure and a `blocked` outcome to be "logged and shown to
+ * the caller, never written" — so this panel is the *only* trace either of them
+ * leaves, and it has to say plainly that nothing changed.
+ */
+function noticePanel({ kind = 'ok', heading, body }) {
+  return html`
+<div class="panel ${kind === 'ok' ? 'panel--ok' : 'panel--error'}">
+  <h2>${heading}</h2>
+  ${body}
+</div>`;
 }
 
 function notListed({ url }) {
@@ -86,8 +110,13 @@ function listed({ site }) {
       : ''}
   </dl>
   <p>
-    Something look wrong? Re-submitting is safe &mdash; it just re-checks you.
+    Something look wrong? Re-check it now &mdash; a failed check from here never counts
+    against you.
   </p>
+  <form class="submit-form submit-form--inline" method="post" action="/recheck/${site.id}">
+    <button type="submit">Re-check now</button>
+  </form>
+  <p>Or re-submit, which does the same thing and takes the URL you type:</p>
   ${submitForm({ value: site.submitted_url })}
 </div>`;
 }

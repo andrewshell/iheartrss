@@ -7,6 +7,8 @@
  * fetcher to inject.
  */
 
+import { lookup } from 'node:dns';
+
 import { serve } from '@hono/node-server';
 
 import { createApp } from './app.js';
@@ -14,8 +16,11 @@ import { createBlog } from './blog/index.js';
 import { loadConfig } from './config.js';
 import { closeDb, createDb } from './db/index.js';
 import { seedSelfListing } from './db/seed.js';
+import { createRevalidator } from './jobs/revalidate.js';
 import { loadIpHmacKey } from './lib/iphash.js';
 import { ensureDataDirectory, probeDataDirectory } from './storage.js';
+import { createFetcher } from './verify/fetch.js';
+import { createVerifier } from './verify/index.js';
 
 const config = loadConfig();
 
@@ -64,14 +69,42 @@ const blog = createBlog({
 });
 log('blog.ready', { dir: config.contentDir, posts: blog.posts().length });
 
+// §12 phase 8a: the revalidation scheduler.
+//
+// It is built with **its own fetcher and verifier, and it never touches the app's
+// semaphore** — §8's "reserved outbound slot outside the public semaphore". Sharing
+// the public one would let 4 concurrent /recheck calls aimed at a tarpit host hold
+// every slot for the full budget, stalling revalidation and with it the "removed
+// within a week" clock. Being sequential, the scheduler is its own limit of one.
+const revalidation = createRevalidator({
+  queries,
+  config,
+  verifySite: createVerifier({
+    safeFetch: createFetcher({ lookup, config }),
+    config,
+    isBanned: ({ host, path }) => queries.findBan({ host, path }) !== undefined,
+  }),
+  log,
+});
+
 const app = createApp({
   config,
   db,
   queries,
   blog,
   ipHmacKey,
+  revalidation,
   checkHealth: () => probeDataDirectory({ databasePath: config.databasePath }),
 });
+
+// After the app is built, before we listen: the first run fires ~30s later, so a
+// fresh container doesn't sit idle for an hour (§8).
+if (revalidation.start()) {
+  log('revalidate.started', {
+    batch: config.revalidateBatch,
+    intervalDays: config.revalidateIntervalDays,
+  });
+}
 
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   log('listening', { port: info.port, siteUrl: config.siteUrl });
@@ -85,8 +118,9 @@ const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
  *
  * The database is checkpointed and closed on the way out (§9): the nightly backup
  * copies the main database file, so the WAL is folded back into it rather than
- * left for whatever the next unclean exit does. Phase 8a adds stopping the
- * revalidation interval.
+ * left for whatever the next unclean exit does. The revalidation interval is stopped
+ * first — its timers are `unref`'d, so they cannot hold the process open, but a tick
+ * that starts writing while we are closing the database can.
  */
 let shuttingDown = false;
 
@@ -98,6 +132,7 @@ function shutdown(signal) {
   }
   shuttingDown = true;
   log('shutdown.start', { signal });
+  revalidation.stop();
 
   // Docker's grace period is 10s. Give in-flight requests most of it, then stop
   // waiting — a keep-alive connection that never closes must not turn a clean

@@ -411,3 +411,144 @@ test('rejects an unsupported scheme and an unparseable URL before any fetch', as
     },
   );
 });
+
+// ── Revalidation mode (§8) ────────────────────────────────────────────────────────
+// "Revalidation re-fetches `sites.url` and re-runs feed discovery on THAT PAGE ONLY.
+// It never re-derives the canonical URL."
+
+test('revalidation never re-derives the canonical URL from the feed', async () => {
+  await withSites(
+    (url) => ({
+      'example.com': {
+        '/blog/': { body: html({ feedHref: '/feed.xml' }) },
+        // The oscillation §8 describes: /blog/ declares a feed whose channel link is
+        // /, and / declares a feed whose channel link is /blog/. Re-deriving would
+        // flip `sites.url` on every run — the OPML htmlUrl alternating weekly,
+        // `directory_version` churning, and a pass/opt-out flip-flop if the badge is
+        // on only one of the two pages.
+        '/feed.xml': {
+          type: FEED_TYPE,
+          body: rss({ title: 'A blog', channelLink: url('example.com', '/') }),
+        },
+        '/': { body: html({ feedHref: '/other.xml', badge: false }) },
+        '/other.xml': {
+          type: FEED_TYPE,
+          body: rss({ title: 'A blog', channelLink: url('example.com', '/blog/') }),
+        },
+      },
+    }),
+    async ({ url, safeFetch, hits }) => {
+      const verifySite = createVerifier({ safeFetch, config: CONFIG });
+      const result = await verifySite(url('example.com', '/blog/'), {
+        fixedCanonical: true,
+      });
+
+      assert.equal(result.ok, true, JSON.stringify(result));
+      assert.equal(result.url, url('example.com', '/blog/'), 'the row stays put');
+      assert.equal(result.feedUrl, url('example.com', '/feed.xml'));
+      // And `/` — the URL the feed names — is never fetched at all.
+      assert.deepEqual(hits, ['example.com/blog/', 'example.com/feed.xml']);
+    },
+  );
+});
+
+test('revalidation re-runs feed discovery, so a moved feed is picked up', async () => {
+  await withSites(
+    (url) => ({
+      'example.com': {
+        // The member moved /feed.xml to /feed/ and only the page knows.
+        '/': { body: html({ feedHref: '/feed/' }) },
+        '/feed/': {
+          type: FEED_TYPE,
+          body: rss({ title: 'A blog', channelLink: url('example.com', '/') }),
+        },
+      },
+    }),
+    async ({ url, safeFetch }) => {
+      const verifySite = createVerifier({ safeFetch, config: CONFIG });
+      const result = await verifySite(url('example.com', '/'), { fixedCanonical: true });
+
+      // §8: "not re-running feed discovery means a member who moves /feed.xml → /feed/
+      // fails on a stale feed_url for three weeks and gets dropped with no
+      // self-service repair."
+      assert.equal(result.ok, true, JSON.stringify(result));
+      assert.equal(result.feedUrl, url('example.com', '/feed/'));
+    },
+  );
+});
+
+test('a 304 on the feed is a pass that keeps the stored metadata', async () => {
+  const seen = [];
+
+  await withSites(
+    (url) => ({
+      'example.com': {
+        '/': { body: html({ feedHref: '/feed.xml' }) },
+        '/feed.xml': (req, res) => {
+          seen.push({
+            ifNoneMatch: req.headers['if-none-match'],
+            ifModifiedSince: req.headers['if-modified-since'],
+          });
+          res.writeHead(304, { etag: '"v1"' });
+          res.end();
+        },
+      },
+    }),
+    async ({ url, safeFetch }) => {
+      const verifySite = createVerifier({ safeFetch, config: CONFIG });
+      const result = await verifySite(url('example.com', '/'), {
+        fixedCanonical: true,
+        conditional: {
+          feedUrl: url('example.com', '/feed.xml'),
+          etag: '"v1"',
+          lastModified: 'Wed, 01 Jul 2026 10:00:00 GMT',
+        },
+      });
+
+      // §8: "a 304 is the cheapest possible way to honour the 'good citizen' claim."
+      assert.deepEqual(seen, [{
+        ifNoneMatch: '"v1"',
+        ifModifiedSince: 'Wed, 01 Jul 2026 10:00:00 GMT',
+      }]);
+      // Byte-identical to the document we already validated, so the feed still
+      // validates — but there is no body to take a title from, and overwriting
+      // `title` with nothing would violate its NOT NULL.
+      assert.equal(result.ok, true, JSON.stringify(result));
+      assert.equal(result.feedUnchanged, true);
+      assert.equal(result.title, undefined);
+      assert.equal(result.feedUrl, url('example.com', '/feed.xml'));
+    },
+  );
+});
+
+test('the conditional headers are only sent for the feed we already validated', async () => {
+  const seen = [];
+
+  await withSites(
+    (url) => ({
+      'example.com': {
+        '/': { body: html({ feedHref: '/feed/' }) },
+        '/feed/': (req, res) => {
+          seen.push(req.headers['if-none-match']);
+          res.writeHead(200, { 'content-type': FEED_TYPE, etag: '"new"' });
+          res.end(rss({ title: 'A blog', channelLink: url('example.com', '/') }));
+        },
+      },
+    }),
+    async ({ url, safeFetch }) => {
+      const verifySite = createVerifier({ safeFetch, config: CONFIG });
+      const result = await verifySite(url('example.com', '/'), {
+        fixedCanonical: true,
+        conditional: { feedUrl: url('example.com', '/feed.xml'), etag: '"v1"' },
+      });
+
+      // A validator belongs to one URL. Sent for a different feed it would produce a
+      // 304 for a document we have never seen, and we would "revalidate" a feed that
+      // might not exist.
+      assert.deepEqual(seen, [undefined]);
+      assert.equal(result.ok, true, JSON.stringify(result));
+      assert.equal(result.feedUnchanged, undefined);
+      assert.equal(result.feedEtag, '"new"');
+    },
+  );
+});

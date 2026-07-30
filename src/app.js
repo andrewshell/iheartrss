@@ -9,6 +9,7 @@ import { createRateLimiter, createSemaphore } from './lib/ratelimit.js';
 import { renderSitemap } from './lib/sitemap.js';
 import { registerAdmin } from './routes/admin.js';
 import { registerBlog } from './routes/blog.js';
+import { registerRecheck } from './routes/recheck.js';
 import { registerStatic } from './routes/static.js';
 import { registerSubmit } from './routes/submit.js';
 import { createFetcher } from './verify/fetch.js';
@@ -36,6 +37,10 @@ export function createApp({
   queries = null,
   blog = emptyBlog(),
   checkHealth = () => ({ ok: true }),
+  // §8's scheduler, injected: `/healthz` reports its last run, and the app must
+  // answer the same shape whether or not one is wired up.
+  revalidation = null,
+  now = () => new Date(),
   verifySite = null,
   persist = null,
   ipHmacKey = null,
@@ -51,6 +56,7 @@ export function createApp({
     config,
     queries,
     log,
+    now,
     // §6: 5 per 10 minutes and 30 per day, shared across every route that spends an
     // outbound request, plus a global semaphore of 4 on concurrent verifications so
     // no combination of endpoints can fan out against a third party.
@@ -104,14 +110,26 @@ export function createApp({
       return c.json({ ok: false, reason: result?.reason ?? 'unhealthy' }, 503);
     }
 
-    // §6: `{ ok, sites, lastRevalidation }`. `lastRevalidation` is reported as null
-    // until phase 8a owns the scheduler — the key is present because Docker's
-    // healthcheck and §9's monitoring read this shape, and an absent key reads as a
-    // scheduler that has never run rather than one that does not exist.
+    // §6: `{ ok, sites, lastRevalidation }`, plus §8's two backlog fields.
+    //
+    // Those two exist because the capacity ceiling is otherwise invisible: 20
+    // sites/hour at a 6-day interval is a steady state of ~2,880 members, and past
+    // that `last_checked_at` slides permanently past the interval while /about keeps
+    // promising a week. "/healthz reports whether a batch ran, not how far behind it
+    // is" was the gap.
+    const cutoff = new Date(
+      now().getTime() - (config.revalidateIntervalDays ?? 6) * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const backlog =
+      queries === null
+        ? { oldest_last_checked_at: null, overdue_count: 0 }
+        : queries.revalidationBacklog(cutoff);
+
     return c.json({
       ok: true,
       sites: queries === null ? 0 : queries.countSites(),
-      lastRevalidation: null,
+      lastRevalidation: revalidation === null ? null : revalidation.lastRevalidation(),
+      ...backlog,
     });
   });
 
@@ -133,6 +151,10 @@ export function createApp({
   app.get('/guide', (c) => c.html(guidePage({ config })));
 
   registerSubmit(app, deps);
+
+  // §6/§8: pass-only, rate-limited, same-origin, with its own cooldown clock. Only
+  // registered with a database behind it — there is no row to re-check otherwise.
+  if (queries !== null) registerRecheck(app, deps);
   registerAdmin(app, deps);
   registerBlog(app, { config, blog });
 

@@ -73,7 +73,7 @@ export function createFetcher({
     return assertHostAllowed(parsed) ? null : 'ssrf_blocked';
   }
 
-  async function attempt(url, { budget, kind }) {
+  async function attempt(url, { budget, kind, headers }) {
     const blocked = guard(url);
     if (blocked !== null) return { result: { ok: false, reason: blocked } };
 
@@ -101,7 +101,7 @@ export function createFetcher({
       try {
         response = await undiciFetch(current, {
           dispatcher: agent,
-          headers: { ...DEFAULT_HEADERS },
+          headers: { ...DEFAULT_HEADERS, ...headers },
           redirect: 'manual',
           signal,
         });
@@ -138,6 +138,10 @@ export function createFetcher({
             body: decode(bytes, charset),
             contentType,
             charset,
+            // §8's conditional GETs: handed back so the caller can store them and
+            // send them next time. A 304 carries them too.
+            etag: response.headers.get('etag'),
+            lastModified: response.headers.get('last-modified'),
           },
           receivedResponse,
         };
@@ -166,6 +170,9 @@ export function createFetcher({
    * @param {object} [options.budget] - `{ signal, deadline }` for the whole
    *   submission (§5's fetch budget), shared by every fetch in one submission.
    * @param {'page'|'feed'} [options.kind] - names the size-cap reason code.
+   * @param {object} [options.headers] - extra request headers, merged over the
+   *   defaults. §8's revalidation sends `If-None-Match` / `If-Modified-Since` here;
+   *   a `304` then comes back as a completed exchange with an empty body.
    *
    * Resolves to `{ ok: true, status, url, body, contentType, charset }` for any
    * completed exchange — `url` is the **final** URL after redirects, which is what
@@ -176,8 +183,8 @@ export function createFetcher({
    * failure: §8 needs to tell those apart, so the status is handed back and the
    * caller decides.
    */
-  return async function safeFetch(url, { budget, kind = 'page' } = {}) {
-    const first = await attempt(url, { budget, kind });
+  return async function safeFetch(url, { budget, kind = 'page', headers } = {}) {
+    const first = await attempt(url, { budget, kind, headers });
 
     if (!shouldRetryOverHttp(url, first)) return first.result;
 
@@ -187,7 +194,7 @@ export function createFetcher({
     const downgraded = new URL(url);
     downgraded.protocol = 'http:';
 
-    const second = await attempt(downgraded.href, { budget, kind });
+    const second = await attempt(downgraded.href, { budget, kind, headers });
     return second.result;
   };
 }

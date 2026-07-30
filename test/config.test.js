@@ -165,3 +165,50 @@ test('the blog content knobs are taken from the environment', () => {
 test('a non-numeric CONTENT_POLL_MS stops the boot rather than polling never', () => {
   assert.throws(() => loadConfig({ CONTENT_POLL_MS: 'often' }), /CONTENT_POLL_MS/);
 });
+
+// Phase 8a, §9: the revalidation knobs. The interval is 6 days and not 7 on
+// purpose (§8, "Honouring 'removed within a week'") — at 7 the worst case is 7
+// days plus however long until the site's turn comes round, which makes /about's
+// promise false by a few hours.
+
+test('the revalidation knobs default to §9 values', () => {
+  const config = loadConfig({});
+
+  assert.equal(config.revalidateEnabled, true);
+  assert.equal(config.revalidateBatch, 20);
+  assert.equal(config.revalidateIntervalDays, 6);
+  assert.equal(config.optoutFollowupHours, 24);
+  assert.equal(config.optoutExpiryDays, 14);
+  assert.equal(config.recheckCooldownMin, 60);
+  assert.equal(config.healthcheckPingUrl, null);
+});
+
+test('the revalidation knobs are taken from the environment and validated', () => {
+  const config = loadConfig({
+    REVALIDATE_ENABLED: 'false',
+    REVALIDATE_BATCH: '5',
+    REVALIDATE_INTERVAL_DAYS: '3',
+    OPTOUT_FOLLOWUP_HOURS: '12',
+    OPTOUT_EXPIRY_DAYS: '7',
+    RECHECK_COOLDOWN_MIN: '30',
+    HEALTHCHECK_PING_URL: 'https://hc-ping.com/abc',
+  });
+
+  assert.equal(config.revalidateEnabled, false);
+  assert.equal(config.revalidateBatch, 5);
+  assert.equal(config.revalidateIntervalDays, 3);
+  assert.equal(config.optoutFollowupHours, 12);
+  assert.equal(config.optoutExpiryDays, 7);
+  assert.equal(config.recheckCooldownMin, 30);
+  assert.equal(config.healthcheckPingUrl, 'https://hc-ping.com/abc');
+
+  assert.throws(() => loadConfig({ REVALIDATE_BATCH: '0' }), /REVALIDATE_BATCH/);
+  assert.throws(() => loadConfig({ OPTOUT_EXPIRY_DAYS: 'two weeks' }), /OPTOUT_EXPIRY_DAYS/);
+});
+
+// §9: "Off in dev/tests." Nothing in the test suite boots `server.js`, but the
+// scheduler reaching out to the real network from a test run would be a bug worth
+// making impossible rather than merely unlikely.
+test('REVALIDATE_ENABLED is off under NODE_ENV=test', () => {
+  assert.equal(loadConfig({ NODE_ENV: 'test' }).revalidateEnabled, false);
+});
