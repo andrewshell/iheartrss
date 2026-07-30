@@ -40,6 +40,28 @@ const SITE_NAME = 'I ♥ RSS';
  * one page that most needs to be fast is the wrong trade, external because the CSP
  * allows `script-src 'self'` and deliberately not `'unsafe-inline'`.
  */
+/**
+ * The wordmark, theme-aware (plan §6.1).
+ *
+ * `iheartrss.svg` has a near-black wordmark and `iheartrss-dark.svg` a white one;
+ * the orange heart is identical in both. On a dark background the light file is
+ * black-on-dark and effectively unreadable, which is the whole reason two files
+ * exist — so this is never a bare `<img>`.
+ *
+ * Shared rather than written per page because it already drifted once: the header
+ * had the `<picture>` and the badge preview in /submit's step 1 did not, so that
+ * one rendered black-on-grey in dark mode. Two call sites, one implementation.
+ *
+ * NOT for /badge, which shows both files deliberately on fixed light and dark
+ * preview panels — there the point is to see each variant, not to follow the theme.
+ */
+export function wordmark({ width, height, alt }) {
+  return html`<picture>
+      <source srcset="/iheartrss-dark.svg" media="(prefers-color-scheme: dark)">
+      <img src="/iheartrss.svg" alt="${alt}" width="${width}" height="${height}">
+    </picture>`;
+}
+
 export function layout({ title, body, config, description, scripts = [] }) {
   const fullTitle = title ? `${title} — ${SITE_NAME}` : SITE_NAME;
   const feedUrl = new URL('/feed.xml', config.siteUrl).href;
@@ -68,10 +90,7 @@ ${scripts.map((src) => html`<script src="${src}" defer></script>`)}
 <a class="skip-link" href="#main">Skip to main content</a>
 <header class="site-header">
   <a class="site-header__home" href="/">
-    <picture>
-      <source srcset="/iheartrss-dark.svg" media="(prefers-color-scheme: dark)">
-      <img src="/iheartrss.svg" alt="${SITE_NAME}" width="128" height="45">
-    </picture>
+    ${wordmark({ width: 128, height: 45, alt: SITE_NAME })}
   </a>
   <nav class="site-nav" aria-label="Main">
     <ul>

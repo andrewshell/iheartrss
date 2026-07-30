@@ -515,3 +515,30 @@ test('every reason code the pipeline can produce has its own message', async () 
   // "the UI can show a specific, actionable message".
   assert.equal(headings.size, reasons.length);
 });
+
+test('every themed wordmark offers the dark variant, on every page that shows one', async () => {
+  // §6.1: iheartrss.svg is a near-black wordmark and iheartrss-dark.svg a white one.
+  // On a dark background the light file is black-on-dark and effectively unreadable,
+  // which is the entire reason two files exist.
+  //
+  // This drifted once already: the header carried the <picture> and /submit's step-1
+  // badge preview did not, so it rendered black-on-grey in dark mode. Both now come
+  // from one shared helper, and this walks every page that renders a wordmark.
+  const { app } = appWith();
+
+  for (const path of ['/', '/submit', '/about', '/blog', '/sites', '/guide']) {
+    const html = await (await app.request(path)).text();
+
+    const bareImgs = html.match(/<img[^>]+iheartrss\.svg[^>]*>/g) ?? [];
+    const darkSources = html.match(/srcset="\/iheartrss-dark\.svg"/g) ?? [];
+
+    // Every light-wordmark <img> must be paired with a dark <source>. /badge is
+    // excluded from this loop on purpose — it shows both files side by side on fixed
+    // preview panels, where following the theme would defeat the point.
+    assert.equal(
+      bareImgs.length,
+      darkSources.length,
+      `${path}: ${bareImgs.length} light wordmark(s) but ${darkSources.length} dark source(s)`,
+    );
+  }
+});
