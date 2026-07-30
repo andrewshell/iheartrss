@@ -13,9 +13,9 @@ Two things to know before you touch anything:
 - **`docker compose logs --tail 100 iheartrss` first.** Every failure in this document
   announces itself in a one-line JSON log record. The config validator in particular
   names the variable it rejected, so "it won't boot" is usually already answered.
-- **`data/` is the only irreplaceable thing on the box.** `secrets/ip_hmac_key` is the
-  second, and it must **not** live in the same backup — see
-  [Losing `secrets/ip_hmac_key`](#losing-secretsip_hmac_key).
+- **`data/` is the only irreplaceable thing on the box.** The stack's `.env` is the
+  second — it holds `IP_HMAC_KEY` — and it must **not** live in the same backup as
+  `data/`; see [Losing `IP_HMAC_KEY`](#losing-ip_hmac_key).
 
 ---
 
@@ -102,8 +102,9 @@ rsync -az --delete \
 ```
 
 Or `rclone sync` to object storage, if you'd rather not depend on a machine you own.
-Either way: **do not include `secrets/`**, and put a calendar reminder to run the
-restore drill below against a pulled copy once a quarter.
+Either way: **do not include the stack's `.env`** — it holds `IP_HMAC_KEY`, which is
+backed up separately (see [Losing `IP_HMAC_KEY`](#losing-ip_hmac_key)) — and put a
+calendar reminder to run the restore drill below against a pulled copy once a quarter.
 
 ---
 
@@ -266,33 +267,34 @@ docker compose up -d
 siblings, so the **directory** has to be writable. Nightly backups write into
 `data/backups/` for the same reason.
 
-### `secrets/ip_hmac_key` is missing
+### `IP_HMAC_KEY` is missing
 
 ```
-Error: IP_HMAC_KEY_FILE /run/secrets/ip_hmac_key does not exist
+Error: IP_HMAC_KEY is not set. It must hold at least 32 random bytes of hex or
+base64 — generate one with: openssl rand -hex 32
 ```
 
 Every submission writes a keyed IP hash, so a missing key is deliberately a container
-that never comes up rather than one that 500s on the first submission.
+that never comes up rather than one that 500s on the first submission. In production
+it is never generated for you: a key that changed on every redeploy would unjoin the
+abuse trail silently, which is worse than a boot that stops.
 
 ```sh
-ls -la secrets/ip_hmac_key            # a FILE, 32+ bytes. A directory means Docker
-                                      # created the mount point for you — see below.
+grep -c '^IP_HMAC_KEY=' .env          # 1, and the value is 64 hex chars (or 44 base64)
 ```
 
-If it is missing **and you have the original backed up** (password manager), restore
-that exact file — see the next section for what a _different_ key costs.
+If it is missing **and you have the original backed up** (password manager), put that
+exact value back — see [Losing `IP_HMAC_KEY`](#losing-ip_hmac_key) for what a
+_different_ key costs. Otherwise:
 
 ```sh
-mkdir -p secrets
-head -c 32 /dev/urandom | base64 > secrets/ip_hmac_key
-chmod 600 secrets/ip_hmac_key
+echo "IP_HMAC_KEY=$(openssl rand -hex 32)" >> .env
 docker compose up -d
 ```
 
-If `secrets/ip_hmac_key` is a **directory**, that is Docker having created the missing
-bind-mount source for you. `sudo rmdir secrets/ip_hmac_key`, generate the file, and
-`docker compose up -d` again.
+A key that is present but shorter than 32 decoded bytes is refused with the same
+message rather than quietly used — 32 hex characters is 16 bytes, which is the usual
+way to get this wrong.
 
 ### A bad environment variable
 
@@ -429,7 +431,10 @@ the only record of why, and future-you will want it.
 
 ---
 
-## Losing `secrets/ip_hmac_key`
+## Losing `IP_HMAC_KEY`
+
+The key lives in the stack's `.env`, at `/opt/stacks/iheartrss/.env` — the same file
+dockge edits. There is no key file and no `./secrets` mount.
 
 **What breaks: nothing user-visible.** Historical `ip_hash` values in `submissions`
 become unlinkable — you can no longer tell that two old submissions came from the same
@@ -439,25 +444,27 @@ limiting is in-memory and unaffected; no member notices.
 Generate a new one and carry on:
 
 ```sh
-head -c 32 /dev/urandom | base64 > secrets/ip_hmac_key
-chmod 600 secrets/ip_hmac_key
+openssl rand -hex 32                  # then set IP_HMAC_KEY= to it in .env
 docker compose up -d
 ```
 
 Old hashes stay in the table until the 90-day purge ages them out. Nothing needs
 migrating.
 
-### Back it up SEPARATELY from `./data`
+### Back the `.env` up SEPARATELY from `./data`
 
 The key exists so that stored IP hashes are not reversible. Back it up in the same
 tarball as the database it protects and you have defeated the entire scheme in one
 step — whoever gets the tarball gets both halves.
 
-- The key goes in a **password manager**, or any store that is not where `data/` goes.
-- `./secrets` is deliberately **not** under `./data`, and the off-box `rsync` above
-  copies `data/backups/` only. Keep it that way.
-- Do not "simplify" the backup to `tar czf backup.tgz data secrets`. That one command
-  is the whole mistake.
+- The `.env` goes in a **password manager**, or any store that is not where `data/`
+  goes. It holds `ADMIN_TOKEN` too, so it wants that treatment regardless.
+- The off-box `rsync` above copies `data/backups/` only. Keep it that way.
+- Do not "simplify" the backup to `tar czf backup.tgz data .env`. That one command is
+  the whole mistake.
+- The key is an env var, so it is also visible to anyone who can run
+  `docker inspect iheartrss` or open the stack in dockge. Anyone with either already
+  has the box; see PLAN.md §4 for the trade and what still protects the hashes.
 
 ---
 

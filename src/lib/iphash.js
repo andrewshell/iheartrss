@@ -4,11 +4,17 @@
  * HMAC-SHA256(key, truncate(ip) + 'YYYY-MM-DD'). Never the raw address. Three
  * deliberate choices, all of them from §4:
  *
- *  1. **HMAC under a key from a mounted file**, not sha256 with an env-var salt.
- *     The whole IPv4 space is 2^32, so a plain salted digest is a GPU-minutes
- *     rainbow table and the scheme rests entirely on the secret — and an env var
- *     sits in `docker inspect`, in dockge's UI, and in any `.env` backed up
- *     beside `./data`.
+ *  1. **HMAC under a secret key**, not sha256 with a published salt. The whole
+ *     IPv4 space is 2^32, so a plain salted digest is a GPU-minutes rainbow table
+ *     and the scheme rests entirely on the secret staying secret.
+ *
+ *     The key arrives as `IP_HMAC_KEY`, one env var. It used to be a mounted
+ *     file, on the argument that an env var is readable from `docker inspect` and
+ *     from dockge's UI — true, and the honest cost of this change. It bought
+ *     little in practice: the `.env` holding it already sat in the same stack
+ *     directory as `./data`, and the file meant ssh-ing to the box to create a
+ *     secret before the very first deploy. One configuration path, and (2) and
+ *     (3) below are what keep the residual exposure small.
  *  2. **Truncate first** — /24 for IPv4, /64 for IPv6. That is all abuse triage
  *     needs, and /64 is already the rate-limit bucket.
  *  3. **A daily-rotating date component**, so hashes older than the abuse window
@@ -17,8 +23,6 @@
  */
 
 import { createHmac, randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
 
 import { parseIpBytes } from '../verify/url.js';
 
@@ -68,48 +72,35 @@ export function truncateIp(ip) {
 }
 
 /**
- * Read the HMAC key, or in non-production create one.
+ * Settle on the HMAC key: the configured one if there is one, otherwise — outside
+ * production only — an ephemeral one held in memory for this process.
  *
- * Production must fail: a generated-on-boot key silently changes every redeploy,
- * which quietly breaks the rate limiter's daily bucket and makes the abuse trail
+ * Production must fail rather than generate. A key that changes every redeploy
+ * quietly breaks the rate limiter's daily bucket and makes the abuse trail
  * unjoinable — a failure that looks like nothing at all.
+ *
+ * The dev key is deliberately NOT written to disk. Decoding and validating the
+ * operator's value is `loadConfig`'s job (`IP_HMAC_KEY`); by here it is either a
+ * usable buffer or absent.
+ *
+ * @param {object} deps
+ * @param {Buffer|null} deps.key - the decoded `IP_HMAC_KEY`, or null if unset.
+ * @param {boolean} deps.production
+ * @param {Function} [deps.log] - boot logger, so the ephemeral case is announced.
+ * @returns {Buffer}
  */
-export function loadIpHmacKey({ path, production }) {
-  if (existsSync(path)) {
-    const raw = readFileSync(path);
-
-    // Text decoding is tried FIRST. A 64-char hex key written with a trailing
-    // newline is 65 raw bytes, which passes a raw length check — so a
-    // raw-bytes-first order silently keys off the ASCII of the hex digits and
-    // makes the operator's key and ours disagree about what the secret is.
-    const decoded = decodeText(raw) ?? (raw.length >= MIN_KEY_BYTES ? raw : null);
-
-    if (decoded === null || decoded.length < MIN_KEY_BYTES) {
-      throw new Error(
-        `IP_HMAC_KEY_FILE "${path}" must hold at least ${MIN_KEY_BYTES} random bytes`,
-      );
-    }
-    return decoded;
-  }
+export function loadIpHmacKey({ key, production, log = () => {} }) {
+  if (key && key.length >= MIN_KEY_BYTES) return key;
 
   if (production) {
     throw new Error(
-      `IP_HMAC_KEY_FILE "${path}" does not exist. Create it with: ` +
-        `head -c 32 /dev/urandom > ${path}`,
+      `IP_HMAC_KEY is not set. It must hold at least ${MIN_KEY_BYTES} random ` +
+        'bytes of hex or base64 — generate one with: openssl rand -hex 32',
     );
   }
 
-  const key = randomBytes(MIN_KEY_BYTES);
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, key, { mode: 0o600 });
-  return key;
-}
-
-// An operator will reasonably write the key as hex or base64 text rather than raw
-// bytes; 32 raw bytes and a 64-char hex string are both acceptable.
-function decodeText(buffer) {
-  const text = buffer.toString('utf8').trim();
-  if (/^[0-9a-f]{64,}$/i.test(text)) return Buffer.from(text, 'hex');
-  if (/^[A-Za-z0-9+/=]{44,}$/.test(text)) return Buffer.from(text, 'base64');
-  return null;
+  // Said out loud, because every stored `ip_hash` changes the next time this
+  // process restarts and a dev comparing two runs deserves to know why.
+  log('iphash.ephemeral');
+  return randomBytes(MIN_KEY_BYTES);
 }

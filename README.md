@@ -111,15 +111,15 @@ follow from that, and they are the whole shape of this deployment:
 - **Blog posts ship inside the image.** There is no `content/` to bind-mount, so
   publishing a post is: commit it, publish an image, redeploy. There is no
   `./content` volume — mounting one would mask the posts with an empty directory.
-- **`./data` and `./secrets` are relative to the stack directory** that dockge
-  created, so the two prerequisites below are run there.
+- **`./data` is relative to the stack directory** that dockge created, so the one
+  prerequisite below is run there.
 
 ### 1. Create the stack in dockge
 
 In dockge, **+ Compose** → name it `iheartrss` → paste the contents of
 [`docker-compose.yml`](docker-compose.yml) into the compose editor and the values
-from step 4 into the `.env` editor. **Do not deploy yet** — steps 2 and 3 have to
-happen first.
+from step 3 into the `.env` editor. **Do not deploy yet** — step 2 has to happen
+first.
 
 ### 2. Create the data directory and chown it to uid 1000
 
@@ -139,33 +139,20 @@ boot with the write-probe error, and once there is a database, SQLite fails with
 Chowning the `.db` file alone is **not** enough: WAL mode creates `-wal` and
 `-shm` files beside the database, so the **directory** has to be writable by uid 1000.
 
-### 3. Generate the IP HMAC key
+### 3. Set the stack environment
 
-```sh
-mkdir -p secrets
-head -c 32 /dev/urandom | base64 > secrets/ip_hmac_key
-chmod 600 secrets/ip_hmac_key
-```
-
-The compose file bind-mounts this as a **file**. If it does not exist when the
-stack starts, Docker helpfully creates a _directory_ at that path and the mount
-is wrong in a confusing way — generate it first.
-
-Keep `secrets/` out of the backup set. The key exists so that stored IP hashes
-are not reversible; backing it up in the same tarball as the database it protects
-defeats the point. Copy it somewhere separate — a password manager is fine.
-Losing it makes historical `ip_hash` values unlinkable, which is a nuisance for
-abuse triage and harmless for everything else. `.gitignore` already covers
-`secrets/` and `data/`.
-
-### 4. Set the stack environment
-
-Create `.env` beside `docker-compose.yml`. It is read by compose for
-substitution, not by the app — the app's own variables are set in the compose
+Create `.env` beside `docker-compose.yml`. Compose reads it for substitution
+(`IHEARTRSS_TAG`) and hands the rest to the app via `env_file:` — only the values
+that are a property of running in _this_ container are hardcoded in the compose
 `environment:` block.
 
 ```sh
 ADMIN_TOKEN=$(head -c 32 /dev/urandom | base64)
+
+# Required in production: the key the truncated client IP is HMAC'd under
+# before it is stored (plan §4). Generate with `openssl rand -hex 32`. The
+# container refuses to start without it.
+IP_HMAC_KEY=
 
 # Optional but strongly recommended: pinged at the end of every revalidation
 # batch, so a dead container or a wedged scheduler alerts you instead of being
@@ -189,7 +176,14 @@ SITE_URL=https://iheartrss.com
 No admin UI is served at all while `ADMIN_TOKEN` is unset, and hide/ban are the
 only way to take a listing down — set it.
 
-### 5. Deploy
+Both secrets live in this one file, so **back the `.env` up separately from
+`./data`** — a password manager is fine. The IP HMAC key exists so that stored IP
+hashes are not reversible, and keeping it in the same tarball as the database it
+protects defeats the point. Losing it makes historical `ip_hash` values
+unlinkable: a nuisance for abuse triage, harmless for everything else.
+`.gitignore` already covers `.env` and `data/`.
+
+### 4. Deploy
 
 In dockge, hit **Deploy** on the stack. It pulls the image named by
 `IHEARTRSS_TAG` and starts it; the log pane is right there. Equivalently, from
@@ -214,7 +208,7 @@ docker inspect --format '{{.State.Health.Status}}' iheartrss
 is down — the container healthcheck only inspects the HTTP status, so a 200
 would keep a broken container alive forever.
 
-### 6. Point the reverse proxy at it
+### 5. Point the reverse proxy at it
 
 The port is published on **`127.0.0.1:3000`, never `0.0.0.0:3000`**. Docker
 inserts its own nat rules ahead of `ufw`/`firewalld`, so publishing on all
@@ -235,7 +229,7 @@ TLS is terminated at the proxy. It must:
 One proxy in front means `TRUSTED_PROXY_HOPS=0`, not 1. See `.env.example` for
 the worked example of why.
 
-### 7. Publishing an image (do this before you need to deploy)
+### 6. Publishing an image (do this before you need to deploy)
 
 The stack pulls `ghcr.io/andrewshell/iheartrss:$IHEARTRSS_TAG`, so a version has to
 exist before it can be deployed — and pinning a version is what makes rollback a
@@ -274,7 +268,7 @@ a custom tag alongside the version and `latest`.
 Rollback is then editing that one line and redeploying. See `RUNBOOK.md`,
 "Roll back to a previous image".
 
-### 8. Set up an off-box backup copy
+### 7. Set up an off-box backup copy
 
 The app backs itself up nightly to `data/backups/YYYY-MM-DD.db` (14 days,
 `node:sqlite`'s online `backup()` — safe against the live database). That covers a
@@ -285,9 +279,10 @@ the directory somewhere else, from a machine that is not the VPS:
 rsync -az --delete vps:/opt/stacks/iheartrss/data/backups/ ~/backups/iheartrss/
 ```
 
-**Do not include `secrets/` in that copy.** The IP HMAC key exists so stored IP
-hashes are not reversible; shipping it in the same tarball as the database defeats
-the whole scheme. The key belongs in a password manager.
+**Do not include the stack's `.env` in that copy.** It holds `IP_HMAC_KEY`, which
+exists so stored IP hashes are not reversible; shipping it in the same tarball as
+the database defeats the whole scheme. Back the `.env` up on its own — a password
+manager is the right place for it.
 
 Then run the restore procedure in `RUNBOOK.md` once, against a scratch copy, so you
 have done it before the night you need it.
@@ -314,10 +309,10 @@ The app handles `SIGTERM`, so stops take a fraction of a second rather than the 
 | ----------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | Exits at boot: "database directory … is not writable" | Step 2 was skipped. `sudo chown 1000:1000 data`.                                              |
 | Exits at boot naming an environment variable          | Config validates at boot and fails fast. Fix the value it names.                              |
-| Exits at boot: missing `/run/secrets/ip_hmac_key`     | Step 3 was skipped, or Docker created a _directory_ at that path.                             |
+| Exits at boot: "`IP_HMAC_KEY` is not set"             | It is missing from the stack's `.env` (step 3). `openssl rand -hex 32`.                       |
 | Container healthy, site unreachable                   | Proxy is not pointed at `127.0.0.1:3000`.                                                     |
 | `docker stop` takes 10 seconds                        | The SIGTERM handler is not running — check you are on the current image.                      |
 | `/blog` empty, `/feed.xml` has no items               | Running an image built before posts were baked in, or a stray `./content` mount masking them. |
-| Compose warns about `ADMIN_TOKEN`                     | No `.env` beside the compose file (step 4).                                                   |
+| Compose warns about `ADMIN_TOKEN`                     | No `.env` beside the compose file (step 3).                                                   |
 | `/healthz` `overdue_count` growing                    | Past the ~2,880-member ceiling. Raise `REVALIDATE_BATCH`.                                     |
 | `data/backups/` is empty on a fresh deploy            | The first backup lands about a minute after boot; check for `backup.started` in the logs.     |

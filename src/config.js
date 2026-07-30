@@ -5,7 +5,7 @@
  * not surface as a strange 500 three phases later.
  *
  * Only the variables the app actually uses are parsed. The rest of §9's table
- * (ADMIN_TOKEN, IP_HMAC_KEY_FILE, TRUST_PROXY, the revalidation knobs, …) lands
+ * (ADMIN_TOKEN, IP_HMAC_KEY, TRUST_PROXY, the revalidation knobs, …) lands
  * with the phase that first reads it — an unused-but-validated variable is just
  * a way to fail a boot for a feature that does not exist yet.
  *
@@ -15,6 +15,10 @@
  */
 
 import { basename } from 'node:path';
+
+// §4. Kept here rather than imported from lib/iphash.js so that config stays a leaf
+// module; `createIpHasher` re-checks the same floor on the key it is handed.
+const MIN_IP_HMAC_KEY_BYTES = 32;
 
 export function loadConfig(env = process.env) {
   const errors = [];
@@ -51,7 +55,7 @@ export function loadConfig(env = process.env) {
   // one stops the boot.
   const adminToken = parseAdminToken(env.ADMIN_TOKEN, errors);
   const production = env.NODE_ENV === 'production';
-  const ipHmacKeyFile = parseKeyFile(env.IP_HMAC_KEY_FILE, errors, production);
+  const ipHmacKey = parseIpHmacKey(env.IP_HMAC_KEY, errors);
   const trustProxy = env.TRUST_PROXY === 'true';
   const trustedProxyHops = parseNonNegativeInt(
     env.TRUSTED_PROXY_HOPS,
@@ -201,7 +205,7 @@ export function loadConfig(env = process.env) {
     maxResponseBytes,
     submitBudgetMs,
     adminToken,
-    ipHmacKeyFile,
+    ipHmacKey,
     trustProxy,
     trustedProxyHops,
     maxListingsPerDomain,
@@ -223,8 +227,8 @@ export function loadConfig(env = process.env) {
     rsscloudProtocol,
     contentDir,
     contentPollMs,
-    // Only the IP-HMAC key file's read-or-generate rule branches on this, and it
-    // has to branch on something the deploy actually sets.
+    // The IP-HMAC key's require-or-generate rule branches on this, and it has to
+    // branch on something the deploy actually sets.
     production,
   });
 }
@@ -325,19 +329,38 @@ function parseAdminToken(raw, errors) {
   return token;
 }
 
-// The production default is the compose secret mount (§9). Outside production it has to be
-// a project-local path: the dev fallback in lib/iphash.js generates a key and mkdir's its
-// parent, and pointing that at /run/secrets means `pnpm dev` dies at boot on a root-owned
-// system directory. `secrets/` is already gitignored.
-function parseKeyFile(raw, errors, production) {
-  const fallback = production ? '/run/secrets/ip_hmac_key' : './secrets/ip_hmac_key';
-  if (raw === undefined || raw === '') return fallback;
+/**
+ * The IP HMAC key itself, hex or base64 (§4). Unset returns `null`; whether that is
+ * fatal is `loadIpHmacKey`'s call, because only production has to refuse it.
+ *
+ * A value that is *present but too short* always stops the boot, in every
+ * environment — an operator who set the variable meant it to be the key, and
+ * silently generating a different one instead is the failure that looks like
+ * nothing at all.
+ */
+function parseIpHmacKey(raw, errors) {
+  if (raw === undefined || String(raw).trim() === '') return null;
 
-  if (raw.trim() === '') {
-    errors.push('IP_HMAC_KEY_FILE must be a path to a file holding ≥32 random bytes');
-    return fallback;
+  const key = decodeKey(String(raw).trim());
+  if (key === null || key.length < MIN_IP_HMAC_KEY_BYTES) {
+    errors.push(
+      `IP_HMAC_KEY must be at least ${MIN_IP_HMAC_KEY_BYTES} bytes of hex or base64 ` +
+        '(generate one with: openssl rand -hex 32), not a passphrase',
+    );
+    return null;
   }
-  return raw;
+  return key;
+}
+
+/**
+ * Hex is tried FIRST and the order is load-bearing: every 64-character hex string
+ * is also valid base64, so a base64-first decoder would read an operator's hex key
+ * as 48 unrelated bytes and neither side would notice.
+ */
+function decodeKey(text) {
+  if (/^[0-9a-f]+$/i.test(text) && text.length % 2 === 0) return Buffer.from(text, 'hex');
+  if (/^[A-Za-z0-9+/]+={0,2}$/.test(text)) return Buffer.from(text, 'base64');
+  return null;
 }
 
 function parsePort(raw, errors) {

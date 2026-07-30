@@ -119,8 +119,8 @@ iheartrss/
 ├─ docker-compose.yml           # for dockge
 ├─ .dockerignore
 ├─ .gitignore                   # .env, data/, secrets/, *.local.* — the repo is a live
-│                               #   clone on the server, so this one matters
-├─ secrets/                     # ip_hmac_key, chmod 600, NOT in the backup set (§9)
+│                               #   clone on the server, so this one matters. IP_HMAC_KEY
+│                               #   lives in .env, which is NOT in the backup set (§9)
 ├─ .env.example
 ├─ RUNBOOK.md                   # restore, rollback, "it's 2am and X is broken"
 ├─ PLAN.md
@@ -236,10 +236,18 @@ CREATE TABLE submissions (
   submitted_url TEXT NOT NULL,
   normalized_url TEXT,
   -- HMAC-SHA256(key, truncate(ip) + YYYY-MM-DD). Never the raw IP. Three deliberate choices:
-  --   * HMAC with a key from a mounted FILE, not sha256 with an env-var salt. The whole
-  --     IPv4 space is 2^32 — a plain salted digest is a GPU-minutes rainbow table, so the
-  --     scheme rests entirely on the secret, and an env var sits in `docker inspect`, in
-  --     dockge's UI, and in any .env backed up beside ./data.
+  --   * HMAC under a secret key, not sha256 with a published salt. The whole IPv4 space
+  --     is 2^32 — a plain salted digest is a GPU-minutes rainbow table, so the scheme
+  --     rests entirely on the secret. REVISED: the key is one env var, `IP_HMAC_KEY`,
+  --     not a mounted file. The file argument was that an env var sits in
+  --     `docker inspect` and in dockge's UI — still TRUE, and the honest cost of the
+  --     change. It bought less than it looked like: the .env holding it already sat in
+  --     the stack directory beside ./data, so "file, not env var" moved the secret a few
+  --     inches, while requiring an ssh session to create a file before the very first
+  --     dockge deploy. One configuration path, at a small named cost. What actually
+  --     protects the hashes is unchanged: the key is not in git, the IP is truncated
+  --     BEFORE hashing, the date component rotates daily, and rows are purged at 90 days.
+  --     Anyone who can run `docker inspect` on the box can already read ./data anyway.
   --   * Truncate first: /24 for IPv4, /64 for IPv6. That is all the precision abuse triage
   --     needs (and /64 is already the rate-limit bucket), and it makes the input space
   --     small enough that correlation across days is the only real risk — hence:
@@ -1969,11 +1977,10 @@ services:
       - DATABASE_PATH=/data/iheartrss.db
       - TRUST_PROXY=true
       - ADMIN_TOKEN=${ADMIN_TOKEN}
-      - IP_HMAC_KEY_FILE=/run/secrets/ip_hmac_key
+      - IP_HMAC_KEY=${IP_HMAC_KEY}     # from the .env; no secret file to create first
     volumes:
       - ./data:/data
       - ./content:/app/content:ro   # drop a .md file in to publish; no rebuild needed
-      - ./secrets/ip_hmac_key:/run/secrets/ip_hmac_key:ro   # NOT under ./data — see below
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 60s
@@ -1992,13 +1999,19 @@ directly can set `X-Forwarded-For` to anything, defeating every rate limit and p
 every logged IP hash. It also exposes `/admin` over plaintext. Assert the unsafe combination
 at boot.
 
-**Keep `./secrets/` out of the backup set.** The IP HMAC key living beside the database it
-protects would defeat the point — one backup tarball, or one `git` mistake in a directory
-that is a live clone on the server, and both halves travel together. Generate it once with
-`head -c 32 /dev/urandom | base64 > secrets/ip_hmac_key && chmod 600`, back it up separately
-(a password manager is fine), and note in `RUNBOOK.md` that losing it makes historical
-`ip_hash` values unlinkable — which is a nuisance for abuse triage and harmless for
-everything else. `.gitignore` covers `secrets/`.
+**Keep the stack's `.env` out of the backup set.** REVISED: the IP HMAC key is
+`IP_HMAC_KEY` in that `.env`, not `./secrets/ip_hmac_key` — see §4 for the trade and its
+cost. The rule it was protecting is unchanged and now attaches to the `.env`: the key
+living beside the database it protects would defeat the point, so one backup tarball and
+both halves travel together. Generate it once with `openssl rand -hex 32`, back the `.env`
+up separately (a password manager is fine — it holds `ADMIN_TOKEN` too), and note in
+`RUNBOOK.md` that losing it makes historical `ip_hash` values unlinkable, which is a
+nuisance for abuse triage and harmless for everything else. `.gitignore` covers `.env`.
+
+What this does **not** buy back: an env var is readable from `docker inspect` and from
+dockge's own UI, which a mounted file was not. That is accepted. Anyone with either can
+already read `./data`, and the hashes are additionally protected by truncating to /24 and
+/64 before hashing, by the daily-rotating date component, and by the 90-day purge.
 
 #### Backup, rollback, monitoring
 
@@ -2047,7 +2060,7 @@ recovery and a rebuild from nothing.
 | `DATABASE_PATH` | `./data/iheartrss.db` | |
 | `LINKBACK_HOSTS` | `iheartrss.com,www.iheartrss.com` | Configurable so local dev can point elsewhere. |
 | `ADMIN_TOKEN` | — | Admin disabled if unset. |
-| `IP_HMAC_KEY_FILE` | `/run/secrets/ip_hmac_key` | Path to a file holding ≥32 random bytes. Required in production, validated at boot. **A file, not an env var** — see §4. Replaces the earlier `IP_SALT`. |
+| `IP_HMAC_KEY` | *(none)* | ≥32 random bytes as hex or base64 (`openssl rand -hex 32`). Required in production and validated at boot; outside production an ephemeral in-memory key is generated per boot and logged as such. Replaces `IP_HMAC_KEY_FILE`, and before that `IP_SALT` — see §4 for why the file went and what it cost. |
 | `TRUST_PROXY` | `false` | |
 | `TRUSTED_PROXY_HOPS` | `0` | Entries to skip *past* the rightmost. One nginx → `0`. See §6. |
 | `SUBMIT_BUDGET_MS` | `30000` | Total budget across all fetches in one submission. |
@@ -2305,7 +2318,10 @@ Not blocking — sensible defaults are assumed in the plan and each is cheap to 
 11. ~~Privacy statement.~~ **Resolved:** specified in §6's "What `/about` has to say" — what
     we store, the 90-day purge, no analytics or third-party scripts, and what the IP hash is
     *for*. Ships in phase 1 with `/about`.
-12. ~~`IP_SALT` handling.~~ **Resolved:** replaced by `IP_HMAC_KEY_FILE` — HMAC-SHA256 under
-    a key mounted from a file outside the data directory, over a **truncated** IP (/24, /64)
-    mixed with a **daily-rotating** date component. §4 carries the construction and the
-    reasoning; §9 covers key generation and keeping `./secrets/` out of the backup set.
+12. ~~`IP_SALT` handling.~~ **Resolved:** replaced by `IP_HMAC_KEY` — HMAC-SHA256 under a
+    secret key, over a **truncated** IP (/24, /64) mixed with a **daily-rotating** date
+    component. The key was briefly `IP_HMAC_KEY_FILE`, a mounted file; it is now a single
+    env var, because dockge deploys are "paste a compose file and a `.env`" and a key file
+    meant an ssh session before the first deploy. §4 carries the construction, the
+    reasoning, and the cost of that revision; §9 covers key generation and keeping the
+    `.env` out of the backup set.

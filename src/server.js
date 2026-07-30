@@ -47,12 +47,13 @@ seedSelfListing({ queries, config, log });
 // Before listening, for the same reason as everything else here: every submission
 // writes an `ip_hash`, so a missing key must be a container that never comes up
 // rather than one that 500s the first time somebody submits. In production a missing
-// file is fatal; in development one is generated (§4, §9).
+// IP_HMAC_KEY is fatal; in development an ephemeral one is generated (§4, §9).
 const ipHmacKey = loadIpHmacKey({
-  path: config.ipHmacKeyFile,
+  key: config.ipHmacKey,
   production: config.production,
+  log,
 });
-log('iphash.ready', { path: config.ipHmacKeyFile });
+log('iphash.ready', { source: config.ipHmacKey ? 'IP_HMAC_KEY' : 'ephemeral' });
 
 if (config.adminToken === null) {
   // §6: "No admin UI is served at all if ADMIN_TOKEN is unset." Said out loud,

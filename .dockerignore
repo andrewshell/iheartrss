@@ -1,7 +1,9 @@
 # Keep the build context small and keep host state out of the image.
 #
-# `data/`, `secrets/` and `.env` are real files on a workstation that publishes
-# images, so none of them may ever be baked into a layer.
+# `data/` and `.env` are real files on a workstation that publishes images, so
+# neither may ever be baked into a layer. `secrets/` is nothing the app reads any
+# more — the IP HMAC key is `IP_HMAC_KEY` in the environment — but a stray local
+# one still must not be copied in.
 #
 # `content/` is deliberately NOT excluded: dockge deploys a published image with no
 # repo on the box, so posts have to be in the image or the blog is empty. Verified
