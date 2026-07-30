@@ -1367,11 +1367,25 @@ enclosed inside it, so it holds up against both light and dark browser chrome �
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 ```
 
-`favicon.ico` and `apple-touch-icon.png` are generated **once, by hand, and committed** —
-not built at deploy time. Rasterising would mean adding a headless-browser or librsvg
-dependency to the Docker image to produce two files that change roughly never. The
-apple-touch PNG needs an **opaque** background (white); iOS composites transparent icons
-onto black.
+The raster set is generated **once, by hand, and committed** — not built at deploy time.
+Rasterising would mean adding a headless-browser or librsvg dependency to the Docker image
+to produce files that change roughly never.
+
+**Shipped** (generated with favicon.io, committed to `public/`): `favicon.ico`,
+`favicon-16x16.png`, `favicon-32x32.png`, `apple-touch-icon.png` (180×180),
+`android-chrome-192x192.png`, `android-chrome-512x512.png`, `site.webmanifest`.
+
+**The apple-touch icon is the one asset with no alpha channel**, and it had to be fixed
+after generation. favicon.io emits it transparent — verified alpha 0 in all four corners —
+and iOS composites a transparent home-screen icon onto **black**, so it would have shipped
+as an orange heart on a black tile. It is flattened onto opaque white and re-encoded as
+RGB with no alpha channel at all, so there is nothing left to composite. Every other PNG
+keeps its transparency, which is correct for browser tabs and for non-maskable Android icons.
+
+A `site.webmanifest` now exists, which makes the deferred maskable-icon item in §13.1 live
+rather than hypothetical: the manifest declares no `purpose: "maskable"` icon, so Android
+adaptive icons will letterbox the transparent PNGs rather than crop the heart's shoulders
+flat. Acceptable; the numbers for a proper maskable variant are in §6.1 above when wanted.
 
 **Known limit: the tight crop is not maskable-safe.** Verified by rendering it under a
 circular mask — the heart's left and right shoulders get sliced flat. That's fine for

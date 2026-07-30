@@ -223,3 +223,38 @@ test('/status is linked from /about, since it is the only way to ask why', async
   // §6: "Linked from /about, /sites and every rejection message."
   assert.match(html, /href="\/status/);
 });
+
+test('every page links the full favicon set, and each target actually exists', async () => {
+  // §6.1: the SVG covers modern browsers, but Safari and older browsers need the
+  // raster fallbacks. Phase 1 shipped without them because no rasterizer was
+  // available; this asserts the gap is closed AND that nothing 404s.
+  const app = createApp({ config });
+  const html = await (await app.request('/')).text();
+
+  for (const href of [
+    '/iheartrss-icon.svg',
+    '/favicon.ico',
+    '/favicon-32x32.png',
+    '/favicon-16x16.png',
+    '/apple-touch-icon.png',
+    '/site.webmanifest',
+  ]) {
+    assert.ok(html.includes(href), `<head> should reference ${href}`);
+    const res = await app.request(href);
+    assert.equal(res.status, 200, `${href} should be served, got ${res.status}`);
+  }
+
+  assert.match(html, /rel="manifest"/);
+  assert.match(html, /rel="apple-touch-icon"/);
+});
+
+test('the webmanifest is valid JSON, served as such, and names the app', async () => {
+  const app = createApp({ config });
+  const res = await app.request('/site.webmanifest');
+
+  assert.match(res.headers.get('content-type') ?? '', /application\/manifest\+json/);
+
+  const manifest = JSON.parse(await res.text());
+  assert.ok(manifest.name.length > 0, 'name must not be the generator default of ""');
+  assert.equal(manifest.icons.length, 2);
+});

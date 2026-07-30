@@ -9,9 +9,14 @@ const SITE_NAME = 'I ♥ RSS';
  * already-rendered `hono/html` fragment, `config` carries `siteUrl` so the
  * discovery links in `<head>` are absolute.
  *
- * Note: only the SVG favicon is linked. The plan's `favicon.ico` and
- * `apple-touch-icon.png` are hand-generated one-offs that do not exist yet;
- * linking them before they are committed would advertise two 404s.
+ * Favicons: the SVG is listed first so modern browsers prefer the vector and get
+ * a crisp icon at any DPI; `favicon.ico` and the two PNG sizes are the fallback
+ * for Safari and older browsers, which ignore `image/svg+xml`.
+ *
+ * `apple-touch-icon.png` is deliberately the one asset with **no alpha channel**
+ * (§6.1). iOS composites a transparent home-screen icon onto black, so the
+ * generated file — transparent in all four corners — would have put an orange
+ * heart on a black tile. It is flattened onto opaque white instead.
  *
  * The OPML discovery links land here in phase 6, now that /subscriptions.opml
  * exists — advertising them earlier would have pointed the exact crawlers that
@@ -42,6 +47,11 @@ ${description ? html`<meta name="description" content="${description}">` : ''}
 <link rel="following" type="text/x-opml" title="${SITE_NAME} members" href="${opmlUrl}">
 <link rel="blogroll" type="text/xml" title="${SITE_NAME} members" href="${opmlUrl}">
 <link rel="icon" href="/iheartrss-icon.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="icon" href="/favicon-32x32.png" type="image/png" sizes="32x32">
+    <link rel="icon" href="/favicon-16x16.png" type="image/png" sizes="16x16">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
+    <link rel="manifest" href="/site.webmanifest">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>

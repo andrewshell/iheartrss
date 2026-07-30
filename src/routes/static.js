@@ -1,5 +1,4 @@
-import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,6 +21,9 @@ const CONTENT_TYPES = {
   '.ico': 'image/x-icon',
   '.png': 'image/png',
   '.txt': 'text/plain; charset=utf-8',
+  // The registered type for a web app manifest. Serving it as octet-stream (the
+  // fallback below) makes Chrome ignore the manifest entirely.
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
 // Plan §6/§6.1: the three brand files exist to be hotlinked from other people's
@@ -47,10 +49,31 @@ export function registerStatic(app) {
     }
     if (!info.isFile()) return next();
 
+    // Read the bytes rather than handing `c.body()` a Node stream.
+    //
+    // `c.body(createReadStream(path))` put a Node `Readable` where a web
+    // `ReadableStream` belongs. Node's bundled undici adapts it via its
+    // async-iterator path and closes the stream controller twice when the file
+    // ends, throwing `ERR_INVALID_STATE: ReadableStream is already closed` in a
+    // microtask *after* the response has already been sent — so it could not be
+    // caught per-request and it killed the whole process. One visit to any page
+    // was enough, because `/style.css` comes through here.
+    //
+    // Everything in `public/` is small (largest ~34 KB), so buffering removes the
+    // entire stream-lifecycle problem rather than trading it for a subtler one.
+    // It also makes Content-Length exact: taken from `stat`, it could disagree
+    // with the bytes actually sent if the file changed in between.
+    let body;
+    try {
+      body = await readFile(filePath);
+    } catch {
+      return next();
+    }
+
     const ext = path.extname(name).toLowerCase();
     const headers = {
       'Content-Type': CONTENT_TYPES[ext] ?? 'application/octet-stream',
-      'Content-Length': String(info.size),
+      'Content-Length': String(body.byteLength),
       'Cache-Control': 'public, max-age=604800',
       'X-Content-Type-Options': 'nosniff',
     };
@@ -61,6 +84,6 @@ export function registerStatic(app) {
       headers['Cross-Origin-Resource-Policy'] = 'cross-origin';
     }
 
-    return c.body(createReadStream(filePath), 200, headers);
+    return c.body(body, 200, headers);
   });
 }
