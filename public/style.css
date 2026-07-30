@@ -695,6 +695,96 @@ pre.code code,
   }
 }
 
+/* ------------------------------------------------------------- blog roll -- */
+
+/*
+ * §10's feed reader, on the homepage.
+ *
+ * Everything inside `<blog-roll>` is built by /blog-roll.js at runtime — one
+ * `<details>` per member feed, a `<summary>` carrying the title and a relative
+ * `<time>`, and a `<ul>` of up to five items once it is opened. The component
+ * emits no class names, so these are element selectors scoped to the custom
+ * element rather than the usual BEM classes. That is a property of the markup we
+ * are styling, not a change of convention.
+ *
+ * `display: block` on the element itself is NOT optional: an unknown element is
+ * `display: inline` by default, so the whole reader would lay out as if it were a
+ * word in a sentence.
+ */
+blog-roll {
+  display: block;
+}
+
+.blogroll__note {
+  color: var(--text-muted);
+  max-width: var(--measure);
+}
+
+blog-roll details {
+  border-bottom: 1px solid var(--border);
+}
+
+blog-roll details:last-child {
+  border-bottom: 0;
+}
+
+/*
+ * The summaries are the main thing anyone taps on this page, so they carry a full
+ * ≥44px target (§6.3) with the padding included, not a bare line of text.
+ *
+ * `flex` rather than the default, so the title and the relative time sit on one
+ * line and wrap together on a narrow screen. The marker is restored explicitly:
+ * a flex `<summary>` loses the disclosure triangle in WebKit, and the triangle is
+ * the only affordance saying the row opens.
+ */
+blog-roll summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.5rem;
+  min-height: var(--tap);
+  padding: 0.5rem 0;
+  font-size: var(--step-1);
+  line-height: 1.3;
+  cursor: pointer;
+  list-style: revert;
+}
+
+blog-roll summary::marker {
+  color: var(--brand-text);
+}
+
+/* Both the per-feed time in a summary and the per-item time in the list. */
+blog-roll time {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+blog-roll ul {
+  list-style: none;
+  margin: 0 0 0.9rem;
+  padding-left: 0.9rem;
+  max-width: none;
+  border-left: 2px solid var(--border);
+}
+
+blog-roll li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.4rem;
+}
+
+/* The item links are the other thing anyone taps, and they sit close together, so
+   they get the same floor as the summaries above them. */
+blog-roll li a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0.25rem 0;
+}
+
 /* ------------------------------------------------------------------ blog -- */
 
 /*

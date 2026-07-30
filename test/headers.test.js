@@ -62,9 +62,11 @@ test('every response carries the four §6 security headers', async () => {
     // so nothing needs 'unsafe-inline' or 'unsafe-eval', and a policy that
     // allows them is not the one §6 asked for.
     assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval|\*/, path);
-    // The three that matter for an app whose pages are all server-rendered HTML
-    // with no scripts: no script execution, no framing, no <base> hijack.
-    assert.match(csp, /(?:^|;\s*)script-src 'none'/, path);
+    // §10's feed reader moved this from 'none' to 'self': the app now serves one
+    // script, `/blog-roll.js`, and it is ours on our origin. The property that
+    // matters — an *injected* inline script still cannot run — is unchanged, which
+    // is what the 'unsafe-inline' assertion above is guarding.
+    assert.match(csp, /(?:^|;\s*)script-src 'self'/, path);
     assert.match(csp, /frame-ancestors 'none'/, path);
     assert.match(csp, /base-uri 'none'/, path);
   }

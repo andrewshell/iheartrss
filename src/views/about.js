@@ -104,8 +104,18 @@ export function aboutPage({ config }) {
     <strong>Submission records are deleted after 90 days.</strong>
   </p>
   <p>
-    There are no analytics, no third-party scripts and no tracking of any kind, and
-    browsing this site sets no cookies.
+    <strong>One third party sees you: FeedLand.</strong> The reader on our homepage is
+    served from this domain, but it asks
+    <a href="https://feedland.com/">feedland.com</a> for the list of member feeds and
+    for their latest items, and that request comes from your browser &mdash; so
+    FeedLand sees your IP address and that you loaded our homepage. It is how the
+    reader works, and we would rather say so than hide behind the fact that the script
+    itself is ours.
+  </p>
+  <p>
+    That is the only page it happens on. Every other page here makes no third-party
+    requests at all. There are no analytics and no tracking of any kind, and browsing
+    this site sets no cookies.
   </p>
 </section>
 
