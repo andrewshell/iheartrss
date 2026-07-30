@@ -97,6 +97,16 @@ export function badgePage({ config }) {
     if you&rsquo;d rather.
   </p>
 </section>
+
+<section>
+  <h2>Badge on, feed next</h2>
+  <p>
+    The other half of getting listed is an RSS 2.0 feed advertised in the
+    <code>&lt;head&gt;</code> of the page carrying this badge.
+    <a href="/guide">The guide</a> has the exact lines for Jekyll, Eleventy, Zola, Astro
+    and hand-rolled sites, then <a href="/submit">submit your URL</a>.
+  </p>
+</section>
 `;
 
   return layout({

@@ -79,6 +79,92 @@ export function createQueries(db) {
       VALUES (:site_id, :url, :reason, :contact, :ip_hash, :created_at)
     `),
 
+    getSiteByUrl: db.prepare('SELECT * FROM sites WHERE url = :url'),
+    getSiteByFeedUrl: db.prepare('SELECT * FROM sites WHERE feed_url = :feed_url'),
+    getSiteById: db.prepare('SELECT * FROM sites WHERE id = :id'),
+
+    // §6's /status rule: match the canonical `url` OR the `submitted_url`. A member
+    // types what they submitted, which is often a different page from the canonical
+    // one we stored. `idx_sites_submitted` (§4) exists for this query.
+    getSiteBySubmittedUrl: db.prepare(
+      'SELECT * FROM sites WHERE url = :url OR submitted_url = :url ORDER BY id LIMIT 1',
+    ),
+
+    /**
+     * §5 Step 7's refresh. Deliberately does NOT touch `status`: `hidden` is
+     * terminal, and an `UPDATE … SET status = 'active'` here was the one-request,
+     * no-auth undo of the only lightweight moderation lever there is. The caller
+     * decides whether a status change is allowed; this statement can't grant one.
+     */
+    updateSite: db.prepare(`
+      UPDATE sites
+         SET submitted_url    = :submitted_url,
+             host             = :host,
+             path             = :path,
+             feed_url         = :feed_url,
+             title            = :title,
+             description      = :description,
+             has_source_ns    = :has_source_ns,
+             has_rsscloud     = :has_rsscloud,
+             rsscloud_style   = :rsscloud_style,
+             cloud_json       = :cloud_json,
+             url              = :url,
+             failure_count    = 0,
+             optout_seen_at   = NULL,
+             last_error       = NULL,
+             last_verified_at = :now,
+             last_checked_at  = :now
+       WHERE id = :id
+    `),
+
+    reviveSite: db.prepare(
+      "UPDATE sites SET status = 'active' WHERE id = :id AND status <> 'hidden'",
+    ),
+
+    setSiteStatus: db.prepare('UPDATE sites SET status = :status WHERE id = :id'),
+
+    /**
+     * §5 Step 7's per-domain cap. `host = :domain OR substr(host, -length(…))`, not
+     * `LIKE`: `_` and `%` are LIKE wildcards, so a cap keyed on `a_b.com` would
+     * also count `axb.com`. The leading dot on the suffix is what keeps
+     * `notexample.com` out of `example.com`'s count.
+     *
+     * Only the statuses that are (or can return to) the OPML count. A `removed` row
+     * holding a slot forever would make the cap a permanent outage.
+     */
+    countListingsForDomain: db.prepare(`
+      SELECT count(*) AS n
+        FROM sites
+       WHERE (host = :domain OR substr(host, -length(:dotted)) = :dotted)
+         AND status IN ('active', 'failing', 'blocked', 'hidden')
+    `),
+
+    countSitesCreatedSince: db.prepare(
+      'SELECT count(*) AS n FROM sites WHERE created_at >= :since',
+    ),
+
+    countSites: db.prepare(
+      "SELECT count(*) AS n FROM sites WHERE status IN ('active', 'failing', 'blocked')",
+    ),
+
+    insertModerationLog: db.prepare(`
+      INSERT INTO moderation_log (site_id, action, reason, created_at)
+      VALUES (:site_id, :action, :reason, :created_at)
+    `),
+
+    // §4: hide every site the ban covers, using the same full predicate as findBan —
+    // otherwise a ban leaves the banned rows in the OPML until the §7 backstop join
+    // happens to be consulted.
+    hideSitesMatchingBan: db.prepare(`
+      UPDATE sites
+         SET status = 'hidden'
+       WHERE (    (:host <> '' AND host = :host)
+               OR (:host_suffix <> ''
+                   AND substr(host, -length(:host_suffix)) = :host_suffix) )
+         AND (:path_prefix = ''
+              OR substr(path, 1, length(:path_prefix)) = :path_prefix)
+    `),
+
     insertSite: db.prepare(`
       INSERT INTO sites (
         url, submitted_url, host, path, feed_url, title, description,
@@ -94,6 +180,87 @@ export function createQueries(db) {
 
   return {
     getDirectoryVersion: () => statements.getDirectoryVersion.get(),
+
+    getSiteByUrl: (url) => statements.getSiteByUrl.get({ url }),
+    getSiteByFeedUrl: (feedUrl) => statements.getSiteByFeedUrl.get({ feed_url: feedUrl }),
+    getSiteById: (id) => statements.getSiteById.get({ id }),
+    getSiteBySubmittedUrl: (url) => statements.getSiteBySubmittedUrl.get({ url }),
+
+    countSites: () => statements.countSites.get().n,
+
+    /**
+     * How many listings does this registrable domain already hold? `domain` comes
+     * from `tldts` with `allowPrivateDomains: true` (§5 Step 7 — the flag is not
+     * optional), and subdomains are counted via the dotted suffix.
+     */
+    countListingsForDomain: (domain) =>
+      statements.countListingsForDomain.get({ domain, dotted: `.${domain}` }).n,
+
+    countSitesCreatedSince: (since) => statements.countSitesCreatedSince.get({ since }).n,
+
+    /**
+     * Refresh an existing row from a fresh verification. Returns nothing; the
+     * caller already knows the id.
+     *
+     * `status` is untouched here — see the statement. `revive` asks separately for
+     * the `failing`/`blocked` → `active` transition, and it cannot reach `hidden`.
+     */
+    updateSite(id, site, { revive = true } = {}) {
+      const now = new Date().toISOString();
+
+      statements.updateSite.run({
+        id,
+        url: site.url,
+        submitted_url: site.submitted_url,
+        host: site.host,
+        path: site.path,
+        feed_url: site.feed_url,
+        title: site.title,
+        description: opt(site.description),
+        has_source_ns: bool(site.has_source_ns),
+        has_rsscloud: bool(site.has_rsscloud),
+        rsscloud_style: opt(site.rsscloud_style),
+        cloud_json: opt(site.cloud_json),
+        now,
+      });
+
+      if (revive) statements.reviveSite.run({ id });
+
+      statements.bumpDirectoryVersion.run();
+    },
+
+    /** §12 phase 5's moderation lever. `hidden` is terminal for the upsert. */
+    hideSite(id, reason) {
+      statements.setSiteStatus.run({ id, status: 'hidden' });
+      statements.insertModerationLog.run({
+        site_id: id,
+        action: 'hide',
+        reason: opt(reason),
+        created_at: new Date().toISOString(),
+      });
+      statements.bumpDirectoryVersion.run();
+    },
+
+    /** The only thing that clears `hidden` (§5 Step 7). Re-verification is phase 8. */
+    unhideSite(id, reason) {
+      statements.setSiteStatus.run({ id, status: 'active' });
+      statements.insertModerationLog.run({
+        site_id: id,
+        action: 'unhide',
+        reason: opt(reason),
+        created_at: new Date().toISOString(),
+      });
+      statements.bumpDirectoryVersion.run();
+    },
+
+    logModeration(entry) {
+      statements.insertModerationLog.run({
+        site_id: opt(entry.site_id),
+        action: entry.action,
+        reason: opt(entry.reason),
+        created_at: new Date().toISOString(),
+      });
+    },
 
     /**
      * The listing cap for a registrable domain: the `domain_limits` override if
@@ -114,10 +281,25 @@ export function createQueries(db) {
      * the same ban be inserted twice and make ON CONFLICT silently not fire (§4).
      */
     insertBan(ban) {
+      const host = ban.host ?? '';
+      const host_suffix = ban.host_suffix ?? '';
+      const path_prefix = ban.path_prefix ?? '';
+
       statements.insertBan.run({
-        host: ban.host ?? '',
-        host_suffix: ban.host_suffix ?? '',
-        path_prefix: ban.path_prefix ?? '',
+        host,
+        host_suffix,
+        path_prefix,
+        reason: opt(ban.reason),
+        created_at: new Date().toISOString(),
+      });
+
+      // §6: "Add host to banned_hosts AND hide all its sites." The §7 backstop join
+      // makes the OPML correct either way, but /sites and /status read `status`, so
+      // without this a banned member still looks listed to everyone but a reader.
+      statements.hideSitesMatchingBan.run({ host, host_suffix, path_prefix });
+      statements.insertModerationLog.run({
+        site_id: null,
+        action: 'ban',
         reason: opt(ban.reason),
         created_at: new Date().toISOString(),
       });

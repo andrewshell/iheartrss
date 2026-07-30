@@ -1,27 +1,88 @@
+import { lookup } from 'node:dns';
+
 import { Hono } from 'hono';
 
 import { renderFeed } from './blog/feed.js';
+import { createIpHasher } from './lib/iphash.js';
+import { createRateLimiter, createSemaphore } from './lib/ratelimit.js';
+import { registerAdmin } from './routes/admin.js';
 import { registerStatic } from './routes/static.js';
+import { registerSubmit } from './routes/submit.js';
+import { createFetcher } from './verify/fetch.js';
+import { createVerifier } from './verify/index.js';
+import { createPersister } from './verify/persist.js';
 import { aboutPage } from './views/about.js';
 import { badgePage } from './views/badge.js';
 import { notFoundPage } from './views/error.js';
+import { guidePage } from './views/guide.js';
 import { homePage } from './views/home.js';
 
 /**
  * `db` and `queries` come from `createDb(path)` and are injected rather than
  * imported (plan §11) — that is what lets a test hand the app an in-memory
- * database. Phase 3 only wires them through; the routes that read them arrive in
- * phase 5.
+ * database.
+ *
+ * The verifier, persister, rate limiter and IP hasher are injectable for the same
+ * reason: `routes.test.js` tests the routes with a stub verifier, so it neither
+ * needs a fixture HTTP server nor risks reaching the real network.
  */
 export function createApp({
   config,
   db = null,
   queries = null,
   checkHealth = () => ({ ok: true }),
+  verifySite = null,
+  persist = null,
+  ipHmacKey = null,
+  hashIp = null,
+  limiter = null,
+  semaphore = null,
+  log = defaultLog,
 }) {
   const app = new Hono();
   void db;
-  void queries;
+
+  const deps = {
+    config,
+    queries,
+    log,
+    // §6: 5 per 10 minutes and 30 per day, shared across every route that spends an
+    // outbound request, plus a global semaphore of 4 on concurrent verifications so
+    // no combination of endpoints can fan out against a third party.
+    limiter: limiter ?? createRateLimiter(),
+    semaphore: semaphore ?? createSemaphore(4),
+    hashIp:
+      hashIp ??
+      (ipHmacKey === null
+        ? // Nothing may reach `insertSubmission` with a raw address, so the fallback
+          // is a refusal to hash rather than a plaintext IP.
+          () => {
+            throw new Error('no IP HMAC key: cannot hash a client address');
+          }
+        : createIpHasher({ key: ipHmacKey })),
+    verifySite:
+      verifySite ??
+      createVerifier({
+        safeFetch: createFetcher({ lookup, config }),
+        config,
+        isBanned:
+          queries === null
+            ? undefined
+            : ({ host, path }) => queries.findBan({ host, path }) !== undefined,
+      }),
+    persist: null,
+  };
+
+  deps.persist =
+    persist ??
+    (queries === null
+      ? async () => ({ outcome: 'rejected', reason: 'error' })
+      : createPersister({
+          queries,
+          config,
+          safeFetch: createFetcher({ lookup, config }),
+          log,
+        }));
 
   // Plan §9: the container healthcheck only inspects the HTTP status, so an
   // unhealthy answer has to *be* a 503. `{ok: false}` with a 200 is a container
@@ -43,6 +104,14 @@ export function createApp({
   app.get('/about', (c) => c.html(aboutPage({ config })));
   app.get('/badge', (c) => c.html(badgePage({ config })));
 
+  // §6.2/§12: /guide ships WITH the rejection messages that link to it, not after
+  // them, or the first wave of Jekyll users hits a dead end at exactly the moment
+  // we're asking them to change something.
+  app.get('/guide', (c) => c.html(guidePage({ config })));
+
+  registerSubmit(app, deps);
+  registerAdmin(app, deps);
+
   app.get('/feed.xml', (c) =>
     c.body(renderFeed({ config }), 200, {
       'Content-Type': 'application/rss+xml; charset=utf-8',
@@ -61,6 +130,10 @@ export function createApp({
   app.notFound((c) => c.html(notFoundPage({ config }), 404));
 
   return app;
+}
+
+function defaultLog(msg, fields) {
+  console.log(JSON.stringify({ msg, ...fields }));
 }
 
 // Plan §6: allow the public pages, disallow the routes that either cost us an

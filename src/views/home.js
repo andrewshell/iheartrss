@@ -1,6 +1,7 @@
 import { html } from 'hono/html';
 
 import { layout } from './layout.js';
+import { submitForm } from './submit.js';
 
 export function homePage({ config }) {
   const badgeImg = new URL('/iheartrss.svg', config.siteUrl).href;
@@ -35,10 +36,11 @@ export function homePage({ config }) {
         We look for an RSS 2.0 feed advertised in your page&rsquo;s
         <code>&lt;head&gt;</code>.
       </p>
+      <p><a href="/guide">How to publish an RSS 2.0 feed &rarr;</a></p>
     </li>
     <li>
       <h3>Submit your URL</h3>
-      <p>Submissions open soon. The site is still being built in the open.</p>
+      ${submitForm()}
     </li>
   </ol>
 </section>

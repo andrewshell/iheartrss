@@ -19,26 +19,35 @@ import { normalizeUrl } from './url.js';
  * @param {object} deps
  * @param {Function} deps.safeFetch - from `createFetcher`; the only way out to the network.
  * @param {object} deps.config - `submitBudgetMs`, `linkbackHosts`.
+ * @param {Function} [deps.isBanned] - `({host, path}) => boolean`, injected so Step 0.6
+ *   can consult `banned_hosts` (§4) without this module taking a database dependency.
  */
-export function createVerifier({ safeFetch, config }) {
+export function createVerifier({ safeFetch, config, isBanned = () => false }) {
   /**
    * @param {string} submittedUrl - raw user input.
+   * @param {object} [options]
+   * @param {object} [options.budget] - a caller-supplied shared budget, so Step 7's
+   *   incumbent re-check spends the same clock as Steps 1–6 (§5, "Fetch budget").
    * @returns {Promise<object>} `{ ok: true, url, feedUrl, title, description, features,
    *   … }` or `{ ok: false, reason, … }`.
    */
-  return async function verifySite(submittedUrl) {
+  return async function verifySite(submittedUrl, { budget: sharedBudget } = {}) {
     // ── Step 0 — normalize and pre-screen ────────────────────────────────────────
-    // `banned_hosts` is a §4 table, so that half of Step 0.6 lands with phase 5.
     const normalized = normalizeUrl(submittedUrl);
     if (!normalized.ok) return { ok: false, reason: normalized.reason };
+
+    // Step 0.6, using §4's FULL predicate — host or host-suffix AND path-prefix, so a
+    // ban on `mastodon.social/@spammer` doesn't take out the whole instance. Checked
+    // before any fetch: the point of a ban is to stop spending requests on them.
+    const banHost = new URL(normalized.url);
+    if (isBanned({ host: banHost.hostname, path: banHost.pathname })) {
+      return { ok: false, reason: 'banned', url: normalized.url };
+    }
 
     // §5's fetch budget: ONE budget shared by every fetch in this submission. Per-request
     // timeouts alone let 6 fetches × 5 redirect hops block a synchronous POST far past
     // any reverse-proxy timeout while the user resubmits and trips the rate limiter.
-    const budget = {
-      deadline: Date.now() + config.submitBudgetMs,
-      signal: AbortSignal.timeout(config.submitBudgetMs),
-    };
+    const budget = sharedBudget ?? createBudget(config);
 
     // ── Step 1 — fetch the submitted page ────────────────────────────────────────
     const submitted = await fetchOk(safeFetch, normalized.url, {
@@ -215,6 +224,18 @@ export function createVerifier({ safeFetch, config }) {
 
     return { ok: true, feed: parsed };
   }
+}
+
+/**
+ * The one shared clock for a submission (§5, "Fetch budget"). Created by the route so
+ * Steps 1–6 and Step 7's incumbent re-check together stay inside `SUBMIT_BUDGET_MS` —
+ * two separate budgets would let one POST run for twice it.
+ */
+export function createBudget(config) {
+  return {
+    deadline: Date.now() + config.submitBudgetMs,
+    signal: AbortSignal.timeout(config.submitBudgetMs),
+  };
 }
 
 /**

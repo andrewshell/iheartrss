@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { createDb } from '../src/db/index.js';
 import { createVerifier } from '../src/verify/index.js';
+import { createPersister } from '../src/verify/persist.js';
 import { BADGE, CONFIG, FEED_TYPE, html, rss, withSites } from './helpers/sites.js';
 
 // The two attacks §5 Step 4 is built around, as executable fixtures (§11's
@@ -236,6 +238,230 @@ test('the badge sitting only in a `<code>` block on the canonical page is no con
 
       assert.equal(result.ok, false);
       assert.equal(result.reason, 'no_linkback');
+    },
+  );
+});
+
+// ── §5 Step 7: the incumbent re-check, and why it must fail closed ────────────
+//
+// `UNIQUE(feed_url)` makes identity the feed, which means a `feed_url` collision has
+// to decide who owns the row. "Last party to declare a feed owns it" is the whole
+// game if the move condition is written as `!declaresFeed(incumbent)`: "unreachable"
+// is a COMMON state here — the whole `blocked` status exists because bot protection
+// 403s us routinely — so an attacker just waits for, or induces, a window where the
+// victim's host is momentarily 403-ing, rate-limiting or mid-deploy.
+//
+// Only a CONCLUSIVE 2xx fetch showing the incumbent no longer declares the feed
+// permits the move. Every other outcome is `ambiguous_identity`.
+
+/** An incumbent row owning `feedUrl` at `incumbentUrl`, plus a persister. */
+async function withIncumbent({ incumbentUrl, feedUrl, safeFetch }, run) {
+  const { db, queries } = createDb(':memory:');
+  const persist = createPersister({
+    queries,
+    config: { ...CONFIG, maxListingsPerDomain: 5, maxNewListingsPerDay: 50 },
+    safeFetch,
+  });
+
+  const seeded = await persist({
+    ok: true,
+    url: incumbentUrl,
+    submittedUrl: incumbentUrl,
+    feedUrl,
+    title: 'Victim blog',
+    features: { has_source_ns: false, has_rsscloud: false, rsscloud_style: null },
+  });
+  assert.equal(seeded.outcome, 'added');
+
+  return run({ db, queries, persist, incumbentId: seeded.siteId });
+}
+
+/** A claim on `feedUrl` from a different canonical URL. */
+function claim({ url, feedUrl }) {
+  return {
+    ok: true,
+    url,
+    submittedUrl: url,
+    feedUrl,
+    title: 'Mine now',
+    features: { has_source_ns: false, has_rsscloud: false, rsscloud_style: null },
+  };
+}
+
+test('a feed_url collision is ambiguous_identity while the incumbent still declares the feed', async () => {
+  await withSites(
+    (url) => ({
+      'victim.com': {
+        '/': { body: html({ feedHref: '/feed.xml' }) },
+        '/feed.xml': {
+          type: FEED_TYPE,
+          body: rss({ title: 'Victim blog', channelLink: url('victim.com', '/') }),
+        },
+      },
+    }),
+    async ({ url, safeFetch }) => {
+      const feedUrl = url('victim.com', '/feed.xml');
+
+      await withIncumbent(
+        { incumbentUrl: url('victim.com', '/'), feedUrl, safeFetch },
+        async ({ db, persist, incumbentId }) => {
+          const outcome = await persist(
+            claim({ url: url('attacker.example', '/steal.html'), feedUrl }),
+          );
+
+          assert.equal(outcome.outcome, 'rejected');
+          assert.equal(outcome.reason, 'ambiguous_identity');
+
+          const row = db.prepare('SELECT * FROM sites WHERE id = ?').get(incumbentId);
+          assert.equal(row.url, url('victim.com', '/'), 'the row must not have moved');
+          assert.equal(row.title, 'Victim blog');
+          assert.equal(db.prepare('SELECT count(*) AS n FROM sites').get().n, 1);
+        },
+      );
+    },
+  );
+});
+
+test('an unreachable incumbent fails CLOSED, on every unreachable shape there is', async () => {
+  // A 403 (bot protection — the reason `blocked` exists), a 404, a 500 and a
+  // connection that never answers. An implementer who writes the condition as
+  // "the incumbent no longer declares the feed" hands the row over on all four.
+  const shapes = {
+    '/blocked': { status: 403, body: 'denied' },
+    '/gone': { status: 404, body: 'not found' },
+    '/broken': { status: 500, body: 'oops' },
+    '/hangs': (req, res) => {
+      // Answers well past CONFIG.fetchTimeoutMs, and never during the test.
+      setTimeout(() => res.end('too late'), 60_000).unref();
+    },
+  };
+
+  for (const [path, route] of Object.entries(shapes)) {
+    await withSites(
+      () => ({ 'victim.com': { [path]: route } }),
+      async ({ url, safeFetch }) => {
+        const feedUrl = url('victim.com', '/feed.xml');
+
+        await withIncumbent(
+          { incumbentUrl: url('victim.com', path), feedUrl, safeFetch },
+          async ({ db, persist, incumbentId }) => {
+            const outcome = await persist(
+              claim({ url: url('attacker.example', '/steal.html'), feedUrl }),
+            );
+
+            assert.equal(outcome.outcome, 'rejected', path);
+            assert.equal(outcome.reason, 'ambiguous_identity', path);
+            assert.equal(
+              db.prepare('SELECT url FROM sites WHERE id = ?').get(incumbentId).url,
+              url('victim.com', path),
+              `${path}: an unreachable incumbent must keep its row`,
+            );
+          },
+        );
+      },
+    );
+  }
+});
+
+test('an exhausted budget is ambiguous_identity, not a free move', async () => {
+  await withSites(
+    (url) => ({
+      'victim.com': {
+        '/': { body: html({ feedHref: '/feed.xml' }) },
+      },
+    }),
+    async ({ url, safeFetch }) => {
+      const feedUrl = url('victim.com', '/feed.xml');
+
+      await withIncumbent(
+        { incumbentUrl: url('victim.com', '/'), feedUrl, safeFetch },
+        async ({ db, persist, incumbentId }) => {
+          // The submission's shared budget is already spent by the time Step 7 runs
+          // — the realistic case after 4 slow fetches, and an attacker can arrange it.
+          const outcome = await persist(
+            claim({ url: url('attacker.example', '/steal.html'), feedUrl }),
+            { budget: { deadline: Date.now() - 1, signal: AbortSignal.abort() } },
+          );
+
+          assert.equal(outcome.outcome, 'rejected');
+          assert.equal(outcome.reason, 'ambiguous_identity');
+          assert.equal(
+            db.prepare('SELECT url FROM sites WHERE id = ?').get(incumbentId).url,
+            url('victim.com', '/'),
+          );
+        },
+      );
+    },
+  );
+});
+
+test('a member who moved their channel link is not stranded on a dead htmlUrl', async () => {
+  // The legitimate case the rule exists for, and the mirror image of the
+  // `feed_conflict` mistake §5 Step 7 rejects: a member who moved
+  // `<channel><link>` from `/` to `/blog/` genuinely has an old page that no longer
+  // points at the feed. If identity is the feed, that member must not keep an
+  // `htmlUrl` pointing at a page that is no longer theirs.
+  await withSites(
+    () => ({
+      'alice.example': {
+        // 2xx, and conclusively no longer declaring the feed.
+        '/': { body: '<html><head><title>Moved</title></head><body></body></html>' },
+      },
+    }),
+    async ({ url, safeFetch }) => {
+      const feedUrl = url('alice.example', '/feed.xml');
+
+      await withIncumbent(
+        { incumbentUrl: url('alice.example', '/'), feedUrl, safeFetch },
+        async ({ db, persist, incumbentId }) => {
+          const outcome = await persist(
+            claim({ url: url('alice.example', '/blog/'), feedUrl }),
+          );
+
+          assert.equal(outcome.outcome, 'updated');
+          assert.equal(outcome.siteId, incumbentId);
+
+          const row = db.prepare('SELECT * FROM sites WHERE id = ?').get(incumbentId);
+          assert.equal(row.url, url('alice.example', '/blog/'));
+          assert.equal(row.path, '/blog/');
+          assert.equal(db.prepare('SELECT count(*) AS n FROM sites').get().n, 1);
+        },
+      );
+    },
+  );
+});
+
+test('url matching one row while feed_url matches another is ambiguous_identity', async () => {
+  // §5 Step 7: "either a genuine mess or an attack, and it needs eyes."
+  await withSites(
+    () => ({ 'a.example': { '/': { body: html({ feedHref: '/feed.xml' }) } } }),
+    async ({ url, safeFetch }) => {
+      await withIncumbent(
+        {
+          incumbentUrl: url('a.example', '/'),
+          feedUrl: url('a.example', '/feed.xml'),
+          safeFetch,
+        },
+        async ({ db, persist }) => {
+          const second = await persist(
+            claim({ url: url('b.example', '/'), feedUrl: url('b.example', '/feed.xml') }),
+          );
+          assert.equal(second.outcome, 'added');
+
+          // Now claim a.example/ (row 1's url) with b.example's feed (row 2's feed).
+          const outcome = await persist(
+            claim({ url: url('a.example', '/'), feedUrl: url('b.example', '/feed.xml') }),
+          );
+
+          assert.equal(outcome.outcome, 'rejected');
+          assert.equal(outcome.reason, 'ambiguous_identity');
+
+          const rows = db.prepare('SELECT url, feed_url FROM sites ORDER BY id').all();
+          assert.equal(rows[0].url, url('a.example', '/'));
+          assert.equal(rows[0].feed_url, url('a.example', '/feed.xml'));
+          assert.equal(rows[1].feed_url, url('b.example', '/feed.xml'));
+        },
+      );
     },
   );
 });

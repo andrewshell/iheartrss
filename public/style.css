@@ -351,3 +351,163 @@ pre.code code {
     scroll-behavior: auto !important;
   }
 }
+
+/* ------------------------------------------------- forms + result panels -- */
+/*
+ * Phase 5. §6.3: the submit form is "the one thing that absolutely must work
+ * one-handed on a train", so every control here is a full-width block at the
+ * base size and only spreads out at wider viewports.
+ */
+
+.submit-form {
+  margin: 1.25rem 0;
+}
+
+.submit-form label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.submit-form input[type='url'],
+.submit-form input[type='text'],
+.submit-form textarea {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-height: var(--tap);
+  padding: 0.6rem 0.7rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+
+  /* §6.3: 16px minimum, or iOS Safari zooms the page on focus. Never smaller. */
+  font-size: max(1rem, 16px);
+  font-family: inherit;
+}
+
+.submit-form textarea {
+  resize: vertical;
+}
+
+.submit-form button {
+  min-height: var(--tap);
+  padding: 0.6rem 1.1rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: var(--brand-text);
+  color: #fff;
+  font-size: max(1rem, 16px);
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submit-form .button-secondary {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* Stacked on a phone, side by side once there is room. */
+.submit-form__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.submit-form__hint {
+  color: var(--text-muted);
+  font-size: 0.925rem;
+  margin: 0 0 0.75rem;
+}
+
+.panel {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  padding: 1rem 1.1rem;
+  margin: 1.25rem 0;
+}
+
+.panel > :first-child {
+  margin-top: 0;
+}
+
+.panel > :last-child {
+  margin-bottom: 0;
+}
+
+.panel--ok {
+  border-left-color: #2f7d32;
+}
+
+.panel--error {
+  border-left-color: var(--brand);
+}
+
+.panel__foot,
+.panel__aside {
+  color: var(--text-muted);
+  font-size: 0.925rem;
+}
+
+/* The published htmlUrl/xmlUrl pair. A definition list, reflowing rather than a
+   table (§6.3) — and a long URL wraps instead of widening the page. */
+.published-urls {
+  margin: 0.75rem 0;
+}
+
+.published-urls dt {
+  font-weight: 600;
+  margin-top: 0.6rem;
+}
+
+.published-urls dd {
+  margin: 0.15rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.published-urls__note {
+  font-size: 0.925rem;
+  color: var(--text-muted);
+}
+
+.status__state {
+  font-weight: 600;
+}
+
+/* The /guide contents list: a plain stacked list of ≥44px targets. */
+.guide__toc ul {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  border-left: 3px solid var(--border);
+}
+
+.guide__toc li {
+  margin: 0;
+}
+
+.guide__toc a {
+  display: block;
+  min-height: var(--tap);
+  padding: 0.6rem 0.9rem;
+}
+
+@media (min-width: 40rem) {
+  .submit-form__actions {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .submit-form input[type='url'],
+  .submit-form input[type='text'],
+  .submit-form textarea {
+    max-width: var(--measure);
+  }
+}

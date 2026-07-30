@@ -244,7 +244,9 @@ CREATE TABLE submissions (
   --   * A daily-rotating date component, so hashes older than the abuse window can't be
   --     linked to today's.
   ip_hash       TEXT NOT NULL,
-  result        TEXT NOT NULL,   -- 'added' | 'updated' | 'rejected' | 'error'
+  result        TEXT NOT NULL,   -- 'added' | 'updated' | 'rejected' | 'error' | 'checked'
+                                 -- 'checked' is a POST /check dry run. Folding those into the
+                                 -- other values would make the abuse trail lie about what happened.
   reason        TEXT,            -- machine code, e.g. 'no_linkback'
   created_at    TEXT NOT NULL
 );
@@ -1997,7 +1999,8 @@ recovery and a rebuild from nothing.
 | `OPTOUT_FOLLOWUP_HOURS` | `24` | Cadence once `optout_seen_at` is set. |
 | `OPTOUT_EXPIRY_DAYS` | `14` | A stale first sighting is discarded. |
 | `RECHECK_COOLDOWN_MIN` | `60` | Per-site, on its own `last_recheck_at` clock. |
-| `MAX_LISTINGS_PER_DOMAIN` | `5` | Anti-flood cap; admin-overridable. |
+| `MAX_LISTINGS_PER_DOMAIN` | `5` | Anti-flood cap; per-domain overrides live in `domain_limits` (§4). |
+| `MAX_NEW_LISTINGS_PER_DAY` | `50` | The global daily new-listing cap §5 Step 7 requires. |
 | `CONTENT_DIR` | `./content` | Blog posts. |
 | `CONTENT_POLL_MS` | `30000` | Mtime poll for hot-publishing. |
 | `FETCH_TIMEOUT_MS` | `8000` | Per-request sanity cap. Effective timeout is `min(this, budgetRemaining)` — see §5. |

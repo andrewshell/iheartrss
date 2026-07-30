@@ -46,6 +46,33 @@ export function loadConfig(env = process.env) {
     errors,
   );
 
+  // §6/§9, phase 5. `adminToken` is nullable by design: "no admin UI is served at
+  // all if ADMIN_TOKEN is unset" — an absent token disables the routes, a *weak*
+  // one stops the boot.
+  const adminToken = parseAdminToken(env.ADMIN_TOKEN, errors);
+  const ipHmacKeyFile = parseKeyFile(env.IP_HMAC_KEY_FILE, errors);
+  const trustProxy = env.TRUST_PROXY === 'true';
+  const trustedProxyHops = parseNonNegativeInt(
+    env.TRUSTED_PROXY_HOPS,
+    0,
+    'TRUSTED_PROXY_HOPS',
+    errors,
+  );
+  const maxListingsPerDomain = parsePositiveInt(
+    env.MAX_LISTINGS_PER_DOMAIN,
+    5,
+    'MAX_LISTINGS_PER_DOMAIN',
+    errors,
+  );
+  // Not in §9's table; §5 Step 7 requires "a global daily new-listing cap" as the
+  // second of its two anti-flood backstops, and a cap needs a number.
+  const maxNewListingsPerDay = parsePositiveInt(
+    env.MAX_NEW_LISTINGS_PER_DAY,
+    50,
+    'MAX_NEW_LISTINGS_PER_DAY',
+    errors,
+  );
+
   if (errors.length > 0) {
     throw new Error(
       `Invalid configuration:\n${errors.map((e) => `  - ${e}`).join('\n')}`,
@@ -60,7 +87,61 @@ export function loadConfig(env = process.env) {
     fetchTimeoutMs,
     maxResponseBytes,
     submitBudgetMs,
+    adminToken,
+    ipHmacKeyFile,
+    trustProxy,
+    trustedProxyHops,
+    maxListingsPerDomain,
+    maxNewListingsPerDay,
+    // Only the IP-HMAC key file's read-or-generate rule branches on this, and it
+    // has to branch on something the deploy actually sets.
+    production: env.NODE_ENV === 'production',
   });
+}
+
+function parseNonNegativeInt(raw, fallback, name, errors) {
+  if (raw === undefined || raw === '') return fallback;
+
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) {
+    errors.push(`${name} must be a non-negative integer, got "${raw}"`);
+    return fallback;
+  }
+  return value;
+}
+
+/**
+ * §6: "validated at boot to be ≥32 bytes of hex/base64". The length is measured in
+ * *decoded bytes*, not characters — a 32-character hex string is 16 bytes, which is
+ * exactly the mistake the rule exists to catch.
+ */
+function parseAdminToken(raw, errors) {
+  if (raw === undefined || raw === '') return null;
+
+  const token = raw.trim();
+  const bytes = /^[0-9a-f]+$/i.test(token)
+    ? Math.floor(token.length / 2)
+    : /^[A-Za-z0-9+/_-]+={0,2}$/.test(token)
+      ? Math.floor((token.replace(/=+$/, '').length * 3) / 4)
+      : 0;
+
+  if (bytes < 32) {
+    errors.push(
+      'ADMIN_TOKEN must be at least 32 bytes of hex or base64 ' +
+        '(generate one with: openssl rand -hex 32), not a passphrase',
+    );
+  }
+  return token;
+}
+
+function parseKeyFile(raw, errors) {
+  if (raw === undefined || raw === '') return '/run/secrets/ip_hmac_key';
+
+  if (raw.trim() === '') {
+    errors.push('IP_HMAC_KEY_FILE must be a path to a file holding ≥32 random bytes');
+    return '/run/secrets/ip_hmac_key';
+  }
+  return raw;
 }
 
 function parsePort(raw, errors) {

@@ -43,9 +43,10 @@ ${description ? html`<meta name="description" content="${description}">` : ''}
   <nav class="site-nav" aria-label="Main">
     <ul>
       <li><a href="/">Home</a></li>
+      <li><a href="/submit">Submit</a></li>
+      <li><a href="/guide">Guide</a></li>
       <li><a href="/badge">Badge</a></li>
       <li><a href="/about">About</a></li>
-      <li><a href="/feed.xml">Feed</a></li>
     </ul>
   </nav>
 </header>
@@ -56,6 +57,8 @@ ${body}
   <p>
     <a href="/about">About</a> &middot;
     <a href="/badge">Badge</a> &middot;
+    <a href="/guide">Guide</a> &middot;
+    <a href="/status">Status</a> &middot;
     <a href="/feed.xml">RSS</a>
   </p>
   <p class="site-footer__note">A directory for people who love RSS.</p>

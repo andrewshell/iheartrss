@@ -12,6 +12,7 @@ import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
 import { closeDb, createDb } from './db/index.js';
+import { loadIpHmacKey } from './lib/iphash.js';
 import { ensureDataDirectory, probeDataDirectory } from './storage.js';
 
 const config = loadConfig();
@@ -27,10 +28,27 @@ ensureDataDirectory({ databasePath: config.databasePath });
 const { db, queries } = createDb(config.databasePath);
 log('db.ready', { path: config.databasePath });
 
+// Before listening, for the same reason as everything else here: every submission
+// writes an `ip_hash`, so a missing key must be a container that never comes up
+// rather than one that 500s the first time somebody submits. In production a missing
+// file is fatal; in development one is generated (§4, §9).
+const ipHmacKey = loadIpHmacKey({
+  path: config.ipHmacKeyFile,
+  production: config.production,
+});
+log('iphash.ready', { path: config.ipHmacKeyFile });
+
+if (config.adminToken === null) {
+  // §6: "No admin UI is served at all if ADMIN_TOKEN is unset." Said out loud,
+  // because phase 5's whole point is that a listing can be taken down.
+  log('admin.disabled', { reason: 'ADMIN_TOKEN is not set' });
+}
+
 const app = createApp({
   config,
   db,
   queries,
+  ipHmacKey,
   checkHealth: () => probeDataDirectory({ databasePath: config.databasePath }),
 });
 

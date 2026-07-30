@@ -70,3 +70,59 @@ test('the fetch budget knobs are taken from the environment and validated', () =
     );
   }
 });
+
+// --- Phase 5: the submit flow's variables -----------------------------------
+
+test('ADMIN_TOKEN must be at least 32 bytes of hex or base64', () => {
+  // §6: an operator will otherwise pick a passphrase, and nothing else here is a
+  // shorter path to full control.
+  for (const raw of ['hunter2', 'correct horse battery staple', 'abcd', 'ab'.repeat(15)]) {
+    assert.throws(() => loadConfig({ ADMIN_TOKEN: raw }), /ADMIN_TOKEN/, raw);
+  }
+
+  const hex = loadConfig({ ADMIN_TOKEN: 'ab'.repeat(32) });
+  assert.equal(hex.adminToken, 'ab'.repeat(32));
+});
+
+test('an unset ADMIN_TOKEN disables the admin routes rather than failing the boot', () => {
+  // §6: "No admin UI is served at all if ADMIN_TOKEN is unset."
+  assert.equal(loadConfig({}).adminToken, null);
+});
+
+test('TRUSTED_PROXY_HOPS defaults to 0, for one nginx', () => {
+  const config = loadConfig({});
+
+  assert.equal(config.trustProxy, false);
+  assert.equal(config.trustedProxyHops, 0);
+
+  const proxied = loadConfig({ TRUST_PROXY: 'true', TRUSTED_PROXY_HOPS: '1' });
+  assert.equal(proxied.trustProxy, true);
+  assert.equal(proxied.trustedProxyHops, 1);
+
+  assert.throws(() => loadConfig({ TRUSTED_PROXY_HOPS: '-1' }), /TRUSTED_PROXY_HOPS/);
+});
+
+test('the listing caps have the §9 defaults and must be positive', () => {
+  const config = loadConfig({});
+
+  assert.equal(config.maxListingsPerDomain, 5);
+  assert.ok(config.maxNewListingsPerDay > 0);
+
+  assert.throws(
+    () => loadConfig({ MAX_LISTINGS_PER_DOMAIN: '0' }),
+    /MAX_LISTINGS_PER_DOMAIN/,
+  );
+});
+
+test('IP_HMAC_KEY_FILE defaults to the mounted secret path', () => {
+  // §9: a FILE, not an env var — an env var sits in `docker inspect`, in dockge's
+  // UI, and in any .env backed up beside ./data.
+  assert.equal(loadConfig({}).ipHmacKeyFile, '/run/secrets/ip_hmac_key');
+  assert.equal(loadConfig({ IP_HMAC_KEY_FILE: './data/key' }).ipHmacKeyFile, './data/key');
+  assert.throws(() => loadConfig({ IP_HMAC_KEY_FILE: '  ' }), /IP_HMAC_KEY_FILE/);
+});
+
+test('production is derived from NODE_ENV, because the key file rules differ', () => {
+  assert.equal(loadConfig({}).production, false);
+  assert.equal(loadConfig({ NODE_ENV: 'production' }).production, true);
+});

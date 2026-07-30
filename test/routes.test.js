@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createApp } from '../src/app.js';
+import { parseFeed } from '../src/verify/feed.js';
 
 const config = {
   port: 3000,
@@ -169,4 +170,64 @@ test('the static handler cannot be walked out of public/', async () => {
     const res = await app.request(path);
     assert.equal(res.status, 404, `${path} must not be served`);
   }
+});
+
+test('GET /guide covers each platform §6.2 names', async () => {
+  const app = createApp({ config });
+  const res = await app.request('/guide');
+
+  assert.equal(res.status, 200);
+  const html = await res.text();
+
+  // §6.2's table, all five rows.
+  for (const platform of ['Jekyll', 'GitHub Pages', 'Eleventy', 'Zola', 'Astro']) {
+    assert.match(html, new RegExp(platform), platform);
+  }
+
+  // "Two things the guide must cover beyond format, because they're our other two
+  // common rejections": the autodiscovery tag, with a note that it belongs on the page
+  // the feed's <channel><link> points at; and <channel><link> itself.
+  assert.match(html, /id="autodiscovery"/);
+  assert.match(html, /id="channel-link"/);
+  assert.match(html, /rel="alternate" type="application\/rss\+xml"/);
+  assert.match(html, /&lt;channel&gt;&lt;link&gt;/);
+
+  // A minimal, complete, valid RSS 2.0 document to copy and fill in.
+  assert.match(html, /id="template"/);
+  assert.match(html, /&lt;rss version="2\.0"&gt;/);
+
+  // §6.2: "Worth adding a 'check my page' link straight to /check so the loop is:
+  // read → fix → verify → submit, without leaving the site."
+  assert.match(html, /href="\/submit"/);
+});
+
+test('the downloadable RSS 2.0 template is a feed our own validator accepts', async () => {
+  const app = createApp({ config });
+  const res = await app.request('/rss-2.0-template.xml');
+
+  assert.equal(res.status, 200);
+  const xml = await res.text();
+
+  // If the template we hand out doesn't pass our own Step 3, we are sending people
+  // into a loop.
+  const parsed = parseFeed(xml);
+  assert.equal(parsed.ok, true, JSON.stringify(parsed));
+  assert.ok(parsed.channelLink);
+});
+
+test('/guide is linked from the pages §6.2 says link to it', async () => {
+  const app = createApp({ config });
+
+  for (const path of ['/', '/badge', '/about']) {
+    const html = await (await app.request(path)).text();
+    assert.match(html, /href="\/guide/, `${path} must link to /guide`);
+  }
+});
+
+test('/status is linked from /about, since it is the only way to ask why', async () => {
+  const app = createApp({ config });
+  const html = await (await app.request('/about')).text();
+
+  // §6: "Linked from /about, /sites and every rejection message."
+  assert.match(html, /href="\/status/);
 });
