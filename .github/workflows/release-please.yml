@@ -5,9 +5,11 @@
 # Versions are derived from commit messages, so commits MUST follow Conventional
 # Commits (`feat:`, `fix:`, `feat!:` …). .husky/commit-msg enforces this locally.
 #
-# The publish job then builds the image for that tag. It lives here as a call into
-# publish.yml rather than as a `push: tags:` trigger in publish.yml, because a tag
-# pushed with the built-in GITHUB_TOKEN does not start a new workflow run.
+# It does NOT publish a container image. That is done deliberately from a
+# workstation with `pnpm docker:build-push`, which builds linux/amd64 AND
+# linux/arm64 -- GitHub's runners are amd64-only, so automating it here would
+# publish half of what production needs. Merging a release PR should not be able
+# to ship an image on its own.
 
 name: release-please
 
@@ -23,22 +25,9 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-
-  publish:
-    needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
-    uses: ./.github/workflows/publish.yml
-    with:
-      tag: ${{ needs.release-please.outputs.tag_name }}
-    permissions:
-      contents: read
-      packages: write

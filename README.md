@@ -217,9 +217,21 @@ the box. That is fine until a deploy goes wrong — and then **there is no previ
 version to roll back to**, because none was ever published. Recovery becomes
 `git checkout` and a rebuild on the production box with the site down.
 
-Images correspond to **releases**, not to commits. Merging the release PR that
-`release-please` keeps open on `main` tags `v<x.y.z>`, and
-`.github/workflows/publish.yml` then publishes:
+Publishing is a **manual, deliberate act**, run from a workstation:
+
+```sh
+pnpm docker:build-push          # builds linux/amd64 + linux/arm64, pushes to ghcr.io
+pnpm docker:dry-run             # shows the tags it would push, builds nothing
+```
+
+It is not automated in CI on purpose: GitHub's runners are amd64-only, so a CI
+publish could only ever ship half of what production may need. The script builds
+both architectures via buildx, and gates on `lint`, `format:check` and `test`
+before it pushes anything.
+
+Version comes from `package.json`, which `release-please` bumps when you merge the
+release PR it keeps open on `main`. So the usual order is: merge the release PR,
+`git pull`, then `pnpm docker:build-push`. That publishes:
 
 ```
 ghcr.io/andrewshell/iheartrss:1.2.3    <- deploy and roll back by this
@@ -235,8 +247,8 @@ To deploy those instead of building on the box:
    "the previous latest" is not something you can name at 2am.
 3. `docker compose up -d`.
 
-For an image without cutting a release (testing a build on real hardware, an urgent
-rebuild while Actions is down), run `pnpm docker:build-push` from a workstation.
+You can also publish without cutting a release — `pnpm docker:build-push beta` adds
+a custom tag alongside the version and `latest`.
 
 Rollback is then editing one line in `.env` and redeploying. See `RUNBOOK.md`,
 "Roll back to a previous image".

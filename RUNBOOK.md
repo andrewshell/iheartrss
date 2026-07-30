@@ -203,14 +203,14 @@ under an **older** image does not work in reverse — roll the image back first
 Only reach for this if the last deploy caused the problem. If the data is wrong,
 restoring won't be fixed by an image change.
 
-`.github/workflows/publish.yml` publishes one image per **release**:
-`ghcr.io/andrewshell/iheartrss:1.2.3`, plus `:1.2`, `:1` and `:latest`. Releases are
-cut by `release-please` — merge the release PR it keeps open on `main`.
+Images are published by hand with `pnpm docker:build-push` from a workstation, which
+pushes `ghcr.io/andrewshell/iheartrss:1.2.3` plus `:1.2`, `:1` and `:latest` for both
+linux/amd64 and linux/arm64. Nothing in CI publishes, so **the set of available tags
+is whatever was actually pushed** — check the repo's Packages page on GitHub rather
+than assuming a tag exists because a release was cut.
+
 **Deploy by exact version, never `latest`** — "the previous latest" is not something
 you can name at 2am.
-
-Every published version is listed on the repo's Packages page on GitHub, and
-`git tag --list 'v*'` names the same set.
 
 ### If the stack is on `image:`
 

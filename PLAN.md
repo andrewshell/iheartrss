@@ -1919,7 +1919,7 @@ there), or drop the bind mount and rebuild to publish.
 ```yaml
 services:
   iheartrss:
-    build: .            # or image: ghcr.io/andrewshell/iheartrss:latest
+    build: .            # or image: ghcr.io/andrewshell/iheartrss:<version>
     container_name: iheartrss
     restart: unless-stopped
     init: true
@@ -1984,6 +1984,21 @@ recovery and a rebuild from nothing.
 - **Rollback needs tagged images.** `build: .` with no registry means there is no previous
   version — a bad commit is recovered by `git checkout` and rebuilding on the production box
   at 2am with the site down. Publish tagged images to ghcr and deploy by tag.
+
+  **Published by hand, not by CI** (`pnpm docker:build-push`). An earlier draft had a
+  GitHub Actions workflow publish on every release-please tag; it was deleted. Two reasons:
+  GitHub's hosted runners are **amd64-only**, so an automated publish could only ever ship
+  half of what production might need, and having both a workflow and a local script meant
+  two publishing paths that had already drifted (the workflow built amd64, the script built
+  amd64 + arm64 — same version number, different artifact depending on which ran). The
+  script builds both architectures through buildx and gates on lint, format and tests before
+  pushing. Merging a release PR should not be able to ship an image as a side effect.
+
+  CI therefore does **no Docker work at all** — not even a build-only job. That job did earn
+  its keep once (it caught a `pnpm install --prod` failure the test suite could not see), but
+  an amd64 build on a runner is a weak proxy for the multi-arch build that actually ships,
+  and the script runs the same quality gates before building. The cost is accepted knowingly:
+  a Dockerfile break now surfaces at publish time rather than at merge time.
 - **Alerting: ping healthchecks.io at the end of each revalidation batch.** One line, and it
   covers both "container dead" and "scheduler wedged" — `restart: unless-stopped` plus
   fail-fast config validation otherwise gives you a silent crash loop you learn about from
@@ -2204,7 +2219,7 @@ Each phase leaves the app runnable, so you can see it working as it grows.
 
    (Split because as one phase this was comfortably the largest in the plan while reading
    like the smallest — a whole state machine plus a whole auth system.)
-9. **Operational hardening** — backup timer + off-box copy, tagged image publishing,
+9. **Operational hardening** — backup timer + off-box copy, multi-arch image publishing,
    healthchecks.io ping, log rotation, `RUNBOOK.md`, and a **tested restore**.
    *Deliverable: survivable.*
 
