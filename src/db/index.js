@@ -29,10 +29,11 @@ export function createDb(path) {
 /**
  * Shut the database down cleanly (plan §9, failure 2).
  *
- * `PRAGMA wal_checkpoint(TRUNCATE)` first: the nightly backup copies the main
- * database file, and every dockge redeploy is a stop. Folding the WAL back in on
- * the way out keeps the file self-contained rather than trusting whatever the
- * last unclean exit left behind.
+ * `PRAGMA wal_checkpoint(TRUNCATE)` first: every dockge redeploy is a stop, and
+ * folding the WAL back in on the way out keeps the file self-contained rather than
+ * trusting whatever the last unclean exit left behind. That is what lets the RUNBOOK
+ * say "stop the stack, then copy `data/`" — the nightly job goes through SQLite's
+ * online backup API and does not depend on it.
  */
 export function closeDb(db) {
   try {

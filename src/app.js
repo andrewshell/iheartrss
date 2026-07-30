@@ -3,6 +3,7 @@ import { lookup } from 'node:dns';
 import { Hono } from 'hono';
 
 import { renderFeed } from './blog/feed.js';
+import { securityHeaders } from './lib/headers.js';
 import { createIpHasher } from './lib/iphash.js';
 import { createOpmlDocument } from './lib/opml.js';
 import { createRateLimiter, createSemaphore } from './lib/ratelimit.js';
@@ -51,6 +52,10 @@ export function createApp({
 }) {
   const app = new Hono();
   void db;
+
+  // Registered before every route so §6's headers are on every response, 404s and
+  // redirects included.
+  app.use('*', securityHeaders());
 
   const deps = {
     config,

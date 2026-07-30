@@ -212,3 +212,23 @@ test('the revalidation knobs are taken from the environment and validated', () =
 test('REVALIDATE_ENABLED is off under NODE_ENV=test', () => {
   assert.equal(loadConfig({ NODE_ENV: 'test' }).revalidateEnabled, false);
 });
+
+// §9's backup timer, phase 9. Same shape as the revalidation switch: on by
+// default, off under NODE_ENV=test so a test run cannot litter `data/backups/`.
+test('the backup knobs default to §9 values and are validated', () => {
+  const config = loadConfig({});
+
+  assert.equal(config.backupEnabled, true);
+  assert.equal(config.backupRetentionDays, 14);
+
+  const custom = loadConfig({ BACKUP_ENABLED: 'false', BACKUP_RETENTION_DAYS: '30' });
+  assert.equal(custom.backupEnabled, false);
+  assert.equal(custom.backupRetentionDays, 30);
+
+  // Zero-day retention would delete tonight's copy on the tick that wrote it.
+  assert.throws(() => loadConfig({ BACKUP_RETENTION_DAYS: '0' }), /BACKUP_RETENTION_DAYS/);
+});
+
+test('BACKUP_ENABLED is off under NODE_ENV=test', () => {
+  assert.equal(loadConfig({ NODE_ENV: 'test' }).backupEnabled, false);
+});

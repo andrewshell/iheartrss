@@ -16,6 +16,7 @@ import { createBlog } from './blog/index.js';
 import { loadConfig } from './config.js';
 import { closeDb, createDb } from './db/index.js';
 import { seedSelfListing } from './db/seed.js';
+import { backupDir, createBackupJob } from './jobs/backup.js';
 import { createRevalidator } from './jobs/revalidate.js';
 import { loadIpHmacKey } from './lib/iphash.js';
 import { ensureDataDirectory, probeDataDirectory } from './storage.js';
@@ -87,6 +88,14 @@ const revalidation = createRevalidator({
   log,
 });
 
+// §12 phase 9: nightly `backup()` to ./data/backups/YYYY-MM-DD.db, 14-day retention.
+//
+// It shares the app's connection deliberately. SQLite's online backup API is built
+// for exactly this — a consistent snapshot of a database that is being written to —
+// whereas a second connection would only add a writer to contend with, and copying
+// the file would capture the main database without its `-wal` sibling.
+const backups = createBackupJob({ db, config, log });
+
 const app = createApp({
   config,
   db,
@@ -106,6 +115,13 @@ if (revalidation.start()) {
   });
 }
 
+if (backups.start()) {
+  log('backup.started', {
+    dir: backupDir(config.databasePath),
+    retentionDays: config.backupRetentionDays,
+  });
+}
+
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   log('listening', { port: info.port, siteUrl: config.siteUrl });
 });
@@ -116,11 +132,12 @@ const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
  * `docker stop` takes 10.29s with no handler and 0.16s with one, so without this
  * every dockge redeploy is a SIGKILL that drops in-flight requests.
  *
- * The database is checkpointed and closed on the way out (§9): the nightly backup
- * copies the main database file, so the WAL is folded back into it rather than
- * left for whatever the next unclean exit does. The revalidation interval is stopped
- * first — its timers are `unref`'d, so they cannot hold the process open, but a tick
- * that starts writing while we are closing the database can.
+ * The database is checkpointed and closed on the way out (§9), so the file left on
+ * disk is self-contained rather than dependent on whatever the last unclean exit left
+ * in the WAL — which is what makes the RUNBOOK's "stop the stack, copy `data/`" step
+ * honest. (The nightly job uses SQLite's online backup API and needs no such help.)
+ * The timers are stopped first — they are `unref`'d, so they cannot hold the process
+ * open, but a tick that starts writing while we are closing the database can.
  */
 let shuttingDown = false;
 
@@ -133,6 +150,10 @@ function shutdown(signal) {
   shuttingDown = true;
   log('shutdown.start', { signal });
   revalidation.stop();
+  // Same reason as the revalidation interval: the timer is unref'd so it cannot hold
+  // the process open, but a backup that starts copying pages while we are closing the
+  // database can.
+  backups.stop();
 
   // Docker's grace period is 10s. Give in-flight requests most of it, then stop
   // waiting — a keep-alive connection that never closes must not turn a clean

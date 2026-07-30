@@ -17,6 +17,8 @@ Dockerfile
 .dockerignore
 docker-compose.yml
 README.md
+RUNBOOK.md
+.github
 npm-debug.log*
 .DS_Store
 coverage

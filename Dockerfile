@@ -35,6 +35,10 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY src ./src
 COPY public ./public
+# The operator CLIs. `bin/backup.js` is what RUNBOOK.md uses to take a backup on
+# demand and to verify one — `node:24-alpine` ships no `sqlite3`, so without this
+# there is no way to answer "is that file actually a database" from the box.
+COPY bin ./bin
 
 # Runs unprivileged. The image ships uid/gid 1000 as `node`, which is the uid the
 # bind-mounted ./data on the host must be owned by — see README, "Deploying".

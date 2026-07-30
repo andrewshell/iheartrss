@@ -22,10 +22,18 @@ pnpm dev                  # http://localhost:3000
 | `pnpm start` | Runs the server the way the container does. |
 | `pnpm test` | `node --test` over `test/`. |
 
+| `pnpm verify <url>` | Run the verification pipeline against a real site. |
+| `node bin/backup.js` | Back up the database now, and verify the copy. In production: `docker compose exec iheartrss node bin/backup.js`. |
+
 `./data/` is created on first boot and is gitignored. Configuration is
 documented in `.env.example` and validated at startup: a bad value stops the
 process with a message naming the variable, rather than surfacing three requests
 later.
+
+**When something is broken in production, read [`RUNBOOK.md`](RUNBOOK.md)**, not
+this file. It covers restoring from backup, rolling back, the three ways the
+container fails to boot, a wedged scheduler, taking a member down, and a full
+disk.
 
 ## Writing a blog post
 
@@ -110,10 +118,20 @@ substitution, not by the app — the app's own variables are set in the compose
 
 ```sh
 ADMIN_TOKEN=$(head -c 32 /dev/urandom | base64)
+
+# Optional but strongly recommended: pinged at the end of every revalidation
+# batch, so a dead container or a wedged scheduler alerts you instead of being
+# discovered from a member's email. healthchecks.io or self-hosted.
+HEALTHCHECK_PING_URL=
+
+# Optional overrides; the compose file passes these through with their defaults.
+# REVALIDATE_BATCH=20
+# BACKUP_RETENTION_DAYS=14
+# IHEARTRSS_TAG=latest        # only when deploying by image — see step 7
 ```
 
-(Admin routes arrive in a later phase and are disabled while the token is unset;
-setting it now costs nothing.)
+No admin UI is served at all while `ADMIN_TOKEN` is unset, and hide/ban are the
+only way to take a listing down — set it.
 
 ### 5. Start the stack
 
@@ -158,17 +176,61 @@ TLS is terminated at the proxy. It must:
 One proxy in front means `TRUSTED_PROXY_HOPS=0`, not 1. See `.env.example` for
 the worked example of why.
 
+### 7. Decide how the image gets built (do this before you need it)
+
+Out of the box the compose file uses `build: .`, which builds this working tree on
+the box. That is fine until a deploy goes wrong — and then **there is no previous
+version to roll back to**, because none was ever published. Recovery becomes
+`git checkout` and a rebuild on the production box with the site down.
+
+`.github/workflows/publish.yml` publishes every push to `main` as
+`ghcr.io/andrewshell/iheartrss:main-<short-sha>` (plus `:latest`, plus `:v1.2.3`
+for `v*` tags). To deploy those instead:
+
+1. In `docker-compose.yml`, comment out `build: .` and uncomment the `image:` line.
+2. Put `IHEARTRSS_TAG=main-<short-sha>` in `.env` — a real tag, not `latest`, because
+   "the previous latest" is not something you can name at 2am.
+3. `docker compose up -d`.
+
+Rollback is then editing one line in `.env` and redeploying. See `RUNBOOK.md`,
+"Roll back to a previous image".
+
+### 8. Set up an off-box backup copy
+
+The app backs itself up nightly to `data/backups/YYYY-MM-DD.db` (14 days,
+`node:sqlite`'s online `backup()` — safe against the live database). That covers a
+bad migration and a fat-fingered delete. It does **not** cover a dead VPS, so pull
+the directory somewhere else, from a machine that is not the VPS:
+
+```sh
+rsync -az --delete vps:/opt/stacks/iheartrss/data/backups/ ~/backups/iheartrss/
+```
+
+**Do not include `secrets/` in that copy.** The IP HMAC key exists so stored IP
+hashes are not reversible; shipping it in the same tarball as the database defeats
+the whole scheme. The key belongs in a password manager.
+
+Then run the restore procedure in `RUNBOOK.md` once, against a scratch copy, so you
+have done it before the night you need it.
+
 ### Redeploying
 
-`docker compose up -d --build` after a `git pull`. The app handles `SIGTERM`, so
-stops take a fraction of a second rather than the full 10-second kill timeout —
-which matters once there is a database with a WAL to check point.
+`docker compose up -d --build` after a `git pull` (or a new `IHEARTRSS_TAG` and
+`docker compose up -d`, if you did step 7). The app handles `SIGTERM`, so stops take
+a fraction of a second rather than the full 10-second kill timeout — which matters
+with a WAL to checkpoint.
 
 ### Troubleshooting
+
+`RUNBOOK.md` is the long form. The short version:
 
 | Symptom | Cause |
 |---|---|
 | Exits at boot: "database directory … is not writable" | Step 2 was skipped. `sudo chown 1000:1000 data`. |
+| Exits at boot naming an environment variable | Config validates at boot and fails fast. Fix the value it names. |
+| Exits at boot: missing `/run/secrets/ip_hmac_key` | Step 3 was skipped, or Docker created a *directory* at that path. |
 | Container healthy, site unreachable | Proxy is not pointed at `127.0.0.1:3000`. |
 | `docker stop` takes 10 seconds | The SIGTERM handler is not running — check you are on the current image. |
 | Compose warns about `ADMIN_TOKEN` | No `.env` beside the compose file (step 4). |
+| `/healthz` `overdue_count` growing | Past the ~2,880-member ceiling. Raise `REVALIDATE_BATCH`. |
+| `data/backups/` is empty on a fresh deploy | The first backup lands about a minute after boot; check for `backup.started` in the logs. |

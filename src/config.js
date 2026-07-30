@@ -125,6 +125,19 @@ export function loadConfig(env = process.env) {
     errors,
   );
 
+  // §9, phase 9: the nightly `backup()` timer. On by default — "backups run
+  // themselves" is the point, and an operator who has to remember to switch them on
+  // is the operator who finds out on restore day that they never did. Off under
+  // NODE_ENV=test for the same reason as REVALIDATE_ENABLED: a test run must not
+  // write files into `data/backups/`.
+  const backupEnabled = env.BACKUP_ENABLED !== 'false' && env.NODE_ENV !== 'test';
+  const backupRetentionDays = parsePositiveInt(
+    env.BACKUP_RETENTION_DAYS,
+    14,
+    'BACKUP_RETENTION_DAYS',
+    errors,
+  );
+
   // §6.4, phase 7: the blog's markdown lives in a directory that is a read-only bind
   // mount in production (§9), and the cache is invalidated by polling max(mtime)
   // across it — a poll interval, never a directory watch.
@@ -163,6 +176,8 @@ export function loadConfig(env = process.env) {
     optoutExpiryDays,
     recheckCooldownMin,
     healthcheckPingUrl,
+    backupEnabled,
+    backupRetentionDays,
     contentDir,
     contentPollMs,
     // Only the IP-HMAC key file's read-or-generate rule branches on this, and it
