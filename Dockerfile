@@ -21,7 +21,17 @@ COPY package.json pnpm-lock.yaml ./
 
 # --prod: no devDependencies in the runtime image. --frozen-lockfile: fail the
 # build rather than silently resolving something the lockfile does not pin.
-RUN pnpm install --frozen-lockfile --prod
+#
+# --ignore-scripts is load-bearing, not tidiness. `--prod` skips devDependencies
+# but STILL runs this package's own `prepare` script, and `prepare` is `husky`,
+# which is a devDependency — so the install died with `sh: husky: not found`. That
+# is the documented husky-in-Docker trap.
+#
+# Skipping scripts is safe here because every dependency is pure JavaScript with
+# nothing to compile: the choice of `node:sqlite` over `better-sqlite3` (see
+# PLAN §2) is exactly what makes that true. It is also a small supply-chain win,
+# since no dependency's postinstall runs during the image build.
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 
 FROM node:24.18-alpine AS runtime
