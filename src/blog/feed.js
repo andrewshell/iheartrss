@@ -11,6 +11,15 @@
  * the same element we detect on other people's feeds (§5 Step 6), pointed at our
  * member list. It was withheld in phase 1 because this feed is read by exactly the
  * crawlers that would have followed it to a 404.
+ *
+ * `<cloud>` and `<source:cloud>` arrive together, once we point at a real rssCloud
+ * server (§6.4). Both forms, never one: `<cloud>` is what every rssCloud client that
+ * ever shipped reads, and `<source:cloud>` is the element we award other people a
+ * badge for detecting — so our own feed had better carry it. They are advertised
+ * unconditionally, including when `RSSCLOUD_ENABLED` is false: the element states
+ * which cloud server subscribers may register with, and that server re-fetches the
+ * feed on its own schedule whether or not we ping it. `RSSCLOUD_ENABLED` gates the
+ * ping, not the advertisement.
  */
 
 import { escapeXml, xmlSafeContent, xmlSafeText } from '../lib/xml.js';
@@ -25,6 +34,10 @@ export function renderFeed({ config, posts = [] }) {
   const siteLink = new URL('/', config.siteUrl).href;
   const selfLink = new URL('/feed.xml', config.siteUrl).href;
   const blogrollLink = new URL('/subscriptions.opml', config.siteUrl).href;
+  // The `<source:cloud>` form names the same server as the `<cloud>` attributes,
+  // spelled as one https URL — so the two forms can never drift onto different hosts.
+  // `port` belongs to the http-post form only; the URL form uses the scheme's own.
+  const cloudLink = `https://${config.rsscloudDomain}${config.rsscloudPath}`;
 
   const itemsXml = posts.map((post) => renderItem({ post, config })).join('');
 
@@ -37,6 +50,8 @@ export function renderFeed({ config, posts = [] }) {
     <language>en</language>
     <docs>https://www.rssboard.org/rss-specification</docs>
     <generator>iheartrss.com</generator>
+    <cloud domain="${escapeXml(config.rsscloudDomain)}" port="${escapeXml(String(config.rsscloudPort))}" path="${escapeXml(config.rsscloudPath)}" registerProcedure="" protocol="${escapeXml(config.rsscloudProtocol)}"/>
+    <source:cloud>${escapeXml(cloudLink)}</source:cloud>
     <source:self>${escapeXml(selfLink)}</source:self>
     <source:blogroll>${escapeXml(blogrollLink)}</source:blogroll>${itemsXml}
   </channel>

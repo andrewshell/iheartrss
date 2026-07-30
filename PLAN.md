@@ -29,7 +29,9 @@ FeedLand (and any other OPML-aware reader) can subscribe to.
   homepage carries no member list. §10 covers the seam and what it would cost.
 - User accounts, editing your own listing, email notifications.
 - Atom feed support (decision below).
-- rssCloud *subscription* — we only detect and record cloud support, we don't register.
+- rssCloud *subscription* — we detect and record other sites' cloud support, we don't
+  register with theirs. (Our **own** feed does advertise a cloud server and ping it on
+  restart, as of §6.4 — that is publishing, not subscribing.)
 
 ### What RSS-2.0-only costs, and what we owe in return
 
@@ -1569,8 +1571,36 @@ the same element we detect on other people's feeds (§5 Step 6), pointed at our 
 for the site associated with the feed* — i.e. sites **we** follow. Our member list is a
 third-party roster, so `source:subscriptionList` may be the better fit. Same question applies
 to `rel="following"`, which will make HyperTexting render our members as our "Following" tab.)
-No `<cloud>` or `<source:cloud>` in v1, since we don't run an rsscloud server; if that ever
-changes, both forms go in together.
+**rssCloud: both forms, and a ping on every restart.** An earlier draft said "no `<cloud>` or
+`<source:cloud>` in v1, since we don't run an rsscloud server; if that ever changes, both
+forms go in together." **SUPERSEDED:** running one was never the requirement — Dave Winer's
+public `rpc.rsscloud.io` is, and we point at it. As promised, both forms went in together:
+
+```xml
+<cloud domain="rpc.rsscloud.io" port="80" path="/pleaseNotify" registerProcedure="" protocol="http-post"/>
+<source:cloud>https://rpc.rsscloud.io/pleaseNotify</source:cloud>
+```
+
+`registerProcedure` is present but **empty**: RSS 2.0 requires all five attributes and
+http-post ignores this one. `port="80"` beside an `https` `<source:cloud>` is not a typo — it
+is the port of the http-post endpoint, which is what `<cloud>` describes. Both are rendered
+from config (`RSSCLOUD_DOMAIN`/`PORT`/`PATH`/`PROTOCOL`), and the URL form is built from
+domain + path so the two can never drift onto different servers.
+
+Advertising is unconditional; the **ping** is what `RSSCLOUD_ENABLED` gates —
+`POST https://rpc.rsscloud.io/ping` with a form-encoded `url=<our feed>` and
+`Accept: application/json`, fired once per boot from **inside** `serve()`'s listening
+callback (`src/jobs/rsscloud.js`). Never on the boot path, never able to throw, 10s
+`AbortSignal.timeout`, outcome logged either way. Once per restart is the entire schedule
+and it is not abuse: the cloud server re-fetches the URL and fans out notifications **only
+if the content changed**, so a restart that published nothing costs one request and wakes
+nobody — and since posts ship inside the image, "new image" and "the feed changed" are the
+same event. Skipped unless `NODE_ENV=production` and `SITE_URL`'s host is publicly routable,
+so `pnpm dev`'s watch-restarts and any `SITE_URL=http://localhost:3000` operator can never
+ask a stranger's server to fetch a private address. `pnpm rsscloud:ping` does it by hand.
+
+Out of scope, deliberately: WebSub/Atom. No `<atom:link rel="hub">`, no hub subscription —
+this is the RSS-native mechanism and adding a second one buys nothing here.
 
 **iheartrss.com should be able to pass its own validator.** The header wordmark links to
 `/`, and `/feed.xml` is discoverable from `<head>` — so the site satisfies both checks.

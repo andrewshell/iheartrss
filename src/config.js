@@ -137,6 +137,44 @@ export function loadConfig(env = process.env) {
     errors,
   );
 
+  // §6.4: rssCloud. Two independent halves, and only the second one is a switch.
+  //
+  // The `<cloud>`/`<source:cloud>` values below describe *which* cloud server our
+  // subscribers may register with; the feed advertises them whatever
+  // `RSSCLOUD_ENABLED` says, because that server polls the feed on its own schedule
+  // regardless of us. `RSSCLOUD_ENABLED` gates the ping we send on boot — off under
+  // NODE_ENV=test for the same reason as REVALIDATE_ENABLED and BACKUP_ENABLED: a
+  // test run must never be able to ask a stranger's server to fetch a URL.
+  const rsscloudEnabled = env.RSSCLOUD_ENABLED !== 'false' && env.NODE_ENV !== 'test';
+  const rsscloudPingUrl = parseUrl(
+    env.RSSCLOUD_PING_URL,
+    'https://rpc.rsscloud.io/ping',
+    'RSSCLOUD_PING_URL',
+    errors,
+  );
+  const rsscloudDomain = parseNonEmpty(
+    env.RSSCLOUD_DOMAIN,
+    'rpc.rsscloud.io',
+    'RSSCLOUD_DOMAIN',
+    errors,
+  );
+  // The port of the **http-post** endpoint, which is 80 on rpc.rsscloud.io even
+  // though `<source:cloud>` names the same server over https. It is one of the five
+  // attributes RSS 2.0 requires of `<cloud>`, so it has to be a real number.
+  const rsscloudPort = parsePositiveInt(env.RSSCLOUD_PORT, 80, 'RSSCLOUD_PORT', errors);
+  const rsscloudPath = parseNonEmpty(
+    env.RSSCLOUD_PATH,
+    '/pleaseNotify',
+    'RSSCLOUD_PATH',
+    errors,
+  );
+  const rsscloudProtocol = parseNonEmpty(
+    env.RSSCLOUD_PROTOCOL,
+    'http-post',
+    'RSSCLOUD_PROTOCOL',
+    errors,
+  );
+
   // §6.4, phase 7: the blog's markdown lives in a directory that is a read-only bind
   // mount in production (§9), and the cache is invalidated by polling max(mtime)
   // across it — a poll interval, never a directory watch.
@@ -177,6 +215,12 @@ export function loadConfig(env = process.env) {
     healthcheckPingUrl,
     backupEnabled,
     backupRetentionDays,
+    rsscloudEnabled,
+    rsscloudPingUrl,
+    rsscloudDomain,
+    rsscloudPort,
+    rsscloudPath,
+    rsscloudProtocol,
     contentDir,
     contentPollMs,
     // Only the IP-HMAC key file's read-or-generate rule branches on this, and it
@@ -217,6 +261,31 @@ function parseOptionalUrl(raw, name, errors) {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     errors.push(`${name} must be http or https, got "${value}"`);
     return null;
+  }
+  return value;
+}
+
+/**
+ * An absolute http(s) URL with a default — the always-set counterpart of
+ * `parseOptionalUrl`. A malformed one stops the boot rather than being silently
+ * replaced by the default: a ping that goes nowhere is indistinguishable from a
+ * feature that was never switched on.
+ */
+function parseUrl(raw, fallback, name, errors) {
+  if (raw === undefined || String(raw).trim() === '') return fallback;
+
+  const value = String(raw).trim();
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    errors.push(`${name} must be an absolute URL, got "${value}"`);
+    return fallback;
+  }
+
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    errors.push(`${name} must be http or https, got "${value}"`);
+    return fallback;
   }
   return value;
 }
