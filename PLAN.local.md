@@ -92,7 +92,7 @@ invitation with a link, never like a validator complaining.
 | Frontmatter | hand-rolled, ~15 lines | Only `title:` is needed, and optional at that. `gray-matter` drags in `js-yaml` to parse one flat key/value block. Documented limit: flat `key: value` only, no nesting or lists. Swap in `gray-matter` if post metadata ever grows. |
 | CSS | One hand-written `public/style.css` | No build step, no framework. **Mobile-first** — see §6.3. |
 | Tests | `node:test` + `node:assert` | Built in, zero dependencies. |
-| Lint/format | Biome (optional) | Single binary, replaces eslint+prettier. Skip if you'd rather. |
+| Lint/format | ~~Biome (optional)~~ → **ESLint + Prettier** | ~~Single binary, replaces eslint+prettier.~~ **SUPERSEDED:** adopted ESLint (flat config) + Prettier instead, to match the rsscloud project's conventions so both repos are maintained the same way. Prettier owns formatting, ESLint owns correctness (no overlapping rules). |
 
 **Total production dependencies: 7** (`hono`, `@hono/node-server`, `fast-xml-parser`,
 `node-html-parser`, `marked`, `undici`, `tldts`). No build step for the server — plain ESM,

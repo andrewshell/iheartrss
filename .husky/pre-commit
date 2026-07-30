@@ -1,0 +1,7 @@
+# Lint, formatting and the full test suite. The suite is 373 tests in ~11s, which
+# is cheap enough to run on every commit — so a broken commit never reaches a
+# branch. If it ever grows past ~30s, move `pnpm test` out of here and let ci.yml
+# own it.
+pnpm lint
+pnpm format:check
+pnpm test

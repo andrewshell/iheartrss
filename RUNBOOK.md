@@ -21,14 +21,14 @@ Two things to know before you touch anything:
 
 ## Triage: what is actually wrong?
 
-| Symptom | Go to |
-|---|---|
-| Container is restarting, or exits at boot | [Container won't boot](#container-wont-boot) |
-| Site is up but the data is wrong / gone | [Restore from backup](#restore-from-backup) |
-| Site is broken and the last thing you did was deploy | [Roll back to a previous image](#roll-back-to-a-previous-image) |
-| healthchecks.io alerted, container looks fine | [Scheduler wedged or falling behind](#scheduler-wedged-or-falling-behind) |
-| A listed site is serving malware or spam | [Taking a member down](#taking-a-member-down) |
-| Disk is full | [Disk filling up](#disk-filling-up) |
+| Symptom                                              | Go to                                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------------------- |
+| Container is restarting, or exits at boot            | [Container won't boot](#container-wont-boot)                              |
+| Site is up but the data is wrong / gone              | [Restore from backup](#restore-from-backup)                               |
+| Site is broken and the last thing you did was deploy | [Roll back to a previous image](#roll-back-to-a-previous-image)           |
+| healthchecks.io alerted, container looks fine        | [Scheduler wedged or falling behind](#scheduler-wedged-or-falling-behind) |
+| A listed site is serving malware or spam             | [Taking a member down](#taking-a-member-down)                             |
+| Disk is full                                         | [Disk filling up](#disk-filling-up)                                       |
 
 ```sh
 docker compose ps                                            # up? restarting?
@@ -203,10 +203,14 @@ under an **older** image does not work in reverse — roll the image back first
 Only reach for this if the last deploy caused the problem. If the data is wrong,
 restoring won't be fixed by an image change.
 
-`.github/workflows/publish.yml` publishes every push to `main` as
-`ghcr.io/andrewshell/iheartrss:main-<short-sha>`, plus `:latest`, plus `:v1.2.3` for
-tags. **Deploy by `main-<sha>` or `v*`, never `latest`** — "the previous latest" is not
-something you can name at 2am.
+`.github/workflows/publish.yml` publishes one image per **release**:
+`ghcr.io/andrewshell/iheartrss:1.2.3`, plus `:1.2`, `:1` and `:latest`. Releases are
+cut by `release-please` — merge the release PR it keeps open on `main`.
+**Deploy by exact version, never `latest`** — "the previous latest" is not something
+you can name at 2am.
+
+Every published version is listed on the repo's Packages page on GitHub, and
+`git tag --list 'v*'` names the same set.
 
 ### If the stack is on `image:`
 
@@ -215,7 +219,7 @@ something you can name at 2am.
 docker image ls ghcr.io/andrewshell/iheartrss
 
 # Point .env at the previous tag and redeploy:
-sed -i 's/^IHEARTRSS_TAG=.*/IHEARTRSS_TAG=main-abc1234/' .env
+sed -i 's/^IHEARTRSS_TAG=.*/IHEARTRSS_TAG=1.2.2/' .env
 docker compose up -d
 docker compose logs --tail 20 iheartrss
 ```
@@ -226,7 +230,7 @@ Then there is no previous version on this box and this is the 2am rebuild §9 wa
 about. Do the one-time switch instead — it takes two minutes and you only do it once:
 
 1. In `docker-compose.yml`, comment out `build: .` and uncomment the `image:` line.
-2. Put `IHEARTRSS_TAG=main-<the sha you want>` in `.env`.
+2. Put `IHEARTRSS_TAG=<the version you want>` in `.env`.
 3. `docker compose up -d`.
 
 From then on rollback is the three commands above.
@@ -283,7 +287,7 @@ ls -la secrets/ip_hmac_key            # a FILE, 32+ bytes. A directory means Doc
 ```
 
 If it is missing **and you have the original backed up** (password manager), restore
-that exact file — see the next section for what a *different* key costs.
+that exact file — see the next section for what a _different_ key costs.
 
 ```sh
 mkdir -p secrets
@@ -324,15 +328,20 @@ curl -s http://127.0.0.1:3000/healthz
 ```
 
 ```json
-{"ok":true,"sites":412,"lastRevalidation":"2026-07-30T01:00:04.113Z",
- "oldest_last_checked_at":"2026-07-24T09:12:44.900Z","overdue_count":0}
+{
+  "ok": true,
+  "sites": 412,
+  "lastRevalidation": "2026-07-30T01:00:04.113Z",
+  "oldest_last_checked_at": "2026-07-24T09:12:44.900Z",
+  "overdue_count": 0
+}
 ```
 
-| Field | What it means | Bad looks like |
-|---|---|---|
-| `lastRevalidation` | When a batch last **finished**. Ticks hourly, plus ~30s after boot. | `null` long after boot, or hours stale. |
-| `oldest_last_checked_at` | The least recently checked listing. | Older than `REVALIDATE_INTERVAL_DAYS` (6) — the promise is already false for that member. |
-| `overdue_count` | How many listings are past the interval. | Anything **growing** across checks. |
+| Field                    | What it means                                                       | Bad looks like                                                                            |
+| ------------------------ | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `lastRevalidation`       | When a batch last **finished**. Ticks hourly, plus ~30s after boot. | `null` long after boot, or hours stale.                                                   |
+| `oldest_last_checked_at` | The least recently checked listing.                                 | Older than `REVALIDATE_INTERVAL_DAYS` (6) — the promise is already false for that member. |
+| `overdue_count`          | How many listings are past the interval.                            | Anything **growing** across checks.                                                       |
 
 A single non-zero `overdue_count` is not an emergency; the same number rising over
 successive hours is.
@@ -477,7 +486,7 @@ What is already bounded, so you can stop looking at it:
   the revalidation tick. They need no cron and no attention. If `submissions` is huge,
   check the scheduler is actually ticking (previous section) — the purge rides on it.
 
-What is *not* bounded, and is usually the real answer:
+What is _not_ bounded, and is usually the real answer:
 
 ```sh
 docker image prune -a          # old image tags accumulate once you deploy by tag

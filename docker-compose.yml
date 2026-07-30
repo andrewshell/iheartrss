@@ -21,11 +21,11 @@ services:
     # only version that exists is whatever is checked out here — so a bad deploy is
     # recovered by `git checkout` and a rebuild at 2am (§9).
     #
-    # The `image:` line deploys a tag published by .github/workflows/publish.yml,
-    # which is what makes rollback a one-line edit. To switch: comment out `build:`,
-    # uncomment `image:`, and put `IHEARTRSS_TAG=main-<short-sha>` in the .env beside
-    # this file. Pin an actual tag, not `latest` — "the previous latest" is not a
-    # thing you can name. See RUNBOOK.md, "Roll back to a previous image".
+    # The `image:` line deploys a release published by .github/workflows/publish.yml
+    # (one image per release-please release), which is what makes rollback a one-line
+    # edit. To switch: comment out `build:`, uncomment `image:`, and put
+    # `IHEARTRSS_TAG=1.2.3` in the .env beside this file. Pin an exact version, not
+    # `latest` — "the previous latest" is not a thing you can name. See RUNBOOK.md, "Roll back to a previous image".
     build: .
     # image: ghcr.io/andrewshell/iheartrss:${IHEARTRSS_TAG:-latest}
     container_name: iheartrss
@@ -37,7 +37,7 @@ services:
 
     mem_limit: 512m
     pids_limit: 256
-    security_opt: ["no-new-privileges:true"]
+    security_opt: ['no-new-privileges:true']
     cap_drop: [ALL]
 
     # json-file is unbounded by default; left alone it fills the disk and takes
@@ -45,8 +45,8 @@ services:
     logging:
       driver: json-file
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: '10m'
+        max-file: '3'
 
     ports:
       # 127.0.0.1, NEVER 3000:3000. Docker inserts its own nat rules ahead of
@@ -55,7 +55,7 @@ services:
       # TRUST_PROXY=true, anyone connecting directly could then set
       # X-Forwarded-For to anything — defeating every rate limit, poisoning every
       # logged IP hash, and exposing /admin over plaintext.
-      - "127.0.0.1:3000:3000"
+      - '127.0.0.1:3000:3000'
 
     environment:
       - NODE_ENV=production
@@ -99,7 +99,13 @@ services:
     healthcheck:
       # Only the HTTP status is inspected, which is why /healthz answers 503
       # rather than a 200 carrying {ok:false}.
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 60s
       timeout: 5s
       retries: 3

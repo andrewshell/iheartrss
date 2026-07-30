@@ -1,0 +1,76 @@
+# Quality gate for pull requests and for main.
+#
+# This does NOT publish anything. Images correspond to releases, and releases are
+# cut by release-please -> a `v*` tag -> .github/workflows/publish.yml.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint, format & tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      # 26 is a forward-looking canary, not a deploy target. Without fail-fast
+      # off, a break there would cancel the 24 job and hide the result that
+      # actually matters.
+      fail-fast: false
+      matrix:
+        # `engines.node` is >=24 and the app is built on `node:sqlite`, which
+        # does not exist on 22 — so 22 is not in this list and must not be.
+        node: ['24', '26']
+    steps:
+      - uses: actions/checkout@v5
+
+      # Provides the pnpm version pinned in package.json's `packageManager`,
+      # and must run before setup-node so `cache: 'pnpm'` can find pnpm.
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Tests
+        run: pnpm test
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build only — no push. This exists so a broken Dockerfile fails CI on the
+      # PR instead of at release time, when the tag has already been cut.
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

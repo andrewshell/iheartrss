@@ -1,0 +1,44 @@
+# release-please keeps a "chore(main): release x.y.z" PR open on main, accumulating
+# every conventional commit that lands. Merging that PR bumps package.json, writes
+# CHANGELOG.md, and tags `v<x.y.z>`.
+#
+# Versions are derived from commit messages, so commits MUST follow Conventional
+# Commits (`feat:`, `fix:`, `feat!:` …). .husky/commit-msg enforces this locally.
+#
+# The publish job then builds the image for that tag. It lives here as a call into
+# publish.yml rather than as a `push: tags:` trigger in publish.yml, because a tag
+# pushed with the built-in GITHUB_TOKEN does not start a new workflow run.
+
+name: release-please
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/publish.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+    permissions:
+      contents: read
+      packages: write

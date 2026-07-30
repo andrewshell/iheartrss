@@ -1,4 +1,4 @@
-# Publish a tagged image to GHCR (plan §9, "Rollback needs tagged images").
+# Publish a released image to GHCR (plan §9, "Rollback needs tagged images").
 #
 # The problem this solves: `build: .` in docker-compose.yml means the only version
 # that exists is the working tree on the production box. A bad deploy is then
@@ -6,24 +6,46 @@
 # machine you are trying not to touch. With published tags, rollback is editing one
 # line in the compose file and redeploying.
 #
-# What gets published, on every push to main:
+# WHEN THIS RUNS. Images correspond to releases, not to commits. release-please
+# maintains a release PR on main; merging it bumps the version, writes CHANGELOG.md
+# and tags `v<x.y.z>`, and then release-please.yml calls THIS workflow with that
+# tag. Nothing publishes on an ordinary push to main — ci.yml is the gate there.
 #
+# It is *called* rather than triggered by the tag on purpose: a tag pushed by the
+# built-in GITHUB_TOKEN does not start a new workflow run, so a `push: tags:` trigger
+# alone would silently never fire. The `push: tags:` trigger below is kept for tags
+# pushed by a human, and workflow_dispatch for rebuilding an older release.
+#
+# What gets published for `v1.2.3`:
+#
+#   ghcr.io/andrewshell/iheartrss:1.2.3   <- deploy and roll back by this
+#   ghcr.io/andrewshell/iheartrss:1.2
+#   ghcr.io/andrewshell/iheartrss:1
 #   ghcr.io/andrewshell/iheartrss:latest
-#   ghcr.io/andrewshell/iheartrss:main-<short-sha>   <- deploy and roll back by this
 #
-# and on a `v*` tag, additionally `:v1.2.3`, `:1.2`, `:1`.
+# Pin the compose file to an exact version, never `latest`: rolling back to "the
+# previous latest" is not a thing you can name.
 #
-# Pin the compose file to a `main-<sha>` (or a `v*`) tag rather than `latest`:
-# rolling back to "the previous latest" is not a thing you can name.
+# For an image WITHOUT cutting a release, use ./scripts/docker-build-push.sh from a
+# workstation. That is the deliberate out-of-band path.
 
 name: publish
 
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
-  # So a rollback target can be built from an older commit without pushing a tag.
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Release tag to build and publish, e.g. v1.2.3'
+        required: true
+        type: string
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build and publish, e.g. v1.2.3'
+        required: true
+        type: string
+  push:
+    tags: ['v*']
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
@@ -32,18 +54,23 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
-      - uses: pnpm/action-setup@v4
+      - name: Enable corepack
+        run: corepack enable
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: pnpm
+          cache: 'pnpm'
 
       - run: pnpm install --frozen-lockfile
 
       # An image nobody can roll back *from* is not much better than no image.
+      # ci.yml already ran on main, but this job is what vouches for the exact
+      # tree being tagged, so it stays.
       - run: pnpm test
 
   publish:
@@ -55,7 +82,9 @@ jobs:
       packages: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: docker/login-action@v3
         with:
@@ -67,13 +96,14 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE }}
+          # `value=` is spelled out rather than relying on the triggering ref,
+          # because on a workflow_call from release-please the ref is main, not
+          # the tag, and the semver patterns would resolve to nothing.
           tags: |
-            type=ref,event=branch
-            type=sha,prefix=main-,format=short,enable=${{ github.ref == 'refs/heads/main' }}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}},value=${{ inputs.tag || github.ref_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag || github.ref_name }}
+            type=semver,pattern={{major}},value=${{ inputs.tag || github.ref_name }}
+            type=raw,value=latest
           labels: |
             org.opencontainers.image.description=A webring-style directory for people who love RSS.
 
