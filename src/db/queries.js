@@ -77,6 +77,51 @@ export function createQueries(db) {
        ORDER BY s.created_at DESC, s.id DESC
     `),
 
+    /**
+     * `/admin`'s working list. Unlike `listMembers` this deliberately includes
+     * `hidden`, `dropped` and `removed`: the dashboard is where a hidden row gets
+     * unhidden, so the one view that must show it is this one.
+     */
+    listRecentSites: db.prepare(`
+      SELECT id, url, host, path, title, status, failure_count, last_error,
+             optout_seen_at, created_at, last_checked_at
+        FROM sites
+       ORDER BY created_at DESC, id DESC
+       LIMIT :limit
+    `),
+
+    /** §4's `failing`/`blocked` rows: the two states that need an admin's eye. */
+    listSitesNeedingAttention: db.prepare(`
+      SELECT id, url, host, title, status, failure_count, last_error, optout_seen_at,
+             last_checked_at
+        FROM sites
+       WHERE status IN ('failing', 'blocked')
+       ORDER BY CASE status WHEN 'blocked' THEN 0 ELSE 1 END, last_checked_at
+    `),
+
+    recentSubmissions: db.prepare(`
+      SELECT submitted_url, normalized_url, result, reason, created_at
+        FROM submissions
+       ORDER BY created_at DESC, id DESC
+       LIMIT :limit
+    `),
+
+    /**
+     * §10's rejection-reason histogram — "the fastest way to learn which design
+     * decision is costing members". The data has been in `submissions` since phase
+     * 5; nothing was ever counting it.
+     *
+     * `result = 'rejected'` only: an `added` row has no reason, and a `checked` dry
+     * run tells you about a member testing their page, not about a barrier.
+     */
+    rejectionHistogram: db.prepare(`
+      SELECT reason, count(*) AS n
+        FROM submissions
+       WHERE result = 'rejected' AND reason IS NOT NULL AND created_at >= :since
+       GROUP BY reason
+       ORDER BY n DESC, reason
+    `),
+
     getDirectoryVersion: db.prepare(
       'SELECT version, outline_hash, updated_at FROM directory_version WHERE id = 1',
     ),
@@ -104,6 +149,31 @@ export function createQueries(db) {
         (SELECT max_listings FROM domain_limits WHERE domain = :domain),
         :fallback
       ) AS max_listings
+    `),
+
+    listDomainLimits: db.prepare(
+      'SELECT domain, max_listings, note FROM domain_limits ORDER BY domain',
+    ),
+
+    /**
+     * §4: the overrides are "editable from /admin". An upsert rather than an insert,
+     * because the operator's second thought about a number is the normal case — and
+     * `INSERT OR REPLACE` would drop the `note` on a limit-only edit.
+     */
+    upsertDomainLimit: db.prepare(`
+      INSERT INTO domain_limits (domain, max_listings, note)
+      VALUES (:domain, :max_listings, :note)
+      ON CONFLICT(domain) DO UPDATE
+         SET max_listings = :max_listings,
+             note = COALESCE(:note, note)
+    `),
+
+    deleteDomainLimit: db.prepare('DELETE FROM domain_limits WHERE domain = :domain'),
+
+    listBans: db.prepare(`
+      SELECT host, host_suffix, path_prefix, reason, created_at
+        FROM banned_hosts
+       ORDER BY created_at DESC
     `),
 
     insertBan: db.prepare(`
@@ -139,6 +209,23 @@ export function createQueries(db) {
       INSERT INTO reports (site_id, url, reason, contact, ip_hash, created_at)
       VALUES (:site_id, :url, :reason, :contact, :ip_hash, :created_at)
     `),
+
+    getReportById: db.prepare('SELECT * FROM reports WHERE id = :id'),
+
+    /**
+     * §6: the report queue on `/admin`. Unhandled first and newest first within
+     * that, because a report is only actionable until somebody has acted on it.
+     */
+    listReports: db.prepare(`
+      SELECT id, site_id, url, reason, contact, handled_at, created_at
+        FROM reports
+       ORDER BY handled_at IS NOT NULL, created_at DESC, id DESC
+       LIMIT :limit
+    `),
+
+    markReportHandled: db.prepare(
+      'UPDATE reports SET handled_at = :handled_at WHERE id = :id AND handled_at IS NULL',
+    ),
 
     getSiteByUrl: db.prepare('SELECT * FROM sites WHERE url = :url'),
     getSiteByFeedUrl: db.prepare('SELECT * FROM sites WHERE feed_url = :feed_url'),
@@ -512,6 +599,17 @@ export function createQueries(db) {
     /** §6.3's `/sites`: the same members, newest first, all of them. */
     listMembers: () => statements.listMembers.all(),
 
+    /** `/admin`'s working list — every status, including the ones /sites omits. */
+    listRecentSites: (limit = 50) => statements.listRecentSites.all({ limit }),
+
+    /** The `failing` and `blocked` rows, worst first. */
+    listSitesNeedingAttention: () => statements.listSitesNeedingAttention.all(),
+
+    recentSubmissions: (limit = 25) => statements.recentSubmissions.all({ limit }),
+
+    /** §10's rejection-reason histogram, over the retained window. */
+    rejectionHistogram: (since) => statements.rejectionHistogram.all({ since }),
+
     /**
      * Record a freshly computed outline hash and the timestamp that goes with it.
      *
@@ -596,6 +694,35 @@ export function createQueries(db) {
       statements.bumpDirectoryVersion.run();
     },
 
+    getReportById: (id) => statements.getReportById.get({ id }),
+
+    /** §6's report queue, unhandled first. */
+    listReports: (limit = 50) => statements.listReports.all({ limit }),
+
+    /**
+     * Mark a report handled. No directory-version bump: a report is not an outline.
+     * The `handled_at IS NULL` guard makes a double-click idempotent rather than
+     * re-stamping a report somebody dealt with last week — but the moderation_log
+     * row is written either way, because "the admin pressed this" is the fact the
+     * log records.
+     */
+    handleReport(id, reason) {
+      const { changes } = statements.markReportHandled.run({
+        id,
+        handled_at: new Date().toISOString(),
+      });
+      const report = statements.getReportById.get({ id });
+
+      statements.insertModerationLog.run({
+        site_id: opt(report?.site_id),
+        action: 'report_handled',
+        reason: opt(reason),
+        created_at: new Date().toISOString(),
+      });
+
+      return changes > 0;
+    },
+
     logModeration(entry) {
       statements.insertModerationLog.run({
         site_id: opt(entry.site_id),
@@ -612,6 +739,40 @@ export function createQueries(db) {
      */
     maxListingsForDomain: (domain, fallback) =>
       statements.maxListingsForDomain.get({ domain, fallback }).max_listings,
+
+    /** §4's per-domain cap overrides, for `/admin`. */
+    listDomainLimits: () => statements.listDomainLimits.all(),
+
+    /**
+     * Set (or clear, with `max_listings === null`) a per-domain cap override.
+     *
+     * No directory-version bump: the cap only gates *future* listings, so no outline
+     * changes. It does write a `moderation_log` row — a silently changed cap is
+     * indistinguishable later from "the code never enforced it".
+     */
+    setDomainLimit(domain, maxListings, note) {
+      if (maxListings === null) {
+        statements.deleteDomainLimit.run({ domain });
+      } else {
+        statements.upsertDomainLimit.run({
+          domain,
+          max_listings: maxListings,
+          note: opt(note),
+        });
+      }
+
+      statements.insertModerationLog.run({
+        site_id: null,
+        action: 'domain_limit',
+        reason: `${domain} → ${maxListings === null ? 'default' : maxListings}${
+          note ? ` (${note})` : ''
+        }`,
+        created_at: new Date().toISOString(),
+      });
+    },
+
+    /** §6's ban list on `/admin`. */
+    listBans: () => statements.listBans.all(),
 
     /**
      * Is this (host, path) banned? Returns the matching row, or `undefined`.

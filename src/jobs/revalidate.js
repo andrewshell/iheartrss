@@ -406,7 +406,7 @@ export function classify(result) {
  * title would violate its NOT NULL and turn every conditional hit into a caught
  * constraint failure — a check that silently stops counting.
  */
-function passColumns(row, result) {
+export function passColumns(row, result) {
   if (result.feedUnchanged) {
     return {
       title: row.title,

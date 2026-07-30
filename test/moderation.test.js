@@ -238,7 +238,12 @@ test('a banned submitted URL is refused before any outbound fetch', async () => 
 
 const TOKEN = 'a'.repeat(64);
 
-function adminApp({ adminToken = TOKEN } = {}) {
+function adminApp({
+  adminToken = TOKEN,
+  now = () => new Date('2026-07-29T12:00:00.000Z'),
+  trustProxy = false,
+  verifySite = async () => ({ ok: false, reason: 'no_linkback' }),
+} = {}) {
   const { db, queries } = createDb(':memory:');
   const app = createApp({
     config: {
@@ -247,13 +252,15 @@ function adminApp({ adminToken = TOKEN } = {}) {
       maxListingsPerDomain: 5,
       maxNewListingsPerDay: 50,
       submitBudgetMs: 5000,
-      trustProxy: false,
+      revalidateIntervalDays: 6,
+      trustProxy,
       trustedProxyHops: 0,
       adminToken,
     },
     db,
     queries,
-    verifySite: async () => ({ ok: false, reason: 'no_linkback' }),
+    now,
+    verifySite,
     ipHmacKey: Buffer.alloc(32, 3),
     log: () => {},
   });
@@ -319,6 +326,21 @@ test('no admin routes exist at all when ADMIN_TOKEN is unset', async () => {
   // 401 also means it isn't a probe for whether admin exists.
   assert.equal((await adminPost(app, `/admin/sites/${id}/hide`)).status, 404);
   assert.equal((await adminPost(app, '/admin/ban', { host: 'x.example' })).status, 404);
+
+  // Every route added in 8b, GETs included — the login page is the one that would
+  // most obviously give the game away.
+  for (const path of ['/admin', '/admin/login']) {
+    assert.equal((await app.request(path)).status, 404, `GET ${path}`);
+  }
+  for (const path of [
+    '/admin/login',
+    '/admin/logout',
+    `/admin/sites/${id}/unhide`,
+    '/admin/reports/1/handle',
+    '/admin/domain-limits',
+  ]) {
+    assert.equal((await adminPost(app, path)).status, 404, `POST ${path}`);
+  }
 });
 
 test('POST /admin/ban bans a host and hides its sites in one request', async () => {
@@ -363,4 +385,443 @@ test('hiding a site the admin mistyped is a 404, not a silent success', async ()
   const { app } = adminApp();
 
   assert.equal((await adminPost(app, '/admin/sites/9999/hide')).status, 404);
+});
+
+// ── Sessions, CSRF and the dashboard (§6 "Admin auth", §12 phase 8b) ─────────
+
+test('GET /admin without a session is a 401, never the dashboard', async () => {
+  const { app } = adminApp();
+
+  const res = await app.request('/admin');
+
+  assert.equal(res.status, 401);
+});
+
+/** POST /admin/login and hand back the `name=value` pair for the Cookie header. */
+async function login(app, token = TOKEN, { ip } = {}) {
+  const headers = { 'content-type': 'application/x-www-form-urlencoded' };
+  if (ip !== undefined) headers['x-forwarded-for'] = ip;
+
+  const res = await app.request('/admin/login', {
+    method: 'POST',
+    headers,
+    body: new URLSearchParams({ token }).toString(),
+  });
+  const setCookie = res.headers.get('set-cookie') ?? '';
+  return { res, setCookie, cookie: setCookie.split(';')[0] };
+}
+
+test('a correct token at POST /admin/login opens a session GET /admin accepts', async () => {
+  const { app } = adminApp();
+
+  const { res, setCookie, cookie } = await login(app);
+
+  assert.equal(res.status, 303);
+  assert.match(setCookie, /HttpOnly/);
+  assert.match(setCookie, /Secure/);
+  assert.match(setCookie, /SameSite=Strict/);
+
+  // §6: the cookie holds a random 32-byte session id, NOT the token. Storing the
+  // long-lived, un-rotatable env secret in a browser with no expiry and no
+  // revocation short of a redeploy is a bad trade for a few saved lines.
+  assert.ok(!setCookie.includes(TOKEN), 'the admin token must never reach the cookie');
+
+  const dashboard = await app.request('/admin', { headers: { cookie } });
+  assert.equal(dashboard.status, 200);
+});
+
+test('POST /admin/login backs off exponentially after a failure', async () => {
+  const clock = { t: Date.parse('2026-07-29T12:00:00.000Z') };
+  const { app } = adminApp({ now: () => new Date(clock.t) });
+
+  // §6: a wrong-LENGTH guess must 401, never 500 — raw timingSafeEqual throws
+  // ERR_CRYPTO_TIMING_SAFE_EQUAL_LENGTH, which is both a crash per attempt and a
+  // token-length oracle.
+  assert.equal((await login(app, 'short')).res.status, 401);
+
+  // "Rate-limit and exponentially back off the login route" — the second guess in
+  // the same instant is refused outright.
+  const second = await login(app, 'b'.repeat(64));
+  assert.equal(second.res.status, 429);
+  assert.ok(Number(second.res.headers.get('retry-after')) >= 1);
+
+  // The lockout applies to the RIGHT token too. Letting the correct one through
+  // during a backoff window makes the 429 a "wrong guess" oracle.
+  assert.equal((await login(app)).res.status, 429);
+
+  // Once the first window elapses, one more attempt is allowed...
+  clock.t += 1_000;
+  assert.equal((await login(app, 'c'.repeat(64))).res.status, 401);
+
+  // ...and that second failure buys a LONGER window than the first: 1.5s after it,
+  // the first curve would already have expired and the second has not.
+  clock.t += 1_500;
+  assert.equal((await login(app)).res.status, 429);
+
+  clock.t += 60_000;
+  assert.equal((await login(app)).res.status, 303);
+});
+
+test('login backoff is global too, so rotating IPs does not buy fresh attempts', async () => {
+  const clock = { t: Date.parse('2026-07-29T12:00:00.000Z') };
+  const { app } = adminApp({ now: () => new Date(clock.t), trustProxy: true });
+
+  // Every guess from a brand-new address, an hour apart, so the per-IP arm never
+  // fires and nothing but the global counter can refuse anything.
+  for (let i = 0; i < 21; i += 1) {
+    if (i > 0) clock.t += 60 * 60 * 1000;
+    const { res } = await login(app, 'd'.repeat(64), { ip: `203.0.113.${i + 1}` });
+    assert.equal(res.status, 401, `attempt ${i + 1} from a fresh IP`);
+  }
+
+  const { res } = await login(app, 'e'.repeat(64), { ip: '198.51.100.7' });
+  assert.equal(res.status, 429);
+});
+
+/** Log in and read the CSRF token back out of the dashboard's own forms. */
+async function adminSession(app) {
+  const { cookie } = await login(app);
+  const page = await (await app.request('/admin', { headers: { cookie } })).text();
+  const csrf = /name="csrf"\s+value="([^"]+)"/.exec(page)?.[1];
+  return { cookie, csrf, page };
+}
+
+function sessionPost(app, path, body, cookie) {
+  return app.request(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', cookie },
+    body: new URLSearchParams(body).toString(),
+  });
+}
+
+const statusOf = (db, id) =>
+  db.prepare('SELECT status FROM sites WHERE id = ?').get(id).status;
+
+test('a cookie-authenticated admin POST without the CSRF token is rejected', async () => {
+  const { app, db, id } = adminApp();
+  const { cookie, csrf } = await adminSession(app);
+
+  // §6: "CSRF token derived from the session id (so it rotates), required on every
+  // admin POST." The dashboard's own forms have to carry it, or the UI can't work.
+  assert.ok(csrf, 'the dashboard must carry a CSRF token for its forms');
+
+  const missing = await sessionPost(app, `/admin/sites/${id}/hide`, { reason: 'spam' }, cookie);
+  assert.equal(missing.status, 403);
+
+  const wrong = await sessionPost(
+    app,
+    `/admin/sites/${id}/hide`,
+    { reason: 'spam', csrf: 'not-the-token' },
+    cookie,
+  );
+  assert.equal(wrong.status, 403);
+  assert.equal(statusOf(db, id), 'active', 'a CSRF-less POST must write nothing');
+
+  const ok = await sessionPost(app, `/admin/sites/${id}/hide`, { reason: 'spam', csrf }, cookie);
+  assert.equal(ok.status, 303);
+  assert.equal(statusOf(db, id), 'hidden');
+});
+
+test('POST /admin/logout ends the session for real, not just in the browser', async () => {
+  const { app } = adminApp();
+  const { cookie, csrf } = await adminSession(app);
+
+  const res = await sessionPost(app, '/admin/logout', { csrf }, cookie);
+
+  assert.equal(res.status, 303);
+  assert.match(res.headers.get('set-cookie') ?? '', /Max-Age=0/);
+  // The server-side entry has to be gone too: a logout that only clears the cookie
+  // leaves a live credential in every proxy log it ever appeared in.
+  assert.equal((await app.request('/admin', { headers: { cookie } })).status, 401);
+});
+
+test('an admin session expires on its TTL', async () => {
+  const clock = { t: Date.parse('2026-07-29T12:00:00.000Z') };
+  const { app } = adminApp({ now: () => new Date(clock.t) });
+  const { cookie } = await login(app);
+
+  clock.t += 11 * 60 * 60 * 1000;
+  assert.equal((await app.request('/admin', { headers: { cookie } })).status, 200);
+
+  // §6: "a random 32-byte session id with a TTL". Without expiry, the in-memory Map
+  // is a set of credentials that live as long as the process.
+  clock.t += 2 * 60 * 60 * 1000;
+  assert.equal((await app.request('/admin', { headers: { cookie } })).status, 401);
+});
+
+test('every mutating admin action leaves a moderation_log row', async () => {
+  const { app, db, queries, id } = adminApp();
+  queries.insertReport({
+    site_id: id,
+    url: 'https://spammer.example/',
+    reason: 'spam',
+    ip_hash: 'h',
+  });
+  const reportId = db.prepare('SELECT id FROM reports').get().id;
+
+  await adminPost(app, `/admin/sites/${id}/hide`, { reason: 'r1' });
+  await adminPost(app, `/admin/sites/${id}/unhide`, { reason: 'r2' });
+  await adminPost(app, '/admin/ban', { host: 'other.example', reason: 'r3' });
+  await adminPost(app, `/admin/reports/${reportId}/handle`, { reason: 'r4' });
+  await adminPost(app, '/admin/domain-limits', { domain: 'tenants.com', max_listings: '-1' });
+
+  // §4: "Every admin action, so there's a record of what was done and why." The log
+  // is the only account of a moderation decision that survives the operator.
+  const actions = db
+    .prepare('SELECT action FROM moderation_log ORDER BY id')
+    .all()
+    .map((row) => row.action);
+  assert.deepEqual(actions, ['hide', 'unhide', 'ban', 'report_handled', 'domain_limit']);
+});
+
+test('a path-scoped ban through the admin route leaves the rest of the host listed', async () => {
+  const { app, db, queries } = adminApp();
+  const listing = (path, slug) =>
+    queries.insertSite({
+      url: `https://mastodon.social${path}`,
+      submitted_url: `https://mastodon.social${path}`,
+      host: 'mastodon.social',
+      path,
+      feed_url: `https://mastodon.social/${slug}.rss`,
+      title: slug,
+      description: undefined,
+      has_source_ns: false,
+      has_rsscloud: false,
+      rsscloud_style: undefined,
+      cloud_json: undefined,
+    });
+  const spammer = listing('/@spammer', 'spammer');
+  const alice = listing('/@alice', 'alice');
+
+  await adminPost(app, '/admin/ban', {
+    host: 'mastodon.social',
+    path_prefix: '/@spammer',
+    reason: 'spam',
+  });
+
+  // §4's outer parentheses, end to end: without them the exact-host arm ignores
+  // path_prefix and a ban on one account silently takes out the whole instance.
+  assert.equal(statusOf(db, spammer), 'hidden');
+  assert.equal(statusOf(db, alice), 'active');
+  const opml = await (await app.request('/subscriptions.opml')).text();
+  assert.ok(!opml.includes('@spammer'));
+  assert.match(opml, /@alice/);
+
+  // ...while a host_suffix ban is the wildcard-DNS form, and catches every depth.
+  await adminPost(app, '/admin/ban', { host_suffix: '.attacker.example' });
+  assert.ok(queries.findBan({ host: 'deep.nested.attacker.example', path: '/' }));
+  assert.equal(queries.findBan({ host: 'notattacker.example', path: '/' }), undefined);
+});
+
+test('no public page links to /admin', async () => {
+  const { app } = adminApp();
+
+  // §6/§12: the dashboard is disallowed in robots.txt AND never linked. A link in the
+  // shared footer would put it in every crawler's queue and in every referrer log.
+  for (const path of ['/', '/about', '/sites', '/submit', '/badge', '/guide', '/status', '/report']) {
+    const body = await (await app.request(path)).text();
+    assert.ok(!body.includes('/admin'), `${path} must not link to /admin`);
+  }
+
+  const robots = await (await app.request('/robots.txt')).text();
+  assert.match(robots, /^Disallow: \/admin$/m);
+});
+
+test('the dashboard carries the rejection histogram, both queues and the backlog', async () => {
+  const { app, db, queries, id } = adminApp();
+
+  const attempt = (reason, result = 'rejected') =>
+    queries.insertSubmission({
+      submitted_url: 'https://someone.example/',
+      normalized_url: 'https://someone.example/',
+      ip_hash: 'h',
+      result,
+      reason,
+    });
+  attempt('no_linkback');
+  attempt('no_linkback');
+  attempt('feed_not_rss2');
+  attempt(undefined, 'added');
+
+  db.prepare("UPDATE sites SET status = 'failing', last_error = 'timeout' WHERE id = ?").run(id);
+  queries.insertReport({
+    site_id: id,
+    url: 'https://spammer.example/',
+    reason: 'serving malware',
+    ip_hash: 'h',
+  });
+  queries.insertBan({ host_suffix: '.attacker.example', reason: 'wildcard flood' });
+
+  const { page } = await adminSession(app);
+
+  // §10: the histogram is the fastest way to learn which design decision is costing
+  // members — a count per reason, not a pile of rows to eyeball.
+  assert.match(page, /data-reason="no_linkback" data-count="2"/);
+  assert.match(page, /data-reason="feed_not_rss2" data-count="1"/);
+  // An `added` submission is not a rejection and must not appear as one.
+  assert.ok(!/data-reason="added"/.test(page));
+
+  // The failing site, the open report and the ban list.
+  assert.match(page, /timeout/);
+  assert.match(page, /serving malware/);
+  assert.match(page, /\.attacker\.example/);
+
+  // §8's backlog, the same two numbers /healthz reports — this is where an operator
+  // notices the capacity ceiling before /about's promise quietly goes false.
+  assert.match(page, /data-overdue-count="\d+"/);
+});
+
+test('POST /admin/domain-limits changes the effective per-domain cap', async () => {
+  const { app, db, queries } = adminApp();
+  const persist = createPersister({
+    queries,
+    config: CONFIG,
+    safeFetch: async () => ({ ok: false, reason: 'unexpected_fetch' }),
+  });
+  const member = (n) => ({
+    ok: true,
+    url: `https://user${n}.tenants.com/`,
+    submittedUrl: `https://user${n}.tenants.com/`,
+    feedUrl: `https://user${n}.tenants.com/rss.xml`,
+    title: `Member ${n}`,
+    features: { has_source_ns: false, has_rsscloud: false, rsscloud_style: null },
+  });
+
+  for (let n = 1; n <= 5; n += 1) {
+    assert.equal((await persist(member(n))).outcome, 'added', `listing ${n}`);
+  }
+  assert.equal((await persist(member(6))).reason, 'domain_cap');
+
+  const res = await adminPost(app, '/admin/domain-limits', {
+    domain: 'Tenants.com',
+    max_listings: '-1',
+    note: 'multi-tenant',
+  });
+  assert.equal(res.status, 200);
+
+  // §4/§5: "Editable from /admin; the 'admin-overridable' the cap promises lives
+  // here, not in env." An override that doesn't change the answer to the cap query
+  // is a row nobody reads.
+  assert.equal((await persist(member(6))).outcome, 'added');
+  assert.equal(queries.maxListingsForDomain('tenants.com', 5), -1);
+
+  assert.equal(
+    db.prepare('SELECT action FROM moderation_log ORDER BY id DESC').get().action,
+    'domain_limit',
+  );
+});
+
+test('POST /admin/domain-limits refuses a limit that is not a number', async () => {
+  const { app, db } = adminApp();
+
+  const res = await adminPost(app, '/admin/domain-limits', {
+    domain: 'tenants.com',
+    max_listings: 'lots',
+  });
+
+  assert.equal(res.status, 400);
+  assert.equal(
+    db.prepare('SELECT count(*) AS n FROM domain_limits WHERE domain = ?').get('tenants.com').n,
+    0,
+  );
+});
+
+test('POST /admin/reports/:id/handle clears a report and records who did it', async () => {
+  const { app, db, queries, id } = adminApp();
+  queries.insertReport({
+    site_id: id,
+    url: 'https://spammer.example/',
+    reason: 'serving malware',
+    ip_hash: 'h',
+  });
+  const reportId = db.prepare('SELECT id FROM reports').get().id;
+
+  const res = await adminPost(app, `/admin/reports/${reportId}/handle`, {
+    reason: 'hid the site',
+  });
+
+  assert.equal(res.status, 200);
+  assert.ok(
+    db.prepare('SELECT handled_at FROM reports WHERE id = ?').get(reportId).handled_at,
+    'a handled report must carry the timestamp that takes it out of the queue',
+  );
+
+  // §4: "Every admin action, so there's a record of what was done and why."
+  const entry = db
+    .prepare('SELECT site_id, action, reason FROM moderation_log ORDER BY id DESC')
+    .get();
+  assert.equal(entry.action, 'report_handled');
+  assert.equal(entry.site_id, id);
+  assert.equal(entry.reason, 'hid the site');
+
+  assert.equal((await adminPost(app, '/admin/reports/9999/handle')).status, 404);
+});
+
+test('hiding a site takes it out of the OPML and moves the ETag', async () => {
+  const { app, id } = adminApp();
+
+  const before = await app.request('/subscriptions.opml');
+  const beforeBody = await before.text();
+  assert.match(beforeBody, /spammer\.example/);
+
+  await adminPost(app, `/admin/sites/${id}/hide`, { reason: 'spam' });
+
+  const after = await app.request('/subscriptions.opml');
+  assert.ok(!(await after.text()).includes('spammer.example'));
+  // §7: without the version bump the removal sits in every cache that holds the old
+  // document — the moderation lever works and nobody downstream ever finds out.
+  assert.notEqual(after.headers.get('etag'), before.headers.get('etag'));
+  assert.ok(after.headers.get('etag'));
+});
+
+test('an unhide re-verifies the site and applies the pass', async () => {
+  const asked = [];
+  const { app, db, queries, id } = adminApp({
+    verifySite: async (url, options) => {
+      asked.push({ url, options });
+      return {
+        ok: true,
+        url,
+        feedUrl: 'https://spammer.example/rss.xml',
+        title: 'Reformed',
+        description: 'Now behaving',
+        features: { has_source_ns: true, has_rsscloud: false, rsscloud_style: null },
+      };
+    },
+  });
+  queries.hideSite(id, 'spam');
+  db.prepare('UPDATE sites SET failure_count = 2 WHERE id = ?').run(id);
+
+  const res = await adminPost(app, `/admin/sites/${id}/unhide`, { reason: 'appealed' });
+  assert.equal(res.status, 200);
+
+  // Phase 8a's note: an unhide re-verifies, and with `fixedCanonical` — the canonical
+  // URL is never re-derived, so an unhide cannot move the row onto another row's URL.
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].url, 'https://spammer.example/');
+  assert.equal(asked[0].options.fixedCanonical, true);
+
+  const row = db.prepare('SELECT * FROM sites WHERE id = ?').get(id);
+  assert.equal(row.status, 'active');
+  assert.equal(row.title, 'Reformed', 'the fresh verification must be applied');
+  assert.equal(row.has_source_ns, 1);
+  assert.equal(row.failure_count, 0);
+});
+
+test('an unhide whose re-verification fails still unhides, and writes no failure', async () => {
+  const { app, db, queries, id } = adminApp({
+    verifySite: async () => ({ ok: false, reason: 'timeout' }),
+  });
+  queries.hideSite(id, 'spam');
+
+  const res = await adminPost(app, `/admin/sites/${id}/unhide`, { reason: 'appealed' });
+
+  // The admin's decision is authoritative — an unreachable site does not veto it.
+  assert.equal(res.status, 200);
+  const row = db.prepare('SELECT * FROM sites WHERE id = ?').get(id);
+  assert.equal(row.status, 'active');
+  // ...and a failed re-verification writes nothing: starting the 3-strike clock on
+  // an unhide would delist the site again in a fortnight for the admin's own action.
+  assert.equal(row.failure_count, 0);
+  assert.equal(row.last_error, null);
 });

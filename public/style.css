@@ -772,3 +772,74 @@ pre.code code,
 .latest .post__title {
   font-size: var(--step-2);
 }
+
+/* ── /admin (§6, phase 8b) ───────────────────────────────────────────────────
+   Never linked from a public page, so these rules only ever load for the
+   operator. Same §6.3 rule as everywhere else: reflowing lists, never tables —
+   the dashboard gets used from a phone at least as often as from a desk. */
+.admin-list,
+.admin-histogram {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.admin-list li,
+.admin-histogram li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-list li > *,
+.admin-histogram li > * {
+  min-width: 0;
+}
+
+.admin-meta {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.admin-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.admin-report-reason {
+  flex-basis: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* An inline form inside a list row: the reason box and its button stay on one
+   line on a desktop and stack on a phone rather than overflowing. */
+.admin-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0;
+}
+
+.admin-inline input[type='text'] {
+  flex: 1 1 8rem;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.35rem;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+}
+
+.panel__error {
+  color: var(--brand);
+  font-weight: 600;
+}
