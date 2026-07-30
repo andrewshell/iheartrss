@@ -4,11 +4,14 @@
 # Builds and pushes a multi-platform image to the GitHub Container Registry
 # (ghcr.io/andrewshell/iheartrss).
 #
-# This is the OUT-OF-BAND path. The normal path is release-please: merge the
-# release PR, it tags `v<x.y.z>`, and .github/workflows/publish.yml builds and
-# pushes that tag plus `latest`. Use this script when you need an image without
-# cutting a release (testing a build on real hardware, an urgent rebuild while
-# Actions is down).
+# This is the ONLY way images get published. Nothing in CI pushes an image, by
+# design: GitHub's runners are amd64-only, and production may run on arm64, so an
+# automated publish could only ever ship half of what is needed. This builds both
+# linux/amd64 and linux/arm64 through buildx.
+#
+# The version comes from package.json, which release-please bumps when you merge
+# the release PR it keeps open on main. Usual order: merge that PR, `git pull`,
+# then run this. Pass a custom tag to publish alongside the version and `latest`.
 
 set -e  # Exit on any error
 

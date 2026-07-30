@@ -21,9 +21,9 @@ services:
     # only version that exists is whatever is checked out here — so a bad deploy is
     # recovered by `git checkout` and a rebuild at 2am (§9).
     #
-    # The `image:` line deploys a release published by .github/workflows/publish.yml
-    # (one image per release-please release), which is what makes rollback a one-line
-    # edit. To switch: comment out `build:`, uncomment `image:`, and put
+    # The `image:` line deploys a version published with `pnpm docker:build-push`
+    # (multi-arch: amd64 + arm64), which is what makes rollback a one-line edit.
+    # To switch: comment out `build:`, uncomment `image:`, and put
     # `IHEARTRSS_TAG=1.2.3` in the .env beside this file. Pin an exact version, not
     # `latest` — "the previous latest" is not a thing you can name. See RUNBOOK.md, "Roll back to a previous image".
     build: .
