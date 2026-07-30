@@ -13,12 +13,23 @@ const SITE_NAME = 'I ♥ RSS';
  * `apple-touch-icon.png` are hand-generated one-offs that do not exist yet;
  * linking them before they are committed would advertise two 404s.
  *
- * The OPML discovery links (`rel="following"` / `rel="blogroll"`) are
- * deliberately absent until /subscriptions.opml exists (plan §12, phase 6).
+ * The OPML discovery links land here in phase 6, now that /subscriptions.opml
+ * exists — advertising them earlier would have pointed the exact crawlers that
+ * auto-discover them (HyperTexting, Micro.blog) at a 404 for four phases.
+ *
+ * **Two elements, not one `rel="following blogroll"`** (§6.4). They serve two
+ * consumers that spell it differently: HyperTexting documents `rel="following"` as
+ * the recommended form and matches `rel` as a token list, while the Winer-adjacent
+ * ecosystem spells it `blogroll` with `type="text/xml"` (scripting.com serves exactly
+ * that). HyperTexting would handle a combined value, but there is no guarantee the
+ * older blogroll readers do, and a string-comparing parser would miss it. Two lines
+ * is cheap insurance. `subscriptions` is skipped: `following` already covers the one
+ * consumer that recognises it.
  */
 export function layout({ title, body, config, description }) {
   const fullTitle = title ? `${title} — ${SITE_NAME}` : SITE_NAME;
   const feedUrl = new URL('/feed.xml', config.siteUrl).href;
+  const opmlUrl = new URL('/subscriptions.opml', config.siteUrl).href;
 
   return html`<!doctype html>
 <html lang="en">
@@ -28,6 +39,8 @@ export function layout({ title, body, config, description }) {
 <title>${fullTitle}</title>
 ${description ? html`<meta name="description" content="${description}">` : ''}
 <link rel="alternate" type="application/rss+xml" title="${SITE_NAME}" href="${feedUrl}">
+<link rel="following" type="text/x-opml" title="${SITE_NAME} members" href="${opmlUrl}">
+<link rel="blogroll" type="text/xml" title="${SITE_NAME} members" href="${opmlUrl}">
 <link rel="icon" href="/iheartrss-icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/style.css">
 </head>
@@ -43,6 +56,7 @@ ${description ? html`<meta name="description" content="${description}">` : ''}
   <nav class="site-nav" aria-label="Main">
     <ul>
       <li><a href="/">Home</a></li>
+      <li><a href="/sites">Members</a></li>
       <li><a href="/submit">Submit</a></li>
       <li><a href="/guide">Guide</a></li>
       <li><a href="/badge">Badge</a></li>
@@ -58,7 +72,9 @@ ${body}
     <a href="/about">About</a> &middot;
     <a href="/badge">Badge</a> &middot;
     <a href="/guide">Guide</a> &middot;
+    <a href="/sites">Members</a> &middot;
     <a href="/status">Status</a> &middot;
+    <a href="/subscriptions.opml">OPML</a> &middot;
     <a href="/feed.xml">RSS</a>
   </p>
   <p class="site-footer__note">A directory for people who love RSS.</p>

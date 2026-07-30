@@ -116,8 +116,12 @@ test('the listing caps have the §9 defaults and must be positive', () => {
 
 test('IP_HMAC_KEY_FILE defaults to the mounted secret path', () => {
   // §9: a FILE, not an env var — an env var sits in `docker inspect`, in dockge's
-  // UI, and in any .env backed up beside ./data.
-  assert.equal(loadConfig({}).ipHmacKeyFile, '/run/secrets/ip_hmac_key');
+  // UI, and in any .env backed up beside ./data. The mounted path is the PRODUCTION
+  // default only; see the dev-default test below for why that distinction matters.
+  assert.equal(
+    loadConfig({ NODE_ENV: 'production' }).ipHmacKeyFile,
+    '/run/secrets/ip_hmac_key',
+  );
   assert.equal(loadConfig({ IP_HMAC_KEY_FILE: './data/key' }).ipHmacKeyFile, './data/key');
   assert.throws(() => loadConfig({ IP_HMAC_KEY_FILE: '  ' }), /IP_HMAC_KEY_FILE/);
 });
@@ -125,4 +129,19 @@ test('IP_HMAC_KEY_FILE defaults to the mounted secret path', () => {
 test('production is derived from NODE_ENV, because the key file rules differ', () => {
   assert.equal(loadConfig({}).production, false);
   assert.equal(loadConfig({ NODE_ENV: 'production' }).production, true);
+});
+
+test('IP_HMAC_KEY_FILE defaults inside the project outside production (§9)', () => {
+  // Regression: the default was the production path /run/secrets/ip_hmac_key in every
+  // environment, so `pnpm dev` died at boot trying to mkdir a root-owned system directory.
+  // Tests never caught it because they inject the key directly.
+  const dev = loadConfig({ SITE_URL: 'https://iheartrss.com' });
+  assert.equal(dev.production, false);
+  assert.ok(
+    !dev.ipHmacKeyFile.startsWith('/run/'),
+    `dev default must stay inside the project, got ${dev.ipHmacKeyFile}`,
+  );
+
+  const prod = loadConfig({ SITE_URL: 'https://iheartrss.com', NODE_ENV: 'production' });
+  assert.equal(prod.ipHmacKeyFile, '/run/secrets/ip_hmac_key');
 });

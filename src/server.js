@@ -12,6 +12,7 @@ import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
 import { closeDb, createDb } from './db/index.js';
+import { seedSelfListing } from './db/seed.js';
 import { loadIpHmacKey } from './lib/iphash.js';
 import { ensureDataDirectory, probeDataDirectory } from './storage.js';
 
@@ -27,6 +28,13 @@ ensureDataDirectory({ databasePath: config.databasePath });
 // request. Migrations are idempotent, so every restart runs this.
 const { db, queries } = createDb(config.databasePath);
 log('db.ready', { path: config.databasePath });
+
+// §12 phase 6: member #1 is iheartrss.com itself, seeded by direct INSERT because
+// §5 Step 7 rejects any canonical host in LINKBACK_HOSTS. Idempotent, so it runs on
+// every boot and a restart neither duplicates the row nor bumps the directory
+// version. Kept out of `001_init.sql` because the row depends on SITE_URL, which a
+// migration cannot see.
+seedSelfListing({ queries, config, log });
 
 // Before listening, for the same reason as everything else here: every submission
 // writes an `ip_hash`, so a missing key must be a container that never comes up

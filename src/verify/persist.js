@@ -8,6 +8,7 @@
 
 import { getDomain } from 'tldts';
 
+import { DESCRIPTION_MAX, normalizeMetaText, TITLE_MAX } from '../lib/xml.js';
 import { parsePage } from './page.js';
 
 export function createPersister({
@@ -53,8 +54,15 @@ export function createPersister({
       host: url.hostname,
       path: url.pathname,
       feed_url: verification.feedUrl,
-      title: verification.title,
-      description: verification.description,
+      // §7: "Cap lengths at ingest (title ~200 chars, description ~500) as well as
+      // at render, and strip bidi overrides (U+202E) and C0/C1 controls so the DB is
+      // clean." Nothing else bounds these — they arrive verbatim from a feed of up to
+      // MAX_RESPONSE_BYTES into unbounded TEXT columns, so a 1 MB title would be
+      // re-read and re-truncated on every OPML render and every /sites request for
+      // as long as the row exists. `normalizeMetaText` is the same function the
+      // renderers use, so the two ends cannot disagree.
+      title: normalizeMetaText(verification.title, TITLE_MAX),
+      description: normalizeMetaText(verification.description, DESCRIPTION_MAX),
       ...featureColumns(verification.features),
     };
 

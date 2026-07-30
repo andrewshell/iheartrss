@@ -137,3 +137,38 @@ test('a canonical URL on one of our own linkback hosts is refused', async () => 
 
   assert.equal(db.prepare('SELECT count(*) AS n FROM sites').get().n, 0);
 });
+
+test('a hostile title and description are capped and cleaned at ingest', async () => {
+  const { queries, persist } = setup();
+
+  const { siteId } = await persist(
+    verified({
+      title: '\u202EEvil Blog' + ' '.repeat(20) + 'B'.repeat(1024 * 1024),
+      description: '\uD800lone \u0007surrogate' + 'C'.repeat(5000),
+    }),
+  );
+
+  const row = queries.getSiteById(siteId);
+
+  // §7: "Cap lengths at ingest (title ~200 chars, description ~500) as well as at
+  // render, and strip bidi overrides (U+202E) and C0/C1 controls so the DB is clean.
+  // Nothing currently bounds these: they come verbatim from a 5 MB feed into
+  // unbounded TEXT columns."
+  assert.equal(Array.from(row.title).length, 200);
+  assert.equal(Array.from(row.description).length, 500);
+  assert.equal(row.title.includes('\u202E'), false, 'bidi override must be stripped');
+  assert.equal(row.description.includes('\u0007'), false, 'C0 controls must be stripped');
+  assert.doesNotMatch(row.description, /[\uD800-\uDFFF]/u);
+  // Whitespace runs are collapsed, so a title padded with spaces can't fake a gap.
+  assert.doesNotMatch(row.title, / {2,}/);
+});
+
+test('an absent description stays NULL rather than becoming an empty string', async () => {
+  const { queries, persist } = setup();
+
+  const { siteId } = await persist(verified({ description: undefined }));
+
+  // The `opt()` coercion boundary in queries.js depends on this staying nullish, and
+  // §7 omits `description` from the OPML when it is null rather than emitting `""`.
+  assert.equal(queries.getSiteById(siteId).description, null);
+});

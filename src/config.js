@@ -50,7 +50,8 @@ export function loadConfig(env = process.env) {
   // all if ADMIN_TOKEN is unset" — an absent token disables the routes, a *weak*
   // one stops the boot.
   const adminToken = parseAdminToken(env.ADMIN_TOKEN, errors);
-  const ipHmacKeyFile = parseKeyFile(env.IP_HMAC_KEY_FILE, errors);
+  const production = env.NODE_ENV === 'production';
+  const ipHmacKeyFile = parseKeyFile(env.IP_HMAC_KEY_FILE, errors, production);
   const trustProxy = env.TRUST_PROXY === 'true';
   const trustedProxyHops = parseNonNegativeInt(
     env.TRUSTED_PROXY_HOPS,
@@ -95,7 +96,7 @@ export function loadConfig(env = process.env) {
     maxNewListingsPerDay,
     // Only the IP-HMAC key file's read-or-generate rule branches on this, and it
     // has to branch on something the deploy actually sets.
-    production: env.NODE_ENV === 'production',
+    production,
   });
 }
 
@@ -134,12 +135,17 @@ function parseAdminToken(raw, errors) {
   return token;
 }
 
-function parseKeyFile(raw, errors) {
-  if (raw === undefined || raw === '') return '/run/secrets/ip_hmac_key';
+// The production default is the compose secret mount (§9). Outside production it has to be
+// a project-local path: the dev fallback in lib/iphash.js generates a key and mkdir's its
+// parent, and pointing that at /run/secrets means `pnpm dev` dies at boot on a root-owned
+// system directory. `secrets/` is already gitignored.
+function parseKeyFile(raw, errors, production) {
+  const fallback = production ? '/run/secrets/ip_hmac_key' : './secrets/ip_hmac_key';
+  if (raw === undefined || raw === '') return fallback;
 
   if (raw.trim() === '') {
     errors.push('IP_HMAC_KEY_FILE must be a path to a file holding ≥32 random bytes');
-    return '/run/secrets/ip_hmac_key';
+    return fallback;
   }
   return raw;
 }

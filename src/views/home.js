@@ -3,7 +3,12 @@ import { html } from 'hono/html';
 import { layout } from './layout.js';
 import { submitForm } from './submit.js';
 
-export function homePage({ config }) {
+/**
+ * `memberCount` is §6's "single member **count**" — the homepage carries the number
+ * and deliberately **no member list**, because §10's feed reader will own that space.
+ * The list itself lives on /sites.
+ */
+export function homePage({ config, memberCount = 0 }) {
   const badgeImg = new URL('/iheartrss.svg', config.siteUrl).href;
 
   const body = html`
@@ -13,6 +18,11 @@ export function homePage({ config }) {
     A directory of people who love RSS. Put the badge on your homepage, submit your
     URL, and — once we&rsquo;ve checked the link back and found your feed — you&rsquo;re
     on the list, and in an OPML subscription list any reader can subscribe to.
+  </p>
+  <p class="hero__count">
+    ${memberCount === 1 ? html`1 member` : html`${memberCount} members`} so far &mdash;
+    <a href="/sites">see them all</a>, or
+    <a href="/subscriptions.opml">subscribe to the whole list</a>.
   </p>
 </section>
 

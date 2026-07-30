@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 
 import { renderFeed } from './blog/feed.js';
 import { createIpHasher } from './lib/iphash.js';
+import { createOpmlDocument } from './lib/opml.js';
 import { createRateLimiter, createSemaphore } from './lib/ratelimit.js';
 import { registerAdmin } from './routes/admin.js';
 import { registerStatic } from './routes/static.js';
@@ -16,6 +17,7 @@ import { badgePage } from './views/badge.js';
 import { notFoundPage } from './views/error.js';
 import { guidePage } from './views/guide.js';
 import { homePage } from './views/home.js';
+import { sitesPage } from './views/sites.js';
 
 /**
  * `db` and `queries` come from `createDb(path)` and are injected rather than
@@ -95,12 +97,24 @@ export function createApp({
       result = { ok: false, reason: err.message };
     }
 
-    return result?.ok
-      ? c.json({ ok: true })
-      : c.json({ ok: false, reason: result?.reason ?? 'unhealthy' }, 503);
+    if (!result?.ok) {
+      return c.json({ ok: false, reason: result?.reason ?? 'unhealthy' }, 503);
+    }
+
+    // §6: `{ ok, sites, lastRevalidation }`. `lastRevalidation` is reported as null
+    // until phase 8a owns the scheduler — the key is present because Docker's
+    // healthcheck and §9's monitoring read this shape, and an absent key reads as a
+    // scheduler that has never run rather than one that does not exist.
+    return c.json({
+      ok: true,
+      sites: queries === null ? 0 : queries.countSites(),
+      lastRevalidation: null,
+    });
   });
 
-  app.get('/', (c) => c.html(homePage({ config })));
+  app.get('/', (c) =>
+    c.html(homePage({ config, memberCount: queries === null ? 0 : queries.countSites() })),
+  );
   app.get('/about', (c) => c.html(aboutPage({ config })));
   app.get('/badge', (c) => c.html(badgePage({ config })));
 
@@ -111,6 +125,39 @@ export function createApp({
 
   registerSubmit(app, deps);
   registerAdmin(app, deps);
+
+  // ── The OPML subscription list (§7) ──────────────────────────────────────────
+  const opml = createOpmlDocument({ queries: queries ?? emptyDirectory(), config });
+
+  app.get('/subscriptions.opml', (c) => {
+    const { body, etag, lastModified } = opml.render();
+
+    const headers = {
+      // §7: text/xml, because that is what FeedLand — the consumer that has to read
+      // us — serves its own OPML as. `text/x-opml` lives in the `<link type=…>`
+      // hint in §6.4; the two do not have to agree.
+      'Content-Type': 'text/xml; charset=utf-8',
+      'X-Content-Type-Options': 'nosniff',
+      ETag: etag,
+      'Last-Modified': lastModified,
+    };
+
+    return isFresh(c.req, { etag, lastModified })
+      ? c.body(null, 304, headers)
+      : c.body(body, 200, headers);
+  });
+
+  // §6.3: the human view of the same set — all members, newest first, no pagination.
+  app.get('/sites', (c) =>
+    c.html(sitesPage({ config, members: queries === null ? [] : queries.listMembers() })),
+  );
+
+  // §6: people will guess /opml, and /.well-known/recommendations.opml is the
+  // emerging convention for blogroll discovery.
+  app.get('/opml', (c) => c.redirect('/subscriptions.opml', 301));
+  app.get('/.well-known/recommendations.opml', (c) =>
+    c.redirect('/subscriptions.opml', 301),
+  );
 
   app.get('/feed.xml', (c) =>
     c.body(renderFeed({ config }), 200, {
@@ -134,6 +181,54 @@ export function createApp({
 
 function defaultLog(msg, fields) {
   console.log(JSON.stringify({ msg, ...fields }));
+}
+
+/**
+ * A database-less app (the phase-1 tests, `createApp({ config })`) still answers
+ * every route rather than 404ing on some of them. An empty directory is the honest
+ * answer, and it keeps the route table one thing instead of two.
+ */
+function emptyDirectory() {
+  return {
+    getDirectoryVersion: () => ({
+      version: 0,
+      outline_hash: '',
+      updated_at: new Date(0).toISOString(),
+    }),
+    listOutlines: () => [],
+    saveOutlineHash: () => {},
+  };
+}
+
+/**
+ * Is the client's cached copy still good? (§7: "Answer conditional GETs with 304.")
+ *
+ * `If-None-Match` wins over `If-Modified-Since` when both are present, per RFC 9110
+ * — the ETag is the precise validator, and `Last-Modified` has only one-second
+ * resolution, so two changes inside a second are invisible to it.
+ */
+function isFresh(req, { etag, lastModified }) {
+  const ifNoneMatch = req.header('if-none-match');
+
+  if (ifNoneMatch !== undefined) {
+    return ifNoneMatch
+      .split(',')
+      .map((candidate) => candidate.trim())
+      .some(
+        (candidate) =>
+          candidate === '*' ||
+          // A weak comparison, which is what If-None-Match requires: `W/"x"` and
+          // `"x"` are the same entity for this purpose.
+          candidate.replace(/^W\//, '') === etag,
+      );
+  }
+
+  const ifModifiedSince = req.header('if-modified-since');
+  if (ifModifiedSince === undefined) return false;
+
+  const since = Date.parse(ifModifiedSince);
+  // Both sides are HTTP-dates at one-second resolution, so `<=` is the comparison.
+  return !Number.isNaN(since) && Date.parse(lastModified) <= since;
 }
 
 // Plan §6: allow the public pages, disallow the routes that either cost us an

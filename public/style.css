@@ -511,3 +511,150 @@ pre.code code {
     max-width: var(--measure);
   }
 }
+
+/* ── /sites (§6.3) ──────────────────────────────────────────────────────────────
+   A reflowing list, NOT a table. Tables are the single most common mobile failure
+   and this row carries a title, a host, up to four badges and a date. Mobile-first:
+   the base rules stack everything, and the min-width query below spreads the meta
+   line out on wider screens. No fixed widths, no horizontal scroll at any width. */
+.site-list {
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 0;
+}
+
+.site {
+  padding: 1rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.site:last-child {
+  border-bottom: 1px solid var(--border);
+}
+
+.site__title {
+  margin: 0;
+  font-size: 1.125rem;
+  line-height: 1.35;
+  /* A long unbroken title wraps rather than widening the page. */
+  overflow-wrap: anywhere;
+}
+
+.site__host,
+.site__description,
+.site__meta {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.925rem;
+  overflow-wrap: anywhere;
+}
+
+.site__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.5rem 0 0;
+}
+
+/* ≥44px touch targets (§6.3): the row's two links are what a thumb aims at. */
+.site__title a,
+.site__meta a {
+  display: inline-block;
+  min-height: var(--tap);
+  line-height: var(--tap);
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  /* `help` because every badge carries a title= explaining itself, for the reader
+     who is two screens past the legend. */
+  cursor: help;
+}
+
+.badge--source-ns,
+.badge--rsscloud {
+  border-color: var(--brand);
+  color: var(--brand-text);
+}
+
+.badge--failing,
+.badge--blocked {
+  font-weight: 600;
+}
+
+.badge--none {
+  cursor: default;
+  color: var(--text-muted);
+}
+
+/* §6.3: "a legend explaining what the source-ns and rssCloud badges mean — nobody
+   arrives knowing that." */
+.legend {
+  margin: 1.5rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.legend h2 {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 1rem;
+}
+
+.legend__list {
+  margin: 0;
+}
+
+.legend__list dt {
+  margin-top: 0.6rem;
+}
+
+.legend__list dd {
+  margin: 0.2rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.925rem;
+}
+
+.sites__empty {
+  margin: 1.5rem 0;
+}
+
+@media (min-width: 40rem) {
+  .site {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'title  badges'
+      'host   meta'
+      'desc   desc';
+    column-gap: 1rem;
+    align-items: baseline;
+  }
+
+  .site__title {
+    grid-area: title;
+  }
+
+  .site__host {
+    grid-area: host;
+  }
+
+  .site__description {
+    grid-area: desc;
+  }
+
+  .site__badges {
+    grid-area: badges;
+    justify-content: flex-end;
+  }
+
+  .site__meta {
+    grid-area: meta;
+    text-align: right;
+  }
+}

@@ -23,8 +23,60 @@
 const bool = (value) => (value ? 1 : 0);
 const opt = (value) => value ?? null;
 
+/**
+ * §7's backstop join, as a correlated `NOT EXISTS` over `banned_hosts`.
+ *
+ * §4's predicate verbatim — **note the outer parentheses**, which are load-bearing:
+ * SQL binds AND tighter than OR, so `A OR B AND C` lets the exact-host arm ignore
+ * `path_prefix` and turns a ban on one Mastodon account into a ban on the whole
+ * instance. Written once and shared by every listing query below, because two
+ * copies of this predicate is two chances to drop a bracket.
+ *
+ * It is a *backstop*: `insertBan` already hides the matching rows. The join is what
+ * makes the OPML correct when a ban lands without touching a `sites` row at all.
+ */
+const NOT_BANNED = `
+  NOT EXISTS (
+    SELECT 1 FROM banned_hosts b
+     WHERE (    (b.host <> '' AND b.host = s.host)
+             OR (b.host_suffix <> ''
+                 AND substr(s.host, -length(b.host_suffix)) = b.host_suffix) )
+       AND (b.path_prefix = ''
+            OR substr(s.path, 1, length(b.path_prefix)) = b.path_prefix)
+  )`;
+
+// §7: "Generated on demand from `status IN ('active','failing','blocked')`."
+// `blocked` is in the list deliberately (§4, §8): being 403'd by Cloudflare from a
+// datacentre IP is not the member's failure, and dropping `blocked` from this one
+// line silently reverts that whole decision to a no-op.
+const LISTED_STATUSES = "s.status IN ('active', 'failing', 'blocked')";
+
 export function createQueries(db) {
   const statements = {
+    // §7: ordered by title. `s.id` breaks ties so the outline set — and therefore
+    // the ETag hashed from it — is stable across renders when two members share a
+    // title.
+    listOutlines: db.prepare(`
+      SELECT s.id, s.title, s.description, s.feed_url, s.url
+        FROM sites s
+       WHERE ${LISTED_STATUSES}
+         AND ${NOT_BANNED}
+       ORDER BY s.title, s.id
+    `),
+
+    // §6.3: "All members on one page, newest first" — no pagination, no LIMIT. The
+    // same listed-status set and the same ban backstop as the OPML, because /sites is
+    // "a human-readable view of what's in the OPML" and the two disagreeing is the
+    // bug the page exists to catch.
+    listMembers: db.prepare(`
+      SELECT s.id, s.title, s.description, s.url, s.host, s.feed_url,
+             s.has_source_ns, s.has_rsscloud, s.status, s.created_at
+        FROM sites s
+       WHERE ${LISTED_STATUSES}
+         AND ${NOT_BANNED}
+       ORDER BY s.created_at DESC, s.id DESC
+    `),
+
     getDirectoryVersion: db.prepare(
       'SELECT version, outline_hash, updated_at FROM directory_version WHERE id = 1',
     ),
@@ -35,6 +87,15 @@ export function createQueries(db) {
     bumpDirectoryVersion: db.prepare(
       'UPDATE directory_version SET version = version + 1 WHERE id = 1',
     ),
+
+    // The other half of §7's two steps, and the ONLY statement that writes
+    // `outline_hash`/`updated_at`. Called from the render path (`lib/opml.js`), not
+    // from a write helper — see `bumpDirectoryVersion` above.
+    saveOutlineHash: db.prepare(`
+      UPDATE directory_version
+         SET outline_hash = :outline_hash, updated_at = :updated_at
+       WHERE id = 1
+    `),
 
     // §4's cap query verbatim. The default is passed in rather than read from
     // config here so this module stays a pure statement holder.
@@ -180,6 +241,24 @@ export function createQueries(db) {
 
   return {
     getDirectoryVersion: () => statements.getDirectoryVersion.get(),
+
+    /** §7's outline set: what `/subscriptions.opml` serialises, in render order. */
+    listOutlines: () => statements.listOutlines.all(),
+
+    /** §6.3's `/sites`: the same members, newest first, all of them. */
+    listMembers: () => statements.listMembers.all(),
+
+    /**
+     * Record a freshly computed outline hash and the timestamp that goes with it.
+     *
+     * Deliberately NOT folded into `bumpDirectoryVersion`: §7 is explicit that the
+     * bump is "the *trigger to recompute*, not the thing that stamps the timestamp".
+     */
+    saveOutlineHash: ({ outlineHash, updatedAt }) =>
+      statements.saveOutlineHash.run({
+        outline_hash: outlineHash,
+        updated_at: updatedAt,
+      }),
 
     getSiteByUrl: (url) => statements.getSiteByUrl.get({ url }),
     getSiteByFeedUrl: (feedUrl) => statements.getSiteByFeedUrl.get({ feed_url: feedUrl }),

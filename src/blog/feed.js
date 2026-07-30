@@ -6,25 +6,24 @@
  * page's `<head>`. Real items arrive with the blog in phase 7. A valid channel
  * with no items is fine per §5 Step 3.
  *
- * `<source:blogroll>` is deliberately NOT emitted yet — it would point at
- * /subscriptions.opml, which does not exist until phase 6, and this feed is read
- * by exactly the crawlers that would follow it.
+ * `<source:blogroll>` joins it in phase 6, once /subscriptions.opml exists: it is
+ * the same element we detect on other people's feeds (§5 Step 6), pointed at our
+ * member list. It was withheld in phase 1 because this feed is read by exactly the
+ * crawlers that would have followed it to a 404.
  */
+
+import { escapeXml } from '../lib/xml.js';
 
 const SOURCE_NS = 'https://source.scripting.com/';
 
-export function escapeXml(value) {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
+// §6.4: one escaper, shared, rather than a second implementation here. Re-exported
+// because this was its original home.
+export { escapeXml };
 
 export function renderFeed({ config }) {
   const siteLink = new URL('/', config.siteUrl).href;
   const selfLink = new URL('/feed.xml', config.siteUrl).href;
+  const blogrollLink = new URL('/subscriptions.opml', config.siteUrl).href;
 
   return `<?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:source="${escapeXml(SOURCE_NS)}">
@@ -36,6 +35,7 @@ export function renderFeed({ config }) {
     <docs>https://www.rssboard.org/rss-specification</docs>
     <generator>iheartrss.com</generator>
     <source:self>${escapeXml(selfLink)}</source:self>
+    <source:blogroll>${escapeXml(blogrollLink)}</source:blogroll>
   </channel>
 </rss>
 `;
