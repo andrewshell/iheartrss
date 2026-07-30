@@ -74,6 +74,17 @@ export function loadConfig(env = process.env) {
     errors,
   );
 
+  // §6.4, phase 7: the blog's markdown lives in a directory that is a read-only bind
+  // mount in production (§9), and the cache is invalidated by polling max(mtime)
+  // across it — a poll interval, never a directory watch.
+  const contentDir = parseNonEmpty(env.CONTENT_DIR, './content', 'CONTENT_DIR', errors);
+  const contentPollMs = parsePositiveInt(
+    env.CONTENT_POLL_MS,
+    30000,
+    'CONTENT_POLL_MS',
+    errors,
+  );
+
   if (errors.length > 0) {
     throw new Error(
       `Invalid configuration:\n${errors.map((e) => `  - ${e}`).join('\n')}`,
@@ -94,10 +105,23 @@ export function loadConfig(env = process.env) {
     trustedProxyHops,
     maxListingsPerDomain,
     maxNewListingsPerDay,
+    contentDir,
+    contentPollMs,
     // Only the IP-HMAC key file's read-or-generate rule branches on this, and it
     // has to branch on something the deploy actually sets.
     production,
   });
+}
+
+function parseNonEmpty(raw, fallback, name, errors) {
+  if (raw === undefined) return fallback;
+
+  const value = String(raw).trim();
+  if (value === '') {
+    errors.push(`${name} must not be empty`);
+    return fallback;
+  }
+  return value;
 }
 
 function parseNonNegativeInt(raw, fallback, name, errors) {

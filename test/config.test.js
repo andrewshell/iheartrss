@@ -145,3 +145,23 @@ test('IP_HMAC_KEY_FILE defaults inside the project outside production (§9)', ()
   const prod = loadConfig({ SITE_URL: 'https://iheartrss.com', NODE_ENV: 'production' });
   assert.equal(prod.ipHmacKeyFile, '/run/secrets/ip_hmac_key');
 });
+
+// Phase 7, §6.4: the blog's content directory and its poll interval.
+
+test('the blog content knobs default to ./content and a 30s poll', () => {
+  const config = loadConfig({});
+
+  assert.equal(config.contentDir, './content');
+  assert.equal(config.contentPollMs, 30000);
+});
+
+test('the blog content knobs are taken from the environment', () => {
+  const config = loadConfig({ CONTENT_DIR: '/app/content', CONTENT_POLL_MS: '5000' });
+
+  assert.equal(config.contentDir, '/app/content');
+  assert.equal(config.contentPollMs, 5000);
+});
+
+test('a non-numeric CONTENT_POLL_MS stops the boot rather than polling never', () => {
+  assert.throws(() => loadConfig({ CONTENT_POLL_MS: 'often' }), /CONTENT_POLL_MS/);
+});

@@ -72,6 +72,39 @@ export function xmlSafeText(value) {
 }
 
 /**
+ * The same codepoint filter, for **element content** rather than an attribute value:
+ * tab, newline and carriage return survive.
+ *
+ * `xmlSafeText` normalises all three to a space, which is right for a title — every
+ * parser does it inside an attribute value anyway — and wrong for the blog feed's
+ * `<description>` and `<source:markdown>` (§6.4). Collapsing newlines there turns a
+ * fenced code block and a bulleted list into one unparseable line, which defeats the
+ * entire point of shipping the source text alongside the rendered HTML.
+ */
+export function xmlSafeContent(value) {
+  let out = '';
+
+  for (const ch of String(value)) {
+    const cp = ch.codePointAt(0);
+
+    if (cp === 0x09 || cp === 0x0a || cp === 0x0d) {
+      out += ch;
+      continue;
+    }
+    if (cp < 0x20) continue; // C0 controls
+    if (cp >= 0x7f && cp <= 0x9f) continue; // DEL + C1 controls
+    if (cp >= 0xd800 && cp <= 0xdfff) continue; // lone surrogate
+    if (cp === 0xfffe || cp === 0xffff) continue; // not Char
+    if (cp >= 0x202a && cp <= 0x202e) continue; // bidi embeddings + overrides
+    if (cp >= 0x2066 && cp <= 0x2069) continue; // bidi isolates
+
+    out += ch;
+  }
+
+  return out;
+}
+
+/**
  * Cap a string at `max` **codepoints**, never code units: slicing a string by
  * `.slice()` can cut an astral pair in half and manufacture exactly the lone
  * surrogate `xmlSafeText` exists to remove.

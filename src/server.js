@@ -10,6 +10,7 @@
 import { serve } from '@hono/node-server';
 
 import { createApp } from './app.js';
+import { createBlog } from './blog/index.js';
 import { loadConfig } from './config.js';
 import { closeDb, createDb } from './db/index.js';
 import { seedSelfListing } from './db/seed.js';
@@ -52,10 +53,22 @@ if (config.adminToken === null) {
   log('admin.disabled', { reason: 'ADMIN_TOKEN is not set' });
 }
 
+// §12 phase 7: the blog is loaded at boot, so a broken post is visible immediately
+// rather than on the first request. Its cache is invalidated by polling max(mtime)
+// across content/ (§6.4) — no timer to stop on shutdown, because the poll happens on
+// read rather than on an interval.
+const blog = createBlog({
+  dir: config.contentDir,
+  pollMs: config.contentPollMs,
+  log,
+});
+log('blog.ready', { dir: config.contentDir, posts: blog.posts().length });
+
 const app = createApp({
   config,
   db,
   queries,
+  blog,
   ipHmacKey,
   checkHealth: () => probeDataDirectory({ databasePath: config.databasePath }),
 });

@@ -27,6 +27,31 @@ documented in `.env.example` and validated at startup: a bad value stops the
 process with a message naming the variable, rather than surfacing three requests
 later.
 
+## Writing a blog post
+
+Posts are markdown files in `content/`, named by date:
+
+```
+content/2026-07-29.md                   → /blog/2026/07/29
+content/2026-07-29-a-second-one.md      → /blog/2026/07/29/a-second-one
+```
+
+Frontmatter is optional, and so is everything in it — `title:` and `time:` (UTC,
+`HH:MM`) are the only keys read, and the parser is a flat `key: value` one: no
+nesting, no lists. A post with no title is **not** a mistake; it goes out as an
+RSS item with a `<description>` and no `<title>`, and is headed on the page by its
+date.
+
+`pubDate` defaults to **midday UTC**, not midnight, so an evening post in US
+Central doesn't show up on the previous day for readers elsewhere. Two posts on
+one date are ordered by their `time:`, then by filename.
+
+In production `content/` is a read-only bind mount (see `docker-compose.yml`), so
+publishing is a file copy — no rebuild, no restart. The loader re-reads it when
+`max(mtime)` across the `.md` files changes, checked at most every
+`CONTENT_POLL_MS` (default 30s), which means an **edit** to an existing post is
+picked up too, not only a new file.
+
 ## Deploying
 
 The stack runs under [dockge](https://github.com/louislam/dockge) behind an

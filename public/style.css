@@ -245,8 +245,14 @@ code {
 /*
  * §6.3: a long snippet line scrolls INSIDE its own container. The page itself
  * must never scroll sideways.
+ *
+ * `pre.code` is the hand-written snippet on /badge and /guide; the bare `pre` is
+ * what marked emits for a fenced block in a blog post (§6.4) — it cannot carry our
+ * class, so both selectors get the same treatment rather than the blog getting a
+ * page that scrolls sideways on a phone.
  */
-pre.code {
+pre.code,
+.post__body pre {
   background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 0.5rem;
@@ -255,7 +261,8 @@ pre.code {
   max-width: 100%;
 }
 
-pre.code code {
+pre.code code,
+.post__body pre code {
   background: none;
   padding: 0;
   white-space: pre;
@@ -657,4 +664,111 @@ pre.code code {
     grid-area: meta;
     text-align: right;
   }
+}
+
+/* ------------------------------------------------------------------ blog -- */
+
+/*
+ * §6.3: a readable measure for running prose. `--measure` is narrower than
+ * `--page-max` on purpose — long lines are the one typographic mistake that makes
+ * a blog physically tiring to read — and it is a `max-width`, so a phone still
+ * gets the full column.
+ */
+.prose {
+  max-width: var(--measure);
+}
+
+.prose h1 {
+  font-size: var(--step-3);
+  line-height: 1.2;
+  margin-bottom: 0.25rem;
+}
+
+.blog-index {
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  max-width: var(--measure);
+}
+
+.blog-index__item {
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.blog-index__item:last-child {
+  border-bottom: 0;
+}
+
+.blog-index__title {
+  font-size: var(--step-1);
+  margin: 0;
+  line-height: 1.3;
+}
+
+/* ≥44px touch targets on every link in a list of them (§6.3). */
+.blog-index__title a {
+  display: inline-block;
+  min-height: var(--tap);
+  padding: 0.35rem 0;
+}
+
+.blog-index__date,
+.post__date {
+  margin: 0.15rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.blog-index__empty {
+  color: var(--text-muted);
+}
+
+.post__title {
+  font-size: var(--step-3);
+  line-height: 1.2;
+  margin-bottom: 0.25rem;
+}
+
+.post__body > :first-child {
+  margin-top: 1rem;
+}
+
+.post__body h2 {
+  font-size: var(--step-2);
+  line-height: 1.25;
+}
+
+.post__body h3 {
+  font-size: var(--step-1);
+}
+
+.post__body blockquote {
+  margin: 1rem 0;
+  padding: 0.1rem 0 0.1rem 1rem;
+  border-left: 3px solid var(--border);
+  color: var(--text-muted);
+}
+
+/* A wide table in a post scrolls inside its own container, like a code block. */
+.post__body table {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.post__footer {
+  margin-top: 2rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+.latest {
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.latest .post__title {
+  font-size: var(--step-2);
 }

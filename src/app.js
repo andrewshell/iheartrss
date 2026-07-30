@@ -6,7 +6,9 @@ import { renderFeed } from './blog/feed.js';
 import { createIpHasher } from './lib/iphash.js';
 import { createOpmlDocument } from './lib/opml.js';
 import { createRateLimiter, createSemaphore } from './lib/ratelimit.js';
+import { renderSitemap } from './lib/sitemap.js';
 import { registerAdmin } from './routes/admin.js';
+import { registerBlog } from './routes/blog.js';
 import { registerStatic } from './routes/static.js';
 import { registerSubmit } from './routes/submit.js';
 import { createFetcher } from './verify/fetch.js';
@@ -32,6 +34,7 @@ export function createApp({
   config,
   db = null,
   queries = null,
+  blog = emptyBlog(),
   checkHealth = () => ({ ok: true }),
   verifySite = null,
   persist = null,
@@ -113,7 +116,13 @@ export function createApp({
   });
 
   app.get('/', (c) =>
-    c.html(homePage({ config, memberCount: queries === null ? 0 : queries.countSites() })),
+    c.html(
+      homePage({
+        config,
+        memberCount: queries === null ? 0 : queries.countSites(),
+        latestPost: blog.latest(),
+      }),
+    ),
   );
   app.get('/about', (c) => c.html(aboutPage({ config })));
   app.get('/badge', (c) => c.html(badgePage({ config })));
@@ -125,6 +134,7 @@ export function createApp({
 
   registerSubmit(app, deps);
   registerAdmin(app, deps);
+  registerBlog(app, { config, blog });
 
   // ── The OPML subscription list (§7) ──────────────────────────────────────────
   const opml = createOpmlDocument({ queries: queries ?? emptyDirectory(), config });
@@ -159,14 +169,26 @@ export function createApp({
     c.redirect('/subscriptions.opml', 301),
   );
 
+  // §6: an alias, because /rss.xml is what half the world types. Registered before
+  // registerStatic so it wins over any same-named file in public/.
+  app.get('/rss.xml', (c) => c.redirect('/feed.xml', 301));
+
   app.get('/feed.xml', (c) =>
-    c.body(renderFeed({ config }), 200, {
+    c.body(renderFeed({ config, posts: blog.posts() }), 200, {
       'Content-Type': 'application/rss+xml; charset=utf-8',
     }),
   );
 
+  // §6: "Search is the growth channel" — static pages plus every post.
+  app.get('/sitemap.xml', (c) =>
+    c.body(renderSitemap({ config, posts: blog.posts() }), 200, {
+      'Content-Type': 'application/xml; charset=utf-8',
+      'X-Content-Type-Options': 'nosniff',
+    }),
+  );
+
   app.get('/robots.txt', (c) =>
-    c.text(robotsTxt(), 200, {
+    c.text(robotsTxt(config), 200, {
       'Content-Type': 'text/plain; charset=utf-8',
     }),
   );
@@ -198,6 +220,16 @@ function emptyDirectory() {
     listOutlines: () => [],
     saveOutlineHash: () => {},
   };
+}
+
+/**
+ * A blog with no `content/` directory behind it. Same reasoning as
+ * `emptyDirectory()`: every route answers, and the feed stays valid with zero items
+ * (§5 Step 3), so a test that does not care about posts does not have to build a
+ * temporary directory to get one.
+ */
+function emptyBlog() {
+  return { posts: () => [], latest: () => null, refresh: () => {} };
 }
 
 /**
@@ -233,9 +265,9 @@ function isFresh(req, { etag, lastModified }) {
 
 // Plan §6: allow the public pages, disallow the routes that either cost us an
 // outbound fetch (/check, /recheck), leak state (/status) or are private (/admin).
-// The `Sitemap:` line lands with /sitemap.xml in phase 7; pointing crawlers at a
-// 404 until then is worse than omitting it.
-function robotsTxt() {
+// The `Sitemap:` line arrives here in phase 7, with the /sitemap.xml it names —
+// pointing crawlers at a 404 for six phases would have been worse than omitting it.
+function robotsTxt(config) {
   return [
     'User-agent: *',
     'Allow: /',
@@ -243,6 +275,8 @@ function robotsTxt() {
     'Disallow: /check',
     'Disallow: /recheck',
     'Disallow: /status',
+    '',
+    `Sitemap: ${new URL('/sitemap.xml', config.siteUrl).href}`,
     '',
   ].join('\n');
 }
