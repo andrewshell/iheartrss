@@ -119,39 +119,41 @@ test('the listing caps have the §9 defaults and must be positive', () => {
   );
 });
 
-test('IP_HMAC_KEY_FILE defaults to the mounted secret path', () => {
-  // §9: a FILE, not an env var — an env var sits in `docker inspect`, in dockge's
-  // UI, and in any .env backed up beside ./data. The mounted path is the PRODUCTION
-  // default only; see the dev-default test below for why that distinction matters.
-  assert.equal(
-    loadConfig({ NODE_ENV: 'production' }).ipHmacKeyFile,
-    '/run/secrets/ip_hmac_key',
-  );
-  assert.equal(
-    loadConfig({ IP_HMAC_KEY_FILE: './data/key' }).ipHmacKeyFile,
-    './data/key',
-  );
-  assert.throws(() => loadConfig({ IP_HMAC_KEY_FILE: '  ' }), /IP_HMAC_KEY_FILE/);
+// The same 32 bytes (0x00…0x1f) written the two ways an operator plausibly would.
+// Both literals are fixed here rather than derived from one another, so a decoding
+// bug cannot make the test quietly agree with itself.
+const KEY_HEX = '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f';
+const KEY_BASE64 = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=';
+
+test('IP_HMAC_KEY is decoded from hex or base64 to the same 32 bytes', () => {
+  // One configuration path: the key arrives in the .env dockge already manages,
+  // so there is no file to create over ssh before the first deploy.
+  const fromHex = loadConfig({ IP_HMAC_KEY: KEY_HEX }).ipHmacKey;
+  const fromBase64 = loadConfig({ IP_HMAC_KEY: KEY_BASE64 }).ipHmacKey;
+
+  assert.equal(fromHex.length, 32);
+  assert.equal(fromHex[0], 0x00);
+  assert.equal(fromHex[31], 0x1f);
+  assert.deepEqual(fromBase64, fromHex);
 });
 
-test('production is derived from NODE_ENV, because the key file rules differ', () => {
+test('a short IP_HMAC_KEY stops the boot and says how to make a real one', () => {
+  // 16 bytes written as 32 hex characters — the exact mistake the byte-count rule
+  // exists to catch, since it *looks* the right sort of length.
+  assert.throws(() => loadConfig({ IP_HMAC_KEY: '0123456789abcdef0123456789abcdef' }), {
+    message: /IP_HMAC_KEY must be at least 32 bytes.*openssl rand -hex 32/s,
+  });
+
+  // A passphrase is neither hex nor base64 and must not be used as raw bytes.
+  assert.throws(
+    () => loadConfig({ IP_HMAC_KEY: 'correct horse battery staple' }),
+    /IP_HMAC_KEY/,
+  );
+});
+
+test('production is derived from NODE_ENV, because the missing-key rule differs', () => {
   assert.equal(loadConfig({}).production, false);
   assert.equal(loadConfig({ NODE_ENV: 'production' }).production, true);
-});
-
-test('IP_HMAC_KEY_FILE defaults inside the project outside production (§9)', () => {
-  // Regression: the default was the production path /run/secrets/ip_hmac_key in every
-  // environment, so `pnpm dev` died at boot trying to mkdir a root-owned system directory.
-  // Tests never caught it because they inject the key directly.
-  const dev = loadConfig({ SITE_URL: 'https://iheartrss.com' });
-  assert.equal(dev.production, false);
-  assert.ok(
-    !dev.ipHmacKeyFile.startsWith('/run/'),
-    `dev default must stay inside the project, got ${dev.ipHmacKeyFile}`,
-  );
-
-  const prod = loadConfig({ SITE_URL: 'https://iheartrss.com', NODE_ENV: 'production' });
-  assert.equal(prod.ipHmacKeyFile, '/run/secrets/ip_hmac_key');
 });
 
 // Phase 7, §6.4: the blog's content directory and its poll interval.

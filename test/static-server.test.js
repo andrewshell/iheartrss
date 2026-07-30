@@ -131,7 +131,7 @@ test('src/server.js survives serving a static file', async () => {
         // fails the boot before the listener is ever created.
         PORT: '8390',
         DATABASE_PATH: join(dir, 'test.db'),
-        IP_HMAC_KEY_FILE: join(dir, 'key'),
+        IP_HMAC_KEY: 'ab'.repeat(32),
         REVALIDATE_ENABLED: 'false',
         BACKUP_ENABLED: 'false',
       },

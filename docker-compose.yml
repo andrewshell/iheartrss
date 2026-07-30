@@ -6,21 +6,21 @@
 #
 #   * the image is PULLED, never built here — `build:` would have nothing to build
 #   * blog posts come from inside the image, not a bind mount
-#   * `./data` and `./secrets` are resolved relative to the stack directory, and
-#     dockge creates them on first up (see the two prerequisites below)
+#   * `./data` is resolved relative to the stack directory, and dockge creates it
+#     on first up (see the one prerequisite below)
 #
 # TLS is terminated by the existing reverse proxy, not here.
 #
-# TWO THINGS TO DO BEFORE THE FIRST START, from dockge's terminal (or ssh), in
+# ONE THING TO DO BEFORE THE FIRST START, from dockge's terminal (or ssh), in
 # /opt/stacks/iheartrss:
 #
 #   mkdir -p data && sudo chown 1000:1000 data
-#   mkdir -p secrets && head -c 32 /dev/urandom | base64 > secrets/ip_hmac_key && chmod 600 secrets/ip_hmac_key
 #
 # The chown is not optional: the container runs as uid 1000 and Docker creates a
-# missing bind-mount target as root, so boot fails with EACCES. And the key must
-# exist as a FILE first — Docker silently creates a *directory* at a mount path
-# that does not exist yet, which fails in a much more confusing way.
+# missing bind-mount target as root, so boot fails with EACCES.
+#
+# Everything else, IP_HMAC_KEY included, goes in the .env you paste into dockge
+# beside this file — there is no secret file to create over ssh first.
 #
 # See README.md, "Deploying".
 
@@ -61,9 +61,9 @@ services:
       - '127.0.0.1:3000:3000'
 
     # Everything operator-specific lives in the .env dockge manages beside this
-    # file: SITE_URL, ADMIN_TOKEN, IHEARTRSS_TAG, HEALTHCHECK_PING_URL, and any
-    # knob from .env.example you want to override. See .env.example for the full
-    # list with defaults.
+    # file: SITE_URL, ADMIN_TOKEN, IP_HMAC_KEY, IHEARTRSS_TAG, HEALTHCHECK_PING_URL,
+    # and any knob from .env.example you want to override. See .env.example for the
+    # full list with defaults.
     env_file:
       - .env
 
@@ -73,7 +73,6 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - DATABASE_PATH=/data/iheartrss.db
-      - IP_HMAC_KEY_FILE=/run/secrets/ip_hmac_key
       # Behind the reverse proxy. One proxy in front means 0 hops past the
       # rightmost XFF entry, not 1 — see §6 and .env.example.
       - TRUST_PROXY=true
@@ -82,11 +81,9 @@ services:
     volumes:
       # Must exist and be owned by uid 1000 before the first start. Nightly
       # backups land in ./data/backups/YYYY-MM-DD.db (§9), so this directory is
-      # what an off-box copy has to pull. NOT together with ./secrets — see below.
+      # what an off-box copy has to pull. The IP HMAC key is NOT in here — it is
+      # in the .env, which is backed up separately (see RUNBOOK.md).
       - ./data:/data
-      # NOT under ./data: the IP HMAC key living beside the database it protects
-      # would travel with it in one backup tarball, defeating the point.
-      - ./secrets/ip_hmac_key:/run/secrets/ip_hmac_key:ro
       # No ./content mount. Posts ship in the image — a bind mount here would mask
       # them with an empty directory on a box that has no repo, which is exactly
       # how the blog silently renders empty.
