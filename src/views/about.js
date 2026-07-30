@@ -104,9 +104,8 @@ export function aboutPage({ config }) {
     <strong>Submission records are deleted after 90 days.</strong>
   </p>
   <p>
-    There are no analytics, no third-party scripts and no tracking of any kind. The only
-    cookie this site ever sets is the session cookie for the administrator&rsquo;s own login
-    page.
+    There are no analytics, no third-party scripts and no tracking of any kind, and
+    browsing this site sets no cookies.
   </p>
 </section>
 

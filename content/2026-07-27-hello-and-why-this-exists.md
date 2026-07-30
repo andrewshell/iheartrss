@@ -27,10 +27,10 @@ A few things we decided early, and will keep saying out loud:
   ecosystem we want to plug into speaks 2.0, and "we accept everything" is how a
   directory ends up unable to promise anything. [The guide](/guide) explains how to
   publish an RSS 2.0 feed on every common platform.
-- **No accounts, no email, no cookies** except the one that logs the admin in. What
-  we store is on [the about page](/about), in plain language, including exactly what
-  we do with your IP address (hash it, truncated and keyed, and throw the record away
-  after 90 days).
+- **No accounts, no email, no tracking.** Browsing this site sets no cookies at all.
+  What we store is on [the about page](/about), in plain language, including exactly
+  what we do with your IP address (hash it, truncated and keyed, and throw the record
+  away after 90 days).
 - **Everything readable as a feed.** Including this blog, which you can find at
   [/feed.xml](/feed.xml). A site about loving RSS that did not publish one would be
   a bad joke.
