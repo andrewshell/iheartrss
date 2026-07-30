@@ -733,9 +733,18 @@ blog-roll details:last-child {
  * ≥44px target (§6.3) with the padding included, not a bare line of text.
  *
  * `flex` rather than the default, so the title and the relative time sit on one
- * line and wrap together on a narrow screen. The marker is restored explicitly:
- * a flex `<summary>` loses the disclosure triangle in WebKit, and the triangle is
- * the only affordance saying the row opens.
+ * line and wrap together on a narrow screen.
+ *
+ * THE MARKER: `display: flex` removes the disclosure triangle outright, in every
+ * engine — not just WebKit. A `<summary>` is `display: list-item` by default, and
+ * the triangle is its `::marker`; setting any other `display` means there is no
+ * marker box left to style. An earlier attempt at `list-style: revert` plus a
+ * `::marker` colour could not work for that reason, and left the rows looking like
+ * plain text with nothing to say they open.
+ *
+ * So the caret is drawn here instead, and rotating it on open says more than a
+ * static triangle does. `prefers-reduced-motion` already neutralises the
+ * transition globally, including on `::before`.
  */
 blog-roll summary {
   display: flex;
@@ -747,11 +756,28 @@ blog-roll summary {
   font-size: var(--step-1);
   line-height: 1.3;
   cursor: pointer;
-  list-style: revert;
 }
 
-blog-roll summary::marker {
-  color: var(--brand-text);
+/* Older WebKit draws its own marker through a pseudo-element that survives the
+   display change, which would otherwise sit next to ours. */
+blog-roll summary::-webkit-details-marker {
+  display: none;
+}
+
+blog-roll summary::before {
+  content: '';
+  /* Sized in em so it tracks the summary's font-size rather than drifting from it. */
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  border-left: 0.42em solid var(--brand-text);
+  border-top: 0.32em solid transparent;
+  border-bottom: 0.32em solid transparent;
+  transition: transform 120ms ease;
+}
+
+blog-roll details[open] > summary::before {
+  transform: rotate(90deg);
 }
 
 /* Both the per-feed time in a summary and the per-item time in the list. */
