@@ -36,6 +36,13 @@ curl -s http://127.0.0.1:3000/healthz | node -e 'process.stdin.on("data",d=>cons
 docker inspect --format '{{.State.Health.Status}}' iheartrss  # healthy | unhealthy
 ```
 
+**Every `127.0.0.1:3000` in this file assumes the default port.** If `PORT` is set in
+your `.env`, substitute it — the container, the published port and the healthcheck all
+follow `PORT`, but these copy-paste commands do not. A container reported `unhealthy`
+while the site itself works is worth checking against here first: it once meant the
+probe was hardcoded to 3000 while the app listened elsewhere, which looks exactly like
+an outage and is not one.
+
 ---
 
 ## Backups: what exists, without you doing anything

@@ -58,7 +58,11 @@ services:
       # TRUST_PROXY=true, anyone connecting directly could then set
       # X-Forwarded-For to anything — defeating every rate limit, poisoning every
       # logged IP hash, and exposing /admin over plaintext.
-      - '127.0.0.1:3000:3000'
+      #
+      # Both sides follow PORT, so an operator who sets it in .env gets a mapping
+      # that still reaches the app. Hardcoding 3000 here made PORT a knob that
+      # .env.example documents and this file silently ignores.
+      - '127.0.0.1:${PORT:-3000}:${PORT:-3000}'
 
     # Everything operator-specific lives in the .env dockge manages beside this
     # file: SITE_URL, ADMIN_TOKEN, IP_HMAC_KEY, IHEARTRSS_TAG, HEALTHCHECK_PING_URL,
@@ -71,7 +75,11 @@ services:
     # than an operator preference, are hardcoded here.
     environment:
       - NODE_ENV=production
-      - PORT=3000
+      # `environment` beats `env_file`, so a literal PORT=3000 here overrode whatever
+      # the operator put in .env — the app kept listening on 3000 while every other
+      # part of the stack was told otherwise. It defaults rather than disappears,
+      # because the port is still a property of this container when nobody sets it.
+      - PORT=${PORT:-3000}
       - DATABASE_PATH=/data/iheartrss.db
       # Behind the reverse proxy. One proxy in front means 0 hops past the
       # rightmost XFF entry, not 1 — see §6 and .env.example.
@@ -91,12 +99,20 @@ services:
     healthcheck:
       # Only the HTTP status is inspected, which is why /healthz answers 503
       # rather than a 200 carrying {ok:false}.
+      #
+      # The port is read from the container's own PORT, never written literally: a
+      # hardcoded 3000 checks a port nothing is listening on as soon as anyone
+      # changes it, and reports that as "unhealthy" — the app looks broken when only
+      # the probe is. `process.env.PORT` rather than a `$PORT` expansion on purpose:
+      # CMD (not CMD-SHELL) has no shell to expand it, and compose would substitute a
+      # literal `$PORT` itself, from the HOST environment, before the container ever
+      # sees this line.
       test:
         [
           'CMD',
           'node',
           '-e',
-          "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
       interval: 60s
       timeout: 5s

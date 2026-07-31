@@ -64,7 +64,16 @@ EXPOSE 3000
 # Only the HTTP status is inspected, which is why /healthz answers 503 (not a
 # 200 carrying {ok:false}) when a dependency is down. start_period covers boot
 # so the first checks do not burn the retry budget.
+#
+# The port comes from `process.env.PORT`, matching what `config.js` reads, because a
+# hardcoded 3000 here is a healthcheck that tests a port nothing is listening on the
+# moment an operator sets PORT — and it fails as "unhealthy", i.e. as if the app were
+# broken, which is the most expensive way for this to be wrong. Read inside node
+# rather than as a `$PORT` shell expansion: the exec-form CMD has no shell, and in
+# compose a literal `$PORT` would be substituted by compose itself at parse time
+# (from the host environment, usually to an empty string) long before the container
+# ever sees it.
 HEALTHCHECK --interval=60s --timeout=5s --start-period=15s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "src/server.js"]
