@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createApp } from '../src/app.js';
+import { USER_AGENT } from '../src/lib/useragent.js';
 import { parseFeed } from '../src/verify/feed.js';
 
 const config = {
@@ -54,6 +55,58 @@ test('GET /about explains what we fetch and how to be removed', async () => {
   assert.match(html, /six days/i);
   assert.match(html, /How to be removed/i);
   assert.match(html, /within a week/i);
+});
+
+test('the contact address every dead-end message points at actually exists', async () => {
+  const app = createApp({ config });
+  const html = await (await app.request('/about')).text();
+
+  // Four rejection messages send people to "the contact address on the about page",
+  // and /about itself offers email as the fast half of the removal promise. For a
+  // while there was no address on the page at all, which made every one of those a
+  // dead end — worst of all `banned`, the one message with nothing to fix, whose
+  // entire remedy is an address.
+  assert.match(html, /href="mailto:[^"]+@[^"]+"/);
+
+  // Both places that promise it: removal, and reporting someone else.
+  const removal = html.slice(html.indexOf('How to be removed'));
+  assert.match(
+    removal.slice(0, 1200),
+    /mailto:/,
+    'the removal section offers no address',
+  );
+  assert.match(
+    html.slice(html.indexOf('Reporting a listed site')),
+    /mailto:/,
+    'the reporting section offers no address',
+  );
+});
+
+test('/about promises nothing it cannot deliver about our source IP', async () => {
+  const app = createApp({ config });
+  const html = await (await app.request('/about')).text();
+
+  // It used to say the outbound IP would be "published here once the service is
+  // deployed" — still there, unfulfilled, long after deployment. A public feed is
+  // meant to be fetchable by anyone, not by an allowlisted address, so the promise
+  // was withdrawn rather than kept.
+  assert.doesNotMatch(html, /source IP is published/i);
+  // The identification that does the same job is still offered.
+  assert.match(html, /User-Agent/);
+});
+
+test('the User-Agent /about prints is the one we actually send', async () => {
+  const app = createApp({ config });
+  const html = await (await app.request('/about')).text();
+
+  // /about used to print a hand-written approximation — a version number we never
+  // sent, and a doubled slash from appending `/about` to a SITE_URL that already ends
+  // in one. An operator who wrote the allowlist rule this page asks for would have
+  // matched nothing and gone on blocking us, which is the one outcome the section
+  // exists to prevent. Same constant on both sides now.
+  assert.match(html, new RegExp(USER_AGENT.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.doesNotMatch(html, /iheartrss\.com\/1\.0/);
+  assert.doesNotMatch(html, /com\/\/about/);
 });
 
 test('GET /feed.xml is an RSS 2.0 document declaring the source namespace', async () => {

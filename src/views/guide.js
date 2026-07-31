@@ -55,9 +55,11 @@ export function guidePage({ config }) {
     that&rsquo;s the page we read.
   </p>
   <p>
-    <code>type="application/rss+xml"</code> exactly. <code>text/xml</code> and
-    <code>application/atom+xml</code> are the two spellings that get sites rejected
-    here.
+    We match on <code>type="application/rss+xml"</code> exactly. An Atom feed correctly
+    labelled <code>application/atom+xml</code> won&rsquo;t match &mdash; that tag is
+    right, it just isn&rsquo;t the format we list &mdash; and neither will a generic
+    <code>text/xml</code>. If your RSS feed is advertised as <code>text/xml</code>,
+    changing that one attribute is the whole fix.
   </p>
   <p>
     If your page advertises several feeds, we take the first RSS 2.0 one. Put the one

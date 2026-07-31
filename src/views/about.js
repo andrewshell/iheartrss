@@ -1,6 +1,24 @@
 import { html } from 'hono/html';
 
+import { USER_AGENT } from '../lib/useragent.js';
 import { layout } from './layout.js';
+
+/**
+ * The one address, and the reason it is a constant here rather than repeated inline.
+ *
+ * Four rejection messages (`banned`, `ambiguous_identity`, `domain_cap`, `error`) and
+ * both halves of this page point at "the contact address on the about page" — so this
+ * page is the single place it can live, and every one of those messages is a dead end
+ * until it does. `banned` is the sharpest case: it is the one message with nothing for
+ * the reader to fix, and an address is the entire remedy it offers.
+ *
+ * Not in `config`: it is not deployment-varying the way `SITE_URL` is, and a
+ * `CONTACT_EMAIL` env var nobody sets would make an unconfigured deploy publish an
+ * empty `mailto:` — the failure this constant exists to prevent.
+ */
+const CONTACT = 'andrew@iheartrss.com';
+
+const contactLink = html`<a href="mailto:${CONTACT}">${CONTACT}</a>`;
 
 export function aboutPage({ config }) {
   const body = html`
@@ -40,11 +58,10 @@ export function aboutPage({ config }) {
     If you would rather allowlist us in Cloudflare or a WAF than block us, our requests are
     identifiable by their <code>User-Agent</code>, which names this page:
   </p>
-  <pre class="code"><code>iheartrss.com/1.0 (+${config.siteUrl}/about)</code></pre>
+  <pre class="code"><code>${USER_AGENT}</code></pre>
   <p>
-    Our outbound source IP is published here once the service is deployed. If we are being
-    blocked, we mark the listing as blocked rather than dropping it &mdash; being behind a
-    bot filter should not cost anyone their place on the list.
+    If we are being blocked, we mark the listing as blocked rather than dropping it
+    &mdash; being behind a bot filter should not cost anyone their place on the list.
   </p>
 </section>
 
@@ -60,8 +77,8 @@ export function aboutPage({ config }) {
       is not instant.
     </li>
     <li>
-      <strong>Email us</strong> and we will remove the listing straight away, no questions
-      and no account required.
+      <strong>Email ${contactLink}</strong> and we will remove the listing straight away,
+      no questions and no account required.
     </li>
   </ul>
   <p>
@@ -124,7 +141,8 @@ export function aboutPage({ config }) {
   <p>
     If a listed site is spam, malware, or otherwise should not be here, report it and we will
     look at it. Anything listed can be hidden, and any domain can be banned.
-    <a href="/report">Use the report form</a>, or email &mdash; both reach a person.
+    <a href="/report">Use the report form</a>, or email ${contactLink} &mdash; both reach a
+    person.
   </p>
 </section>
 `;

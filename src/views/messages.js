@@ -31,11 +31,16 @@ const MESSAGES = {
     </p>`,
   }),
 
+  // Not "if your site is on the web, its address starts with https" — a Gemini capsule
+  // is a site, its author is squarely the kind of person this directory is for, and
+  // being told otherwise by a link-in-your-page directory is a poor welcome. The limit
+  // is ours: our fetcher speaks two schemes.
   unsupported_scheme: () => ({
     heading: 'We can only fetch http and https',
     body: html`<p>
-      Whatever is behind that scheme, we have no way to read it. If your site is on the
-      web, its address starts with <code>https://</code>.
+      Our fetcher speaks those two and nothing else, so we have no way to read that
+      address. If the same site is also reachable over <code>https://</code>, submit
+      that URL and we&rsquo;ll check it.
     </p>`,
   }),
 

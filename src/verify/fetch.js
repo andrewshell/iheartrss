@@ -7,11 +7,10 @@ import { isIP } from 'node:net';
 
 import { Agent, fetch as undiciFetch } from 'undici';
 
+import { USER_AGENT } from '../lib/useragent.js';
 import { isAllowedAddress } from './url.js';
 
 const MAX_REDIRECTS = 5;
-
-const USER_AGENT = 'iheartrss.com validator (+https://iheartrss.com/about)';
 
 const DEFAULT_HEADERS = Object.freeze({
   'user-agent': USER_AGENT,
