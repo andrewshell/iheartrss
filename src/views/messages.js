@@ -135,6 +135,12 @@ const MESSAGES = {
 
   // §1: RSS-2.0-only is our decision, so the cost of it is ours to carry. This
   // message is the site's pitch, not a validator complaint.
+  //
+  // It used to argue that RSS 2.0 is "the format they all agree on". That is a claim
+  // about readers, it is not true — Atom support is near-universal — and it was being
+  // made to the one person on the site who has just been told their Atom feed is
+  // unwelcome. Taste is a defensible reason to be narrow; a wrong technical claim is
+  // not, and it invites an argument we would lose.
   feed_not_rss2: ({ result }) => ({
     heading: 'We found a feed, just not an RSS 2.0 one',
     body: html`<p>
@@ -147,10 +153,10 @@ const MESSAGES = {
       That's a perfectly good feed &mdash; we're the narrow ones here.
     </p>
     <p>
-      We list RSS 2.0 only, because the whole point of this directory is one OPML file
-      that every reader can subscribe to, and RSS 2.0 is the format they all agree on.
-      It also carries <code>&lt;cloud&gt;</code> and the
-      <code>source:</code> extensions the rest of this ecosystem is built on.
+      We're a community of RSS enthusiasts, and listing RSS 2.0 only is a preference
+      rather than a verdict on your feed. It is also the format that carries
+      <code>&lt;cloud&gt;</code> and the <code>source:</code> extensions the rest of
+      this corner of the web is built on.
     </p>
     <p>
       Almost every generator can emit both, and keeping your Atom feed costs you
