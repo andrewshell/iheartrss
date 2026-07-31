@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.3.0...iheartrss-v0.4.0) (2026-07-31)
+
+
+### Features
+
+* advertise and ping rssCloud for the OPML ([6538007](https://github.com/andrewshell/iheartrss/commit/6538007cac5b8c087e8339269825400f8153937a))
+
+
+### Bug Fixes
+
+* allow the webmanifest under CSP with manifest-src 'self' ([e4ffc9e](https://github.com/andrewshell/iheartrss/commit/e4ffc9edbefe538b9e7ba696d53a77c690f1af4a))
+* give /about a contact address, and stop it promising things ([4e62b09](https://github.com/andrewshell/iheartrss/commit/4e62b09264cd0e6a69ec190296ef51afd744a8e2))
+* make the admin dashboard scannable ([e11fb68](https://github.com/andrewshell/iheartrss/commit/e11fb68285407100557c25b816737c11a19bc487))
+* stop claiming RSS 2.0 is the format every reader agrees on ([553541b](https://github.com/andrewshell/iheartrss/commit/553541ba1841defcbe529e0dc86b148f72a19ec0))
+
 ## [0.3.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.2.0...iheartrss-v0.3.0) (2026-07-30)
 
 
