@@ -389,8 +389,14 @@ pre.code code,
   margin-bottom: 0.4rem;
 }
 
+/* Every text-ish field, not just the two the public forms happen to use. `password`
+   (the admin login) and `number` (the per-domain cap) were missing, so those two
+   rendered as bare browser defaults — a hairline box a third the height of every
+   other field on the same form. */
 .submit-form input[type='url'],
 .submit-form input[type='text'],
+.submit-form input[type='password'],
+.submit-form input[type='number'],
 .submit-form textarea {
   display: block;
   width: 100%;
@@ -541,8 +547,12 @@ pre.code code,
     align-items: center;
   }
 
+  /* Same list as the base rule above — the two have to stay in step, or the type
+     that is missing here stretches 40px past every field stacked with it. */
   .submit-form input[type='url'],
   .submit-form input[type='text'],
+  .submit-form input[type='password'],
+  .submit-form input[type='number'],
   .submit-form textarea {
     max-width: var(--measure);
   }
@@ -914,7 +924,8 @@ blog-roll li a {
    operator. Same §6.3 rule as everywhere else: reflowing lists, never tables —
    the dashboard gets used from a phone at least as often as from a desk. */
 .admin-list,
-.admin-histogram {
+.admin-histogram,
+.admin-caps {
   list-style: none;
   margin: 0.75rem 0 0;
   padding: 0;
@@ -924,55 +935,175 @@ blog-roll li a {
 }
 
 .admin-list li,
-.admin-histogram li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem;
+.admin-histogram li,
+.admin-caps li {
   padding-bottom: 0.6rem;
   border-bottom: 1px solid var(--border);
 }
 
-.admin-list li > *,
-.admin-histogram li > * {
+/* Grid, not a baseline flex row.
+
+   As one flex line these rows read as a ragged sentence: the reason box started
+   wherever the title happened to end, so no two Hide buttons in a list shared an x
+   position and a long title pushed the control onto its own unindented line. Each
+   <li> is its own grid — columns can only line up across rows if the tracks are
+   *definite*, which is why the action column is a length rather than `auto`. */
+.admin-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+/* Only the lists that carry a control get an action column. A blanket second track
+   reserved 18rem of empty space on the submissions and bans lists, so their URLs
+   wrapped at 60% of the panel with nothing beside them. */
+@media (min-width: 40rem) {
+  .admin-list--actions li {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 18rem);
+    align-items: start;
+    column-gap: 1rem;
+  }
+}
+
+/* The text column: title above its meta line, rather than both on one baseline.
+   `minmax(0, …)` above and `min-width: 0` here are the pair that stops a long
+   unbroken URL from setting the column's minimum and shoving the action out of
+   the panel. */
+.admin-row__main {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.admin-row__title {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+/* `code` carries a background, and a stretched grid item or flex item fills its
+   track — which drew a full-width tinted bar behind every reason code in the
+   histogram. Read as a chart that would be four bars all at 100%, which is a worse
+   answer than no chart. Shrink each one back to its own text. */
+.admin-row__main > code,
+.admin-histogram li > code,
+.admin-caps li > code {
+  justify-self: start;
+  align-self: start;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* A timestamp is one value; breaking it after the date puts the clock time on the
+   next line looking like a separate fact. */
+.lede time,
+.admin-meta time {
+  white-space: nowrap;
 }
 
 .admin-meta {
   color: var(--text-muted);
   font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+/* Muted separators: the facts are what should be read, not the punctuation between
+   them. */
+.admin-meta [aria-hidden='true'] {
+  opacity: 0.55;
+}
+
+/* A status is a state, not prose. The two an operator is looking for get the brand
+   colour; the rest stay quiet so the exceptional ones stand out in a long list. */
+.admin-status {
+  font-weight: 600;
+}
+
+.admin-status[data-status='blocked'],
+.admin-status[data-status='failing'],
+.admin-status[data-status='hidden'] {
+  color: var(--brand-text);
+}
+
+/* Reason, count, share — three definite tracks, so the numbers form a column
+   instead of landing wherever each reason code stopped. */
+.admin-histogram li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3rem 3.5rem;
+  align-items: baseline;
+  column-gap: 0.75rem;
+}
+
+/* Domain, cap, note. Same reasoning, one more column. */
+.admin-caps li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3rem;
+  align-items: baseline;
+  gap: 0.15rem 0.75rem;
+}
+
+@media (min-width: 40rem) {
+  .admin-caps li {
+    grid-template-columns: minmax(0, 14rem) 3rem minmax(0, 1fr);
+  }
 }
 
 .admin-count {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+  text-align: right;
 }
 
 .admin-report-reason {
-  flex-basis: 100%;
-  margin: 0;
+  margin: 0.2rem 0 0;
   overflow-wrap: anywhere;
 }
 
 /* An inline form inside a list row: the reason box and its button stay on one
-   line on a desktop and stack on a phone rather than overflowing. */
+   line on a desktop and stack on a phone rather than overflowing. It fills its grid
+   track, so the buttons of every row in a section end on the same edge however wide
+   the label is — "Unhide" is two characters longer than "Hide". */
 .admin-inline {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
   align-items: center;
   margin: 0;
+  width: 100%;
 }
 
 .admin-inline input[type='text'] {
-  flex: 1 1 8rem;
+  flex: 1 1 6rem;
   min-width: 0;
+  min-height: var(--tap);
   padding: 0.35rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: 0.35rem;
   background: var(--surface);
   color: inherit;
   font: inherit;
+}
+
+/* The secondary button. These were the browser default — small grey chrome next to
+   the brand-coloured Ban and Save on the same page, which read as a different class
+   of control rather than the same one at a lower emphasis. §6.3's 44px tap target
+   applies here as much as anywhere: the dashboard gets used from a phone. */
+.admin-inline button {
+  flex: 0 0 auto;
+  min-height: var(--tap);
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.35rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-inline button:hover {
+  border-color: var(--brand-text);
+  color: var(--brand-text);
 }
 
 .panel__error {

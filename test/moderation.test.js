@@ -721,6 +721,78 @@ test('the dashboard carries the rejection histogram, both queues and the backlog
   assert.match(page, /data-overdue-count="\d+"/);
 });
 
+// ── How the dashboard reads (§6.3) ──────────────────────────────────────────────
+//
+// The dashboard is a working surface, not a data dump. These pin the three things
+// that made it hard to scan: raw timestamps, facts run together, and a row whose
+// only handle was empty.
+
+test('timestamps render as <time>, never as a raw ISO string in prose', async () => {
+  const { app } = adminApp();
+  const { page } = await adminSession(app);
+
+  // Minute precision for the eye, full value for a machine and for the tooltip.
+  // Seconds and milliseconds are noise in a triage list.
+  assert.match(
+    page,
+    /<time datetime="[^"]+Z" title="[^"]+ \(UTC\)"\s*>\d{4}-\d{2}-\d{2} \d{2}:\d{2}<\/time/,
+  );
+
+  // Nothing renders `2026-07-31T19:00:10.031Z` as text. Attribute values are
+  // exempt — that is where the exact value is supposed to live.
+  const text = page.replace(/<[^>]*>/g, '');
+  assert.doesNotMatch(text, /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+});
+
+test('a member with no title is listed by host, not as an empty link', async () => {
+  const { app, queries } = adminApp();
+  queries.insertSite({
+    url: 'https://untitled.example/',
+    submitted_url: 'https://untitled.example/',
+    host: 'untitled.example',
+    path: '/',
+    feed_url: 'https://untitled.example/rss.xml',
+    // A feed with no `<channel><title>` is legal RSS and does reach us.
+    title: '',
+    description: undefined,
+    has_source_ns: false,
+    has_rsscloud: false,
+    rsscloud_style: undefined,
+    cloud_json: undefined,
+  });
+
+  const { page } = await adminSession(app);
+
+  // Without the fallback this row rendered `<a href="…"></a>` — a zero-width link,
+  // so the one row an operator most needs to look at was the one they could not
+  // click. /sites has always had this fallback; /admin did not.
+  assert.match(
+    page,
+    /<a class="admin-row__title" href="https:\/\/untitled\.example\/">untitled\.example<\/a>/,
+  );
+  assert.doesNotMatch(page, /class="admin-row__title"[^>]*><\/a>/);
+});
+
+test('the meta facts are separated, not run together', async () => {
+  const { app, db, id } = adminApp();
+  db.prepare(
+    "UPDATE sites SET status = 'failing', last_error = 'timeout' WHERE id = ?",
+  ).run(id);
+
+  const { page } = await adminSession(app);
+
+  // `#2 blocked (blocked_by_site)` gave the eye nothing to lock onto. An id, a
+  // status and an error code are three facts, and they are punctuated as three.
+  assert.match(
+    page,
+    /<span class="admin-status" data-status="failing">failing<\/span> <span aria-hidden="true">&middot;<\/span> <code>timeout<\/code>/,
+  );
+
+  // `aria-hidden` on the separators: they are punctuation for the eye, and a screen
+  // reader announcing "middot" between every field is worse than the run-on line.
+  assert.doesNotMatch(page, /<span aria-hidden="false"/);
+});
+
 test('POST /admin/domain-limits changes the effective per-domain cap', async () => {
   const { app, db, queries } = adminApp();
   const persist = createPersister({

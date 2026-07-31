@@ -14,6 +14,47 @@ import { html } from 'hono/html';
 
 import { layout } from './layout.js';
 
+/**
+ * A timestamp an operator can actually scan.
+ *
+ * Every column here is a stored ISO string, and rendering it raw put
+ * `2026-07-31T19:00:10.031Z` in the middle of a sentence — 24 characters of which
+ * three matter, wrapping mid-token when the line ran out. Seconds and milliseconds
+ * are noise for triage; the exact value stays available in the `datetime` attribute
+ * (which is what a machine should read anyway) and in the tooltip.
+ *
+ * UTC, and said out loud in the tooltip: the database stores UTC and a local-time
+ * render would silently disagree with every log line the operator is reading beside it.
+ */
+function stamp(value) {
+  if (value === null || value === undefined || value === '') return 'never';
+
+  const iso = String(value);
+  return html`<time datetime="${iso}" title="${iso} (UTC)"
+    >${iso.slice(0, 16).replace('T', ' ')}</time
+  >`;
+}
+
+/**
+ * The `#12 · blocked · timeout` line under a row's title.
+ *
+ * Joined with a separator rather than spaces because these are *distinct facts* —
+ * run together as `#2 blocked (blocked_by_site)` there is nothing to tell an id from
+ * a status from an error code, and the eye has to parse the sentence to find the one
+ * it wants. Empty parts drop out, so a row with no error does not render a dangling
+ * separator.
+ */
+function metaLine(parts) {
+  const kept = parts.filter((part) => part !== null && part !== undefined && part !== '');
+
+  return html`<span class="admin-meta"
+    >${kept.map(
+      (part, i) =>
+        html`${i === 0 ? '' : html` <span aria-hidden="true">&middot;</span> `}${part}`,
+    )}</span
+  >`;
+}
+
 export function adminLoginPage({ config, error = null, retryAfterSeconds = null }) {
   const body = html`
 <section class="panel">
@@ -63,10 +104,12 @@ export function adminDashboard({
 <section class="panel">
   <h1>Admin</h1>
   <p class="lede">
-    ${memberCount} listed member(s).
-    <span data-overdue-count="${backlog.overdue_count}">
-      ${backlog.overdue_count} overdue for revalidation</span>;
-    oldest check ${backlog.oldest_last_checked_at ?? 'never'}.
+    ${memberCount} listed ${memberCount === 1 ? 'member' : 'members'}
+    <span aria-hidden="true">&middot;</span>
+    <span data-overdue-count="${backlog.overdue_count}"
+      >${backlog.overdue_count} overdue for revalidation</span>
+    <span aria-hidden="true">&middot;</span>
+    oldest check ${stamp(backlog.oldest_last_checked_at)}
   </p>
   <form class="admin-inline" method="post" action="/admin/logout">
     ${csrfField(csrf)}
@@ -125,17 +168,22 @@ function reportsSection(rows, csrf) {
   ${
     rows.length === 0
       ? html`<p>No reports.</p>`
-      : html`<ul class="admin-list">
+      : html`<ul class="admin-list admin-list--actions">
         ${rows.map(
           (row) => html`<li>
-            <a href="${row.url}">${row.url}</a>
-            <span class="admin-meta">
-              #${row.id} ${row.created_at}
-              ${row.site_id === null ? 'not listed' : html`site #${row.site_id}`}
-              ${row.handled_at === null ? 'open' : html`handled ${row.handled_at}`}
-            </span>
-            <p class="admin-report-reason">${row.reason}</p>
-            ${row.contact ? html`<p class="admin-meta">contact: ${row.contact}</p>` : ''}
+            <div class="admin-row__main">
+              <a class="admin-row__title" href="${row.url}">${row.url}</a>
+              ${metaLine([
+                html`#${row.id}`,
+                stamp(row.created_at),
+                row.site_id === null ? 'not listed' : html`site #${row.site_id}`,
+                row.handled_at === null
+                  ? html`<strong>open</strong>`
+                  : html`handled ${stamp(row.handled_at)}`,
+              ])}
+              <p class="admin-report-reason">${row.reason}</p>
+              ${row.contact ? html`<p class="admin-meta">contact: ${row.contact}</p>` : ''}
+            </div>
             ${
               row.handled_at === null
                 ? html`<form class="admin-inline" method="post"
@@ -165,9 +213,14 @@ function submissionsSection(rows) {
       : html`<ul class="admin-list">
         ${rows.map(
           (row) => html`<li>
-            <code>${row.submitted_url}</code>
-            <span class="admin-meta">${row.result}
-              ${row.reason ? html`<code>${row.reason}</code>` : ''} ${row.created_at}</span>
+            <div class="admin-row__main">
+              <code class="admin-row__title">${row.submitted_url}</code>
+              ${metaLine([
+                row.result,
+                row.reason ? html`<code>${row.reason}</code>` : '',
+                stamp(row.created_at),
+              ])}
+            </div>
           </li>`,
         )}
       </ul>`
@@ -203,8 +256,10 @@ function bansSection(rows, csrf) {
       : html`<ul class="admin-list">
         ${rows.map(
           (row) => html`<li>
-            <code>${row.host || row.host_suffix}${row.path_prefix}</code>
-            <span class="admin-meta">${row.reason ?? ''} ${row.created_at}</span>
+            <div class="admin-row__main">
+              <code class="admin-row__title">${row.host || row.host_suffix}${row.path_prefix}</code>
+              ${metaLine([row.reason ?? '', stamp(row.created_at)])}
+            </div>
           </li>`,
         )}
       </ul>`
@@ -234,7 +289,7 @@ function domainLimitsSection(rows, csrf) {
   ${
     rows.length === 0
       ? html`<p>No overrides.</p>`
-      : html`<ul class="admin-list">
+      : html`<ul class="admin-caps">
         ${rows.map(
           (row) => html`<li>
             <code>${row.domain}</code>
@@ -259,12 +314,18 @@ function sitesSection(heading, rows, csrf) {
   ${
     rows.length === 0
       ? html`<p>Nothing here.</p>`
-      : html`<ul class="admin-list">
+      : html`<ul class="admin-list admin-list--actions">
         ${rows.map(
           (row) => html`<li>
-            <a href="${row.url}">${row.title}</a>
-            <span class="admin-meta">#${row.id} ${row.status}
-              ${row.last_error ? html`(${row.last_error})` : ''}</span>
+            <div class="admin-row__main">
+              <a class="admin-row__title" href="${row.url}">${row.title || row.host}</a>
+              ${metaLine([
+                html`#${row.id}`,
+                html`<span class="admin-status" data-status="${row.status}">${row.status}</span>`,
+                row.last_error ? html`<code>${row.last_error}</code>` : '',
+                row.last_checked_at ? html`checked ${stamp(row.last_checked_at)}` : '',
+              ])}
+            </div>
             <form class="admin-inline" method="post"
                   action="/admin/sites/${row.id}/${row.status === 'hidden' ? 'unhide' : 'hide'}">
               ${csrfField(csrf)}
