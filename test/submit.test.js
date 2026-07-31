@@ -20,14 +20,19 @@ const CONFIG = Object.freeze({
 /** An app on an in-memory database with a stubbed verifier (plan §11). */
 function appWith({ verify, config = {} } = {}) {
   const { db, queries } = createDb(':memory:');
+  // §6.4's pinger, counted rather than called: nothing in this suite may reach
+  // rpc.rsscloud.io, and "did a listing notify our subscribers?" is a route-level
+  // question the job itself cannot answer.
+  const pings = [];
   const app = createApp({
     config: { ...CONFIG, ...config },
     db,
     queries,
     verifySite: verify ?? (async () => ({ ok: false, reason: 'no_linkback' })),
     ipHmacKey: Buffer.alloc(32, 7),
+    rsscloud: { notifyOpmlChanged: () => pings.push('opml') },
   });
-  return { app, db, queries };
+  return { app, db, queries, pings };
 }
 
 /** A same-origin POST, as a browser on our own page would send it. */
@@ -118,6 +123,37 @@ test('a successful POST /submit lists the site and shows both published URLs', a
   assert.equal(row.url, 'https://alice.example/');
   assert.equal(row.submitted_url, 'https://alice.example/blog');
   assert.equal(row.has_source_ns, 1);
+});
+
+test('a new listing pings rpc.rsscloud.io for the OPML; nothing else does', async () => {
+  const { app, pings } = appWith({ verify: async () => PASS });
+
+  await post(app, '/submit', { url: 'alice.example/blog' });
+  assert.deepEqual(pings, ['opml'], 'an added feed is a change to the OPML');
+
+  // A re-submission of a row we already publish changes nothing a subscriber can see,
+  // so asking a stranger's server to re-fetch the document would be pure noise — and
+  // §6's "re-check me now" promise makes re-submitting a supported, repeatable move.
+  await post(app, '/submit', { url: 'alice.example/blog' });
+  assert.deepEqual(pings, ['opml'], 'an `updated` row was already in the document');
+
+  // /check lists nothing, by construction.
+  await post(app, '/check', { url: 'alice.example/blog' });
+  assert.deepEqual(pings, ['opml']);
+});
+
+test('a rejected submission never pings — the OPML did not change', async () => {
+  const { app, pings } = appWith({
+    verify: async () => ({
+      ok: false,
+      reason: 'no_linkback',
+      url: 'https://alice.example/',
+    }),
+  });
+
+  await post(app, '/submit', { url: 'alice.example/blog' });
+
+  assert.deepEqual(pings, []);
 });
 
 test('every attempt is logged with a hashed IP and never a raw one', async () => {

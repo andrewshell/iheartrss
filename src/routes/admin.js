@@ -30,7 +30,14 @@ const COOKIE_NAME = 'iheartrss_admin';
 
 export function registerAdmin(
   app,
-  { config, queries, log, now = () => new Date(), verifySite = null },
+  {
+    config,
+    queries,
+    log,
+    now = () => new Date(),
+    verifySite = null,
+    rsscloud = { notifyOpmlChanged: () => false },
+  },
 ) {
   // §6: "No admin UI is served at all if ADMIN_TOKEN is unset." Not registering the
   // routes means an unconfigured deploy 404s rather than 401s, which also stops it
@@ -187,6 +194,17 @@ export function registerAdmin(
         reason: verified?.reason ?? 'error',
       });
     }
+
+    // §6.4: from a subscriber's side an unhide is indistinguishable from a join — the
+    // feed reappears in `/subscriptions.opml` — so it gets the same ping. Only this
+    // direction: a hide is a change too, but the ping asks the cloud server to *fetch*,
+    // and a takedown reaches caches through the ETag either way.
+    //
+    // **After the re-verification, not before it.** The unhide is authoritative
+    // whichever way that went, but a pass rewrites the title — and the title is the
+    // OPML's ORDER BY key. Pinging first races a 5-second timer against a fetch of
+    // somebody else's server, and hands subscribers the pre-verification document.
+    rsscloud.notifyOpmlChanged();
 
     return done(c, { id, status: 'active', verified: verified?.ok === true });
   });

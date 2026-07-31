@@ -3,7 +3,7 @@ import { lookup } from 'node:dns';
 import { Hono } from 'hono';
 
 import { renderFeed } from './blog/feed.js';
-import { securityHeaders } from './lib/headers.js';
+import { cacheHeaders, securityHeaders } from './lib/headers.js';
 import { createIpHasher } from './lib/iphash.js';
 import { createOpmlDocument } from './lib/opml.js';
 import { createRateLimiter, createSemaphore } from './lib/ratelimit.js';
@@ -48,6 +48,10 @@ export function createApp({
   hashIp = null,
   limiter = null,
   semaphore = null,
+  // §6.4: the rssCloud pinger, injected for the same reason as everything else here —
+  // no test may reach rpc.rsscloud.io. A no-op stand-in when nothing is wired up, so
+  // an app built without one still answers every route.
+  rsscloud = null,
   log = defaultLog,
 }) {
   const app = new Hono();
@@ -56,6 +60,9 @@ export function createApp({
   // Registered before every route so §6's headers are on every response, 404s and
   // redirects included.
   app.use('*', securityHeaders());
+  // The other half of the versioned asset URLs in `views/layout.js`: an HTML response
+  // that a browser may reuse without asking carries the *old* asset URLs with it.
+  app.use('*', cacheHeaders());
 
   const deps = {
     config,
@@ -67,6 +74,7 @@ export function createApp({
     // no combination of endpoints can fan out against a third party.
     limiter: limiter ?? createRateLimiter(),
     semaphore: semaphore ?? createSemaphore(4),
+    rsscloud: rsscloud ?? { notifyOpmlChanged: () => false },
     hashIp:
       hashIp ??
       (ipHmacKey === null

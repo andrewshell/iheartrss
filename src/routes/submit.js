@@ -13,7 +13,17 @@ import { reportPage, statusPage } from '../views/status.js';
 import { submitPage } from '../views/submit.js';
 
 export function registerSubmit(app, deps) {
-  const { config, queries, verifySite, persist, hashIp, limiter, semaphore, log } = deps;
+  const {
+    config,
+    queries,
+    verifySite,
+    persist,
+    hashIp,
+    limiter,
+    semaphore,
+    rsscloud,
+    log,
+  } = deps;
 
   app.get('/submit', (c) => c.html(submitPage({ config })));
 
@@ -176,6 +186,12 @@ export function registerSubmit(app, deps) {
     }
 
     recordAttempt({ submitted, ipHash, result, dryRun });
+
+    // §6.4: a new member is a change to `/subscriptions.opml`, and the OPML — unlike
+    // the feed — changes at moments no restart knows about. `added` only: an `updated`
+    // row was already in the document, and `/check` never reaches here at all.
+    // Scheduled, never awaited — a member's response must not wait on a third party.
+    if (result.outcome === 'added') rsscloud.notifyOpmlChanged();
 
     const status = result.outcome === 'rejected' ? 422 : 200;
     return c.html(submitPage({ config, result, submitted }), status);

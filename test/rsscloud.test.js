@@ -158,8 +158,12 @@ function fakeTimer() {
     scheduled,
     timers: {
       setTimeout: (fn, ms) => {
-        scheduled.push({ fn, ms });
-        return { unref: () => (scheduled[scheduled.length - 1].unrefd = true) };
+        const entry = { fn, ms, handle: null };
+        // The handle is what `clearTimeout` is later handed, so the entry has to hold
+        // it for `stop()` to be observable.
+        entry.handle = { unref: () => (entry.unrefd = true) };
+        scheduled.push(entry);
+        return entry.handle;
       },
       clearTimeout: (handle) => {
         handle.cleared = true;
@@ -173,13 +177,14 @@ test('start() schedules one ping off the boot path, unref’d, and stop() cancel
   const clock = fakeTimer();
   const job = createRsscloudPing({
     config: config(),
+    timers: clock.timers,
     fetchFn: async () => {
       fetched += 1;
       return jsonOk();
     },
   });
 
-  assert.equal(job.start(clock.timers), true);
+  assert.equal(job.start(), true);
   // Not on the boot path: scheduled, not sent — `serve()` must never wait on a
   // third-party host.
   assert.equal(clock.scheduled.length, 1);
@@ -194,16 +199,127 @@ test('start() schedules one ping off the boot path, unref’d, and stop() cancel
   assert.equal(clock.scheduled.length, 1);
 });
 
+// ── The OPML half (§6.4) ────────────────────────────────────────────────────────
+//
+// `/feed.xml` changes when the image does, so a boot ping covers it. The OPML changes
+// when a feed joins the directory — a moment no restart knows about — so its trigger
+// is the membership change itself.
+
+test('notifyOpmlChanged pings the OPML url, not the feed', async () => {
+  const sent = [];
+  const clock = fakeTimer();
+  const job = createRsscloudPing({
+    config: config(),
+    timers: clock.timers,
+    fetchFn: async (url, init) => {
+      sent.push({ url, init });
+      return jsonOk();
+    },
+  });
+
+  assert.equal(job.notifyOpmlChanged(), true);
+  // Scheduled, never awaited: a member's "you're listed" page must not wait on
+  // rpc.rsscloud.io, and that server being down must not fail the submission.
+  assert.equal(sent.length, 0);
+  assert.equal(clock.scheduled[0].unrefd, true);
+
+  await clock.scheduled[0].fn();
+
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].url, 'https://rpc.rsscloud.io/ping');
+  assert.equal(sent[0].init.body, 'url=https%3A%2F%2Fiheartrss.com%2Fsubscriptions.opml');
+});
+
+test('a burst of adds coalesces into one ping, and the window then reopens', async () => {
+  let fetched = 0;
+  const clock = fakeTimer();
+  const job = createRsscloudPing({
+    config: config(),
+    timers: clock.timers,
+    fetchFn: async () => {
+      fetched += 1;
+      return jsonOk();
+    },
+  });
+
+  // Three members joining seconds apart are one change to one document, and the cloud
+  // server re-fetches the whole OPML per ping — so the 2nd and 3rd would buy a
+  // subscriber nothing and cost a stranger's server two more fetches of the same bytes.
+  assert.equal(job.notifyOpmlChanged(), true);
+  assert.equal(job.notifyOpmlChanged(), false);
+  assert.equal(job.notifyOpmlChanged(), false);
+  assert.equal(clock.scheduled.length, 1);
+
+  await clock.scheduled[0].fn();
+  assert.equal(fetched, 1);
+
+  // Not a one-shot latch: the next add after the window has fired gets its own ping.
+  assert.equal(job.notifyOpmlChanged(), true);
+  assert.equal(clock.scheduled.length, 2);
+});
+
+test('a pending OPML ping is cancelled by stop()', () => {
+  const clock = fakeTimer();
+  const job = createRsscloudPing({
+    config: config(),
+    timers: clock.timers,
+    fetchFn: async () => assert.fail('a cancelled ping must not fetch'),
+  });
+
+  job.notifyOpmlChanged();
+  job.stop();
+
+  // Same reason as the boot timer: a container stopped seconds after a submission
+  // should not still be reaching out on its way down.
+  assert.equal(clock.scheduled[0].handle.cleared, true);
+  assert.equal(
+    job.notifyOpmlChanged(),
+    true,
+    'stop() clears the slot, it does not latch',
+  );
+});
+
+test('RSSCLOUD_ENABLED=false neither schedules nor sends an OPML ping', () => {
+  const clock = fakeTimer();
+  const job = createRsscloudPing({
+    config: config({ RSSCLOUD_ENABLED: 'false' }),
+    timers: clock.timers,
+    fetchFn: async () => assert.fail('a disabled ping must not fetch'),
+  });
+
+  assert.equal(job.notifyOpmlChanged(), false);
+  assert.equal(clock.scheduled.length, 0);
+});
+
+test('outside production an OPML ping is skipped like every other', async () => {
+  // NODE_ENV=test is the case that matters: the whole suite runs submissions through
+  // routes that now call `notifyOpmlChanged`, and none of them may reach the network.
+  const logs = recorder();
+  let fetched = 0;
+  const result = await createRsscloudPing({
+    config: loadConfig({ RSSCLOUD_ENABLED: 'true' }),
+    log: logs.log,
+    fetchFn: async () => {
+      fetched += 1;
+      return jsonOk();
+    },
+  }).pingOpml();
+
+  assert.equal(fetched, 0);
+  assert.equal(result.skipped, 'not_production');
+});
+
 test('RSSCLOUD_ENABLED=false schedules nothing and sends nothing', () => {
   const clock = fakeTimer();
   const logs = recorder();
   const job = createRsscloudPing({
     config: config({ RSSCLOUD_ENABLED: 'false' }),
     log: logs.log,
+    timers: clock.timers,
     fetchFn: async () => assert.fail('a disabled ping must not fetch'),
   });
 
-  assert.equal(job.start(clock.timers), false);
+  assert.equal(job.start(), false);
   assert.equal(clock.scheduled.length, 0);
   assert.equal(logs.of('rsscloud.disabled').length, 1);
 });

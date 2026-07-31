@@ -1283,6 +1283,34 @@ Client-IP derivation is where these usually fail:
 strict-origin-when-cross-origin`, and `Cross-Origin-Resource-Policy: cross-origin` on the
 three SVGs, where hotlinking is the point.
 
+**Cache-busting for `/style.css` and `/blog-roll.js`.** Added after members reported still
+seeing the old styles days after a deploy — the cause was `Cache-Control: public,
+max-age=604800` on a URL that never changes, so nothing told a browser holding the
+stylesheet to look again. `lib/assets.js` appends a short digest **of the file's own
+bytes** (`/style.css?v=1f4c0a7b`), applied in `views/layout.js`, which is the only place it
+can be: a file cannot version its own URL. The digest is deliberately not the release
+number (which moves for a docs-only release, discarding every visitor's cache for nothing)
+and not the boot time (which moves several times per deploy). It is re-derived when the
+file's `mtime`+`size` moves, so `pnpm dev` — where `node --watch` never restarts for a file
+it did not import — does not serve yesterday's version while you edit the stylesheet.
+
+Two consequences, and the scheme needs both:
+
+- A request carrying `?v=` gets `public, max-age=31536000, immutable` instead of the week.
+  The digest names one exact set of bytes, which is precisely the promise `immutable` asks
+  a client to rely on. Bare URLs keep the conservative week — they have no such promise.
+- **HTML answers `Cache-Control: no-cache`.** A page a browser may reuse without asking
+  carries the *old* asset URLs inside it, so versioning alone would still not land. Those
+  responses previously carried no `Cache-Control`, `ETag` or `Last-Modified` at all, which
+  left it to each browser's heuristics. `no-cache` is "revalidate before reuse", not "do
+  not store"; set only when the route has not already spoken, so `/subscriptions.opml`'s
+  validators (§7) and the static route's own max-age are untouched.
+
+The icons and the two wordmark SVGs are **not** versioned. Their URLs are hotlinked from
+other people's sites — a published interface, and `/badge`'s copy-paste snippets hand them
+out — so a version there would either be pinned into strangers' pages forever or be a
+second URL for the same bytes.
+
 ---
 
 ### 6.1 Badge assets and snippets
@@ -1608,6 +1636,19 @@ same event. Skipped unless `NODE_ENV=production` and `SITE_URL`'s host is public
 so `pnpm dev`'s watch-restarts and any `SITE_URL=http://localhost:3000` operator can never
 ask a stranger's server to fetch a private address. `pnpm rsscloud:ping` does it by hand.
 
+**The OPML is pinged too, on a different trigger.** §7's `/subscriptions.opml` carries
+`<source:cloud>`, so the same promise applies to it — but it is the opposite kind of
+document. The feed's contents ship inside the image, so a restart covers it; the OPML lives
+in the database and changes at moments no restart knows about, and never changes at boot.
+Its trigger is therefore the membership change itself: `/submit` when a verification ends in
+`added`, and the admin unhide, which is a join from the subscriber's side. Not `updated` — a
+row we already publish is not a change anyone downstream can see — and not a hide, which
+reaches caches through the ETag on the cloud server's next poll anyway; the ping only ever
+asks somebody to *fetch*. It is scheduled rather than awaited (a member's "you're listed"
+page must not wait on rpc.rsscloud.io, and that server being down must not fail a listing)
+and coalesced into a short trailing window, since three members joining seconds apart are
+one change to one document. `node bin/rsscloud.js opml` does it by hand.
+
 Out of scope, deliberately: WebSub/Atom. No `<atom:link rel="hub">`, no hub subscription —
 this is the RSS-native mechanism and adding a second one buys nothing here.
 
@@ -1675,7 +1716,7 @@ theirs to fix. Omitting `blocked` here silently reverts that whole decision to a
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
-<opml version="2.0">
+<opml version="2.0" xmlns:source="https://source.scripting.com/">
   <head>
     <title>I ♥ RSS</title>
     <dateCreated>Wed, 29 Jul 2026 14:00:00 GMT</dateCreated>
@@ -1683,6 +1724,7 @@ theirs to fix. Omitting `blocked` here silently reverts that whole decision to a
     <ownerName>iheartrss.com</ownerName>
     <ownerId>https://iheartrss.com/</ownerId>
     <docs>http://opml.org/spec2.opml</docs>
+    <source:cloud>https://rpc.rsscloud.io/pleaseNotify</source:cloud>
   </head>
   <body>
     <outline type="rss" version="RSS"
@@ -1696,6 +1738,20 @@ theirs to fix. Omitting `blocked` here silently reverts that whole decision to a
 ```
 
 Notes:
+- **`<source:cloud>` in the head, and only the `source:` form.** New, and worked out with
+  Dave Winer: the OPML 2.0 spec enumerates what `<head>` may contain, and `cloud` is not in
+  it — so there is no `<cloud domain=… port=…>` counterpart to the feed's, and the
+  namespaced element is the whole of what this document can say. The value is built from
+  `RSSCLOUD_DOMAIN` + `RSSCLOUD_PATH`, the same two settings the feed's is built from, so
+  the two documents cannot drift onto different servers. The `xmlns:source` declaration goes
+  on `<opml>` — an undeclared prefix is worthless to a consumer matching on the namespace
+  URI, which is the correct way to read either document.
+- **The ETag carries a format version.** The outline-set hash below is deliberately blind to
+  `<head>`, which is right for timestamp churn and wrong for a change like the one above: a
+  subscriber holding a valid ETag would keep getting 304s and never see the new element until
+  some unrelated member happened to join. `hashOutlines` therefore mixes in a `FORMAT_VERSION`
+  constant, bumped whenever the document's shape changes — one round of cache invalidation on
+  the deploy that ships it, nothing thereafter.
 - **Served as `Content-Type: text/xml; charset=utf-8`.** OPML has no registered MIME type,
   so this is a compatibility call rather than a spec one: FeedLand — our primary consumer —
   serves its own OPML as `text/xml`, checked directly against

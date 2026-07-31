@@ -81,6 +81,39 @@ test('renderOpml emits §7’s OPML 2.0 structure', () => {
   assert.equal(only['@htmlUrl'], 'http://scripting.com/');
 });
 
+test('the head carries `source:cloud`, in a declared `source:` namespace', () => {
+  const doc = parse(
+    renderOpml({ config, outlines: [outline()], dateModified: new Date(0) }),
+  );
+
+  // The prefix is worthless undeclared — a consumer matching on the namespace URI,
+  // which is the correct way to read either of our documents, would see nothing.
+  assert.equal(doc.opml['@xmlns:source'], 'https://source.scripting.com/');
+  assert.equal(doc.opml.head['source:cloud'], 'https://rpc.rsscloud.io/pleaseNotify');
+
+  // OPML 2.0 enumerates what `<head>` may contain and `cloud` is not in it, so the
+  // `source:` form is the whole of what this document can say. No bare `<cloud>`.
+  assert.equal(doc.opml.head.cloud, undefined);
+});
+
+test('the OPML and the feed can never advertise different cloud servers', () => {
+  // Both build the URL from RSSCLOUD_DOMAIN + RSSCLOUD_PATH rather than carrying
+  // their own copy, which is what makes drift impossible rather than merely unlikely.
+  const elsewhere = {
+    ...config,
+    rsscloudDomain: 'cloud.example',
+    rsscloudPath: '/notify',
+  };
+
+  const opml = parse(
+    renderOpml({ config: elsewhere, outlines: [], dateModified: new Date(0) }),
+  );
+  const feed = parse(renderFeed({ config: elsewhere }));
+
+  assert.equal(opml.opml.head['source:cloud'], 'https://cloud.example/notify');
+  assert.equal(feed.rss.channel['source:cloud'], 'https://cloud.example/notify');
+});
+
 /**
  * §7/§11's five hostile fixtures. Every one of them is a whole-directory outage if
  * the document stops re-parsing, so they are asserted together against one document

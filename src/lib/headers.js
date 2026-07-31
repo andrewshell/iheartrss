@@ -58,6 +58,37 @@ const CSP = [
   "base-uri 'none'",
 ].join('; ');
 
+/**
+ * `Cache-Control: no-cache` on HTML, and nothing else.
+ *
+ * The companion to `lib/assets.js`, and useless without it in either direction. The
+ * versioned `/style.css?v=…` in a page's `<head>` can only reach a browser that
+ * fetched *that page* — so an HTML response allowed to sit in a cache holds the old
+ * asset URLs with it, and the deploy still does not land. Today those responses carry
+ * no `Cache-Control`, no `ETag` and no `Last-Modified` at all, which leaves the
+ * decision to each browser's heuristics; this replaces "probably refetched" with a
+ * rule.
+ *
+ * `no-cache` is **not** "do not store" — the copy is kept and revalidated before
+ * reuse. These pages are small, server-rendered and database-backed, so a
+ * revalidation that turns into a refetch is exactly the request we already serve.
+ *
+ * HTML only, and only when the route has not already spoken: `routes/static.js` sets
+ * its own (a week, or a year for a versioned URL), and `/subscriptions.opml` answers
+ * conditional GETs with its own validators.
+ */
+export function cacheHeaders() {
+  return async (c, next) => {
+    await next();
+
+    const headers = c.res.headers;
+    if (headers.has('Cache-Control')) return;
+    if (!(headers.get('Content-Type') ?? '').startsWith('text/html')) return;
+
+    headers.set('Cache-Control', 'no-cache');
+  };
+}
+
 export function securityHeaders() {
   return async (c, next) => {
     await next();

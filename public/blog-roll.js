@@ -45,6 +45,29 @@ function stripAndTruncate(htmlString, maxLength) {
   return finalString + '…';
 }
 
+/**
+ * Has FeedLand actually crawled this feed yet?
+ *
+ * A member who joins the directory before FeedLand knows their feed comes back with
+ * `ctItems: 0` — and `whenUpdated` stamped at the moment FeedLand *registered* the
+ * feed rather than when anything was published. That combination puts the one feed
+ * with nothing behind it at the very top of a list sorted newest-first: the reader's
+ * first row reads "2 minutes ago" and opens to an empty list.
+ *
+ * Hiding it until the crawl lands costs the member nothing — they are in
+ * /subscriptions.opml and on /sites from the moment they pass verification, which is
+ * what being listed means — and the row appears on its own once there is something
+ * for a visitor to click.
+ *
+ * A missing or unparseable count means "FeedLand didn't say", which shows the feed.
+ * The failure direction matters: treating unknown as empty would blank the entire
+ * reader the day that field is renamed.
+ */
+function hasBeenCrawled(feed) {
+  const count = Number(feed?.ctItems);
+  return Number.isFinite(count) ? count > 0 : true;
+}
+
 async function getFeedListFromOpml(url) {
   try {
     // Fetch the data from the API endpoint
@@ -60,8 +83,10 @@ async function getFeedListFromOpml(url) {
     // Parse the JSON data
     const data = await response.json();
 
-    // Return the parsed data
-    return data?.feedlist.sort(compareDates.bind(null, 'whenUpdated')) ?? [];
+    // Return the parsed data, minus the feeds there is nothing to read behind yet.
+    return (data?.feedlist ?? [])
+      .filter(hasBeenCrawled)
+      .sort(compareDates.bind(null, 'whenUpdated'));
   } catch (error) {
     console.error('Error fetching feed list from OPML:', error);
     return [];

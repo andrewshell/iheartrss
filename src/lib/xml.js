@@ -13,6 +13,14 @@
  * protect `/admin` from a same-origin request.
  */
 
+/**
+ * Dave Winer's `source:` namespace, shared by `/feed.xml` and `/subscriptions.opml`
+ * so the two documents can never declare different URIs for the same prefix. A
+ * consumer that matches on the namespace rather than the prefix — which is the
+ * correct way to read either document — sees one namespace or it sees neither.
+ */
+export const SOURCE_NS = 'https://source.scripting.com/';
+
 export function escapeXml(value) {
   return String(value)
     .replace(/&/g, '&amp;')

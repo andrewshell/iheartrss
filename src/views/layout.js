@@ -1,5 +1,7 @@
 import { html } from 'hono/html';
 
+import { assetUrl } from '../lib/assets.js';
+
 const SITE_NAME = 'I ♥ RSS';
 
 /**
@@ -39,6 +41,15 @@ const SITE_NAME = 'I ♥ RSS';
  * because the element it hydrates is below the fold and blocking the parser on the
  * one page that most needs to be fast is the wrong trade, external because the CSP
  * allows `script-src 'self'` and deliberately not `'unsafe-inline'`.
+ *
+ * **The stylesheet and every script go through `assetUrl`**, which appends a digest
+ * of the file's own bytes. Without it a visitor keeps `/style.css` for the week that
+ * `routes/static.js` grants it and a deploy simply does not reach them — which is
+ * what was happening. The tags here are the only place the version can be applied:
+ * the file cannot version its own URL, and the alternative is asking people to
+ * force-reload. Icons and the wordmark are deliberately *not* versioned — see
+ * `assetUrl`'s caller list before adding them, because those files are hotlinked from
+ * other people's sites and their URLs are a published interface.
  */
 /**
  * The wordmark, theme-aware (plan §6.1).
@@ -83,8 +94,8 @@ ${description ? html`<meta name="description" content="${description}">` : ''}
     <link rel="icon" href="/favicon-16x16.png" type="image/png" sizes="16x16">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
     <link rel="manifest" href="/site.webmanifest">
-<link rel="stylesheet" href="/style.css">
-${scripts.map((src) => html`<script src="${src}" defer></script>`)}
+<link rel="stylesheet" href="${assetUrl('/style.css')}">
+${scripts.map((src) => html`<script src="${assetUrl(src)}" defer></script>`)}
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to main content</a>

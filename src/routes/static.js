@@ -79,7 +79,19 @@ export function registerStatic(app) {
     const headers = {
       'Content-Type': CONTENT_TYPES[ext] ?? 'application/octet-stream',
       'Content-Length': String(body.byteLength),
-      'Cache-Control': 'public, max-age=604800',
+      // A week for a bare URL, and that number is the reason `lib/assets.js` exists:
+      // people were still being served the old stylesheet days after a deploy, since
+      // nothing about `/style.css` told a browser that had it to look again.
+      //
+      // A request carrying `?v=` came from a tag this deploy rendered, and the value
+      // is a digest of these exact bytes — so it can have the strong answer. The URL
+      // changes when the file does, which is precisely the condition `immutable`
+      // asks a client to assume. Any `v` at all is enough: a *stale* digest still
+      // names a URL nothing will ask for again once the new HTML lands, so there is
+      // nothing to be gained by checking that it matches.
+      'Cache-Control': c.req.query('v')
+        ? 'public, max-age=31536000, immutable'
+        : 'public, max-age=604800',
       'X-Content-Type-Options': 'nosniff',
     };
 

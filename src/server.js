@@ -98,6 +98,12 @@ const revalidation = createRevalidator({
 // the file would capture the main database without its `-wal` sibling.
 const backups = createBackupJob({ db, config, log });
 
+// §6.4: tell our rssCloud server when one of our documents may have changed. Built
+// before the app because the app holds one of its two triggers — `/submit` and the
+// admin unhide ping `/subscriptions.opml` when a feed joins the directory. The other
+// is the boot ping for `/feed.xml`, started from inside `serve()`'s callback below.
+const rsscloud = createRsscloudPing({ config, log });
+
 const app = createApp({
   config,
   db,
@@ -105,6 +111,7 @@ const app = createApp({
   blog,
   ipHmacKey,
   revalidation,
+  rsscloud,
   checkHealth: () => probeDataDirectory({ databasePath: config.databasePath }),
 });
 
@@ -124,13 +131,11 @@ if (backups.start()) {
   });
 }
 
-// §6.4: tell our rssCloud server the feed may have changed. **Started from inside the
-// listening callback, deliberately** — nothing about a third-party host may delay or
-// fail our own startup, and the ping itself is a timer a couple of seconds later.
-// Blog posts ship inside the image, so a restart is exactly when the feed changes; the
-// cloud server re-fetches and only notifies anyone if it really did.
-const rsscloud = createRsscloudPing({ config, log });
-
+// The feed half of §6.4's ping. **Started from inside the listening callback,
+// deliberately** — nothing about a third-party host may delay or fail our own startup,
+// and the ping itself is a timer a couple of seconds later. Blog posts ship inside the
+// image, so a restart is exactly when the feed changes; the cloud server re-fetches and
+// only notifies anyone if it really did.
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   log('listening', { port: info.port, siteUrl: config.siteUrl });
 
@@ -168,7 +173,8 @@ function shutdown(signal) {
   // database can.
   backups.stop();
   // A pending ping is unref'd and harmless, but a container that is stopped two
-  // seconds after it started should not still reach out on its way down.
+  // seconds after it started should not still reach out on its way down. Cancels the
+  // coalescing OPML timer too, for the same reason.
   rsscloud.stop();
 
   // Docker's grace period is 10s. Give in-flight requests most of it, then stop

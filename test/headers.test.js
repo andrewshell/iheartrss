@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 
 import { createApp } from '../src/app.js';
 
@@ -97,4 +99,70 @@ test('the three badge SVGs are cross-origin embeddable, and nothing else is', as
       `${path} should not be embeddable cross-origin`,
     );
   }
+});
+
+// ── The cache-busting contract ──────────────────────────────────────────────────
+//
+// One bug, two halves, and each is useless alone: the asset URL has to change when
+// the file does, and the HTML that carries the new URL has to actually be fetched.
+
+test('every page links a versioned stylesheet, and the digest is the file’s', async () => {
+  const app = createApp({ config });
+
+  const home = await (await app.request('/')).text();
+  const [, version] = home.match(
+    /<link rel="stylesheet" href="\/style\.css\?v=([0-9a-f]+)">/,
+  );
+
+  // The same file behind every page, so the same version on every page — a per-render
+  // or per-boot token would be a fresh download of the same bytes for every visitor.
+  for (const path of ['/about', '/sites', '/submit', '/badge', '/guide', '/blog']) {
+    const html = await (await app.request(path)).text();
+    assert.match(html, new RegExp(`href="/style\\.css\\?v=${version}"`), path);
+  }
+
+  // It is a digest of the bytes, not a release number: a deploy that changes nothing
+  // about the stylesheet must not throw away every visitor's cached copy.
+  const bytes = await readFile(new URL('../public/style.css', import.meta.url));
+  const expected = createHash('sha256').update(bytes).digest('hex').slice(0, 8);
+  assert.equal(version, expected);
+});
+
+test('a versioned asset is immutable for a year; a bare one keeps the week', async () => {
+  const app = createApp({ config });
+
+  // The payoff: the URL changes when the file does, which is exactly the promise
+  // `immutable` asks a client to rely on.
+  const versioned = await app.request('/style.css?v=deadbeef');
+  assert.equal(versioned.status, 200);
+  assert.equal(
+    versioned.headers.get('cache-control'),
+    'public, max-age=31536000, immutable',
+  );
+
+  // A bare URL can still be asked for — old HTML, a bookmark, curl — and it has no
+  // such promise behind it, so it keeps the conservative answer.
+  const bare = await app.request('/style.css');
+  assert.equal(bare.headers.get('cache-control'), 'public, max-age=604800');
+});
+
+test('HTML is revalidated, so a deploy’s new asset URLs are actually seen', async () => {
+  const app = createApp({ config });
+
+  // Without this the whole scheme leaks: a cached HTML page carries the OLD
+  // /style.css?v=… inside it, and the visitor keeps both.
+  for (const path of ['/', '/about', '/sites', '/blog', '/no-such-page']) {
+    const res = await app.request(path);
+    assert.equal(res.headers.get('cache-control'), 'no-cache', path);
+  }
+
+  // Only HTML, and only where the route has not already spoken. The OPML's own
+  // validators (§7) and the static route's max-age must survive untouched.
+  const opml = await app.request('/subscriptions.opml');
+  assert.equal(opml.headers.get('cache-control'), null);
+  assert.ok(opml.headers.get('etag'), 'the OPML still answers with its own validator');
+  assert.match(
+    (await app.request('/iheartrss.svg')).headers.get('cache-control') ?? '',
+    /max-age=31536000/,
+  );
 });

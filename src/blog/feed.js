@@ -22,9 +22,7 @@
  * ping, not the advertisement.
  */
 
-import { escapeXml, xmlSafeContent, xmlSafeText } from '../lib/xml.js';
-
-const SOURCE_NS = 'https://source.scripting.com/';
+import { escapeXml, SOURCE_NS, xmlSafeContent, xmlSafeText } from '../lib/xml.js';
 
 // §6.4: one escaper, shared, rather than a second implementation here. Re-exported
 // because this was its original home.

@@ -252,6 +252,8 @@ function adminApp({
   verifySite = async () => ({ ok: false, reason: 'no_linkback' }),
 } = {}) {
   const { db, queries } = createDb(':memory:');
+  // §6.4's pinger, counted rather than called — no test may reach rpc.rsscloud.io.
+  const pings = [];
   const app = createApp({
     config: {
       siteUrl: 'https://iheartrss.com/',
@@ -269,6 +271,7 @@ function adminApp({
     now,
     verifySite,
     ipHmacKey: Buffer.alloc(32, 3),
+    rsscloud: { notifyOpmlChanged: () => pings.push('opml') },
     log: () => {},
   });
 
@@ -286,7 +289,7 @@ function adminApp({
     cloud_json: undefined,
   });
 
-  return { app, db, queries, id };
+  return { app, db, queries, id, pings };
 }
 
 function adminPost(app, path, body = {}, token = TOKEN) {
@@ -855,6 +858,20 @@ test('an unhide re-verifies the site and applies the pass', async () => {
   assert.equal(row.title, 'Reformed', 'the fresh verification must be applied');
   assert.equal(row.has_source_ns, 1);
   assert.equal(row.failure_count, 0);
+});
+
+test('an unhide pings the OPML, a hide does not', async () => {
+  const { app, queries, id, pings } = adminApp();
+
+  // A hide is a change to the document too, but the ping asks the cloud server to
+  // *fetch* — and a takedown reaches caches through the ETag on their next poll
+  // either way. An unhide is indistinguishable from a join on the subscriber's side.
+  await adminPost(app, `/admin/sites/${id}/hide`, { reason: 'spam' });
+  assert.deepEqual(pings, []);
+
+  queries.hideSite(id, 'still spam');
+  await adminPost(app, `/admin/sites/${id}/unhide`, { reason: 'appealed' });
+  assert.deepEqual(pings, ['opml']);
 });
 
 test('an unhide whose re-verification fails still unhides, and writes no failure', async () => {

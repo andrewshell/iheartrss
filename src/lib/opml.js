@@ -7,7 +7,13 @@
 
 import { createHash } from 'node:crypto';
 
-import { DESCRIPTION_MAX, normalizeMetaText, TITLE_MAX, xmlAttr } from './xml.js';
+import {
+  DESCRIPTION_MAX,
+  normalizeMetaText,
+  SOURCE_NS,
+  TITLE_MAX,
+  xmlAttr,
+} from './xml.js';
 
 /**
  * §7: "`dateCreated` is the site's fixed launch date, not `now()` — the spec
@@ -17,6 +23,20 @@ import { DESCRIPTION_MAX, normalizeMetaText, TITLE_MAX, xmlAttr } from './xml.js
 export const DATE_CREATED = 'Wed, 29 Jul 2026 14:00:00 GMT';
 
 const TITLE = 'I ♥ RSS';
+
+/**
+ * Bumped whenever the *shape* of the document changes — a new `<head>` element, a
+ * new outline attribute, a namespace declaration.
+ *
+ * It exists because the ETag deliberately covers the outline set and nothing else
+ * (see `hashOutlines`), which is right for the churn it was designed against and
+ * wrong for a format change: a subscriber holding a valid ETag would keep getting
+ * 304s and would never see the new `<source:cloud>` until some unrelated member
+ * happened to join. Folding this constant into the hash makes a format change
+ * invalidate every cached copy exactly once, on the deploy that ships it, and cost
+ * nothing thereafter.
+ */
+const FORMAT_VERSION = 2;
 
 /**
  * Render one outline element. Exported because **this string is what gets hashed**:
@@ -62,9 +82,14 @@ export function renderOutlines(outlines) {
  */
 export function renderOpml({ config, outlines, dateModified }) {
   const owner = new URL('/', config.siteUrl);
+  // Built from domain + path exactly as `blog/feed.js` builds the feed's, so the two
+  // documents can never advertise different cloud servers. `<cloud>` itself has no
+  // OPML equivalent — the 2.0 spec enumerates what `<head>` may contain and `cloud`
+  // is not in it — so the `source:` form is the whole of what we can say here.
+  const cloudLink = `https://${config.rsscloudDomain}${config.rsscloudPath}`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<opml version="2.0">
+<opml version="2.0" xmlns:source="${xmlAttr(SOURCE_NS)}">
   <head>
     <title>${xmlAttr(TITLE)}</title>
     <dateCreated>${DATE_CREATED}</dateCreated>
@@ -72,6 +97,7 @@ export function renderOpml({ config, outlines, dateModified }) {
     <ownerName>${xmlAttr(owner.hostname)}</ownerName>
     <ownerId>${xmlAttr(owner.href)}</ownerId>
     <docs>http://opml.org/spec2.opml</docs>
+    <source:cloud>${xmlAttr(cloudLink)}</source:cloud>
   </head>
   <body>
 ${renderOutlines(outlines)}
@@ -98,6 +124,7 @@ export function httpDate(value) {
  */
 export function hashOutlines(outlines) {
   return createHash('sha256')
+    .update(`opml/${FORMAT_VERSION}\n`)
     .update(typeof outlines === 'string' ? outlines : renderOutlines(outlines))
     .digest('hex');
 }

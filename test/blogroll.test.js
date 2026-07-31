@@ -9,6 +9,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { createContext, runInContext } from 'node:vm';
 
 import { createApp } from '../src/app.js';
 
@@ -68,7 +70,12 @@ test('the reader script is loaded by the homepage and by no other page', async (
   // `defer`: the element is further down the document than the tag, and a blocking
   // script on the one page whose whole point is to be fast is the wrong trade.
   const home = await (await app.request('/')).text();
-  assert.match(home, /<script\b[^>]*\bsrc="\/blog-roll\.js"[^>]*><\/script>/);
+  // `?v=<digest>`: stale reader logic against a live third-party API fails in ways
+  // stale colours do not, so the script is versioned like the stylesheet.
+  assert.match(
+    home,
+    /<script\b[^>]*\bsrc="\/blog-roll\.js\?v=[0-9a-f]+"[^>]*><\/script>/,
+  );
   assert.match(home, /<script\b[^>]*\bdefer\b[^>]*><\/script>/);
 
   // The shared layout renders every page, so the script has to be opted into
@@ -106,6 +113,107 @@ test('the section survives both no-JS and a FeedLand outage', async () => {
   assert.match(outside, /href="\/subscriptions\.opml"/);
 
   assert.match(section, /<noscript>/);
+});
+
+// ── The component's own logic ───────────────────────────────────────────────────
+//
+// `public/blog-roll.js` is browser code with no exports, so it is loaded into a `vm`
+// realm with the three globals it touches at load time stubbed out. Its top-level
+// `function` declarations land on that realm's global object, which is what makes
+// `getFeedListFromOpml` reachable — and FeedLand is a stub, so this still never
+// leaves the process.
+
+async function loadComponent(fetchStub) {
+  const source = await readFile(
+    new URL('../public/blog-roll.js', import.meta.url),
+    'utf8',
+  );
+  const realm = createContext({
+    HTMLElement: class {},
+    customElements: { define: () => {} },
+    fetch: fetchStub,
+    console: { error: () => {} },
+  });
+  runInContext(source, realm);
+  return realm;
+}
+
+/** One entry shaped like FeedLand's, which is where the field names come from. */
+function feed(overrides = {}) {
+  return {
+    feedUrl: 'https://alice.example/rss.xml',
+    title: 'Alice',
+    htmlUrl: 'https://alice.example/',
+    ctItems: 23,
+    whenUpdated: '2026-07-30T17:20:59.000Z',
+    whenChecked: '2026-07-31T17:27:15.000Z',
+    ...overrides,
+  };
+}
+
+function feedland(feedlist) {
+  const calls = [];
+  const fetchStub = async (url) => {
+    calls.push(url);
+    return { ok: true, json: async () => ({ head: {}, feedlist }) };
+  };
+  return { calls, fetchStub };
+}
+
+test('a feed FeedLand has not crawled yet is left out of the reader', async () => {
+  // The real shape of the problem: a member who joins before FeedLand knows their
+  // feed comes back with `ctItems: 0` AND `whenUpdated` stamped at registration
+  // time — so the one row with nothing behind it sorts to the *top* of a
+  // newest-first list, reads "just now", and opens to an empty list.
+  const { calls, fetchStub } = feedland([
+    feed({ title: 'Crawled', whenUpdated: '2026-07-20T00:00:00.000Z' }),
+    feed({
+      title: 'Just joined',
+      ctItems: 0,
+      whenUpdated: '2026-07-31T18:29:58.000Z',
+      whenChecked: '2026-07-31T18:29:58.000Z',
+    }),
+    feed({ title: 'Also crawled', whenUpdated: '2026-07-31T00:00:00.000Z' }),
+  ]);
+
+  const list = await (
+    await loadComponent(fetchStub)
+  ).getFeedListFromOpml('https://iheartrss.com/subscriptions.opml');
+
+  // Both halves in one assertion: the uncrawled feed is gone, and the newest-first
+  // order the filter runs alongside is undisturbed.
+  assert.deepEqual(
+    list.map((f) => f.title),
+    ['Also crawled', 'Crawled'],
+  );
+  assert.match(calls[0], /getfeedlistfromopml\?url=https%3A%2F%2Fiheartrss\.com/);
+});
+
+test('an unknown item count shows the feed rather than hiding it', async () => {
+  // The failure direction is the whole point: treating "FeedLand didn't say" as
+  // empty would blank the entire reader the day that field is renamed.
+  const { fetchStub } = feedland([
+    feed({ title: 'No count at all', ctItems: undefined }),
+    feed({ title: 'Nonsense count', ctItems: 'lots' }),
+    feed({ title: 'Zero', ctItems: 0 }),
+  ]);
+
+  const list = await (await loadComponent(fetchStub)).getFeedListFromOpml('https://x/o');
+
+  assert.deepEqual(list.map((f) => f.title).sort(), [
+    'No count at all',
+    'Nonsense count',
+  ]);
+});
+
+test('a FeedLand answer with no feed list at all is empty, not an exception', async () => {
+  const { fetchStub } = feedland(undefined);
+
+  const list = await (await loadComponent(fetchStub)).getFeedListFromOpml('https://x/o');
+
+  // `assert.equal` on the length rather than `deepEqual` against `[]`: this array is
+  // built inside the vm realm, so it is not reference-equal to a host-realm literal.
+  assert.equal(list.length, 0);
 });
 
 test('/about names FeedLand and what it gets to see', async () => {
