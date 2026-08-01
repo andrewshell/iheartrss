@@ -29,10 +29,51 @@
  * reachable from other scripts, so this is the same binding Dave's code.js makes.
  */
 
+/**
+ * The FeedLand host, if the page did not say.
+ *
+ * The homepage DOES say — `data-feedland` on the container, rendered from
+ * `src/lib/feedland.js`, which is the same constant the CSP's `connect-src` is built
+ * from. That is what keeps the host this script calls and the host the browser will
+ * allow it to call from drifting apart.
+ *
+ * This literal is the fallback for a page that forgets the attribute. It is a second
+ * copy of something that has one home, so `test/blogroll.test.js` asserts it still
+ * equals `FEEDLAND_SERVER` — a static file cannot import the constant, so a test is
+ * the only thing that can notice.
+ */
+const DEFAULT_FEEDLAND = 'https://claude.feedland.org';
+
+/**
+ * **The trailing slash is required, and its absence is silent.**
+ *
+ * FeedLand's `servercall` builds its URL as `urlServer + path + "?" + params` — a
+ * bare concatenation with no separator. Hand it `https://claude.feedland.org` and it
+ * requests `https://claude.feedland.orggetfeedlistfromopml`, which fails DNS, which
+ * `servercall` reports through a callback the blogroll logs and moves on from. The
+ * page renders an empty box and the console says nothing about a URL.
+ *
+ * Dave's code.js carries the slash in the literal. Ours cannot: the same host comes
+ * from `lib/feedland.js`, where it is an ORIGIN — no trailing slash, because a CSP
+ * source expression must not have a path. So the slash is added here, at the one
+ * boundary that needs it.
+ */
+function withTrailingSlash(server) {
+  return server.endsWith('/') ? server : `${server}/`;
+}
+
+/** `https://claude.feedland.org` → `wss://claude.feedland.org/`. */
+function toSocketUrl(server) {
+  const url = new URL(server);
+  url.protocol = url.protocol === 'http:' ? 'ws:' : 'wss:';
+  return withTrailingSlash(url.origin);
+}
+
+// The FeedLand includes look for this global by name to find the server. It is
+// filled in by `startBlogroll` once the container has been read.
 const appConsts = {
-  //the includes look here for the server
-  urlFeedlandServer: 'https://claude.feedland.org/',
-  urlSocketServer: 'wss://claude.feedland.org/',
+  urlFeedlandServer: withTrailingSlash(DEFAULT_FEEDLAND),
+  urlSocketServer: toSocketUrl(DEFAULT_FEEDLAND),
 };
 
 function startBlogroll() {
@@ -41,6 +82,10 @@ function startBlogroll() {
   // is opted into per page, but a missing element must be a no-op rather than a
   // thrown error if that ever slips.
   if (container === null) return;
+
+  const server = container.dataset.feedland || DEFAULT_FEEDLAND;
+  appConsts.urlFeedlandServer = withTrailingSlash(server);
+  appConsts.urlSocketServer = toSocketUrl(server);
 
   // eslint-disable-next-line no-undef -- `blogroll` comes from code.scripting.com
   window.theBlogroll = new blogroll({

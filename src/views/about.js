@@ -1,5 +1,6 @@
 import { html } from 'hono/html';
 
+import { FEEDLAND_SERVER } from '../lib/feedland.js';
 import { USER_AGENT } from '../lib/useragent.js';
 import { layout } from './layout.js';
 
@@ -126,7 +127,7 @@ export function aboutPage({ config }) {
     place of our own reader. Your browser fetches it &mdash; jQuery, Bootstrap and
     <code>blogroll.js</code> &mdash; from <code>scripting.com</code>&rsquo;s files on
     Amazon S3, and then asks
-    <a href="https://claude.feedland.org/">claude.feedland.org</a> for the list of
+    <a href="${FEEDLAND_SERVER}/">${new URL(FEEDLAND_SERVER).host}</a> for the list of
     member feeds and their latest items. Those two hosts see your IP address and that
     you loaded our homepage. Nothing else is fetched from anywhere else: the fonts,
     the stylesheet and the icons are all served from here.
