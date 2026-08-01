@@ -34,8 +34,14 @@
  *  * `connect-src 'self'`: no page under this policy talks to anyone else. It read
  *    `'self' https://feedland.com` until the blogroll trial moved the one page that
  *    did onto `CSP_BLOGROLL` below; leaving the host here would have been a standing
- *    allowance with nothing using it. Putting `/blog-roll.js` back on the homepage
- *    means putting `https://feedland.com` back on this line.
+ *    allowance with nothing using it.
+ *
+ *    Putting `/blog-roll.js` back on the homepage means putting its server back on
+ *    this line — and that is now **two** entries, not one: the component defaults to
+ *    `https://claude.feedland.org` (it follows the site onto Dave's server rather
+ *    than staying on feedland.com), and it also opens a socket, so
+ *    `wss://claude.feedland.org` is needed as well. A CSP cannot be derived from the
+ *    element's `server` attribute, so the two have to be kept in step by hand.
  *  * `form-action 'self'`: /submit, /check, /report and /admin post to us. Note
  *    that CSP is a second line here, not the first — §6's `Sec-Fetch-Site`
  *    check is what actually stops a cross-origin form driving our fetcher.

@@ -283,6 +283,17 @@ async function loadComponent(fetchStub) {
     fetch: fetchStub,
     console: { error: () => {} },
     document: fakeDocument(),
+    // Browser globals the component reaches for. A `vm` realm starts with none of
+    // them, so each one here is a thing the browser would have supplied: `URL` to
+    // derive the socket address, `AbortSignal` for the request timeout, `CSS.escape`
+    // for the selector a socket update finds its row with, and the timer pair the
+    // reconnect backoff runs on.
+    URL,
+    AbortSignal,
+    CSS: { escape: (value) => value },
+    WebSocket: class {},
+    setTimeout,
+    clearTimeout,
   });
   runInContext(source, realm);
   return realm;
@@ -339,8 +350,8 @@ function feed(overrides = {}) {
 
 function feedland(feedlist) {
   const calls = [];
-  const fetchStub = async (url) => {
-    calls.push(url);
+  const fetchStub = async (url, options) => {
+    calls.push({ url, options });
     return { ok: true, json: async () => ({ head: {}, feedlist }) };
   };
   return { calls, fetchStub };
@@ -372,7 +383,7 @@ test('a feed FeedLand has not crawled yet is left out of the reader', async () =
     list.map((f) => f.title),
     ['Also crawled', 'Crawled'],
   );
-  assert.match(calls[0], /getfeedlistfromopml\?url=https%3A%2F%2Fiheartrss\.com/);
+  assert.match(calls[0].url, /getfeedlistfromopml\?url=https%3A%2F%2Fiheartrss\.com/);
 });
 
 test('an unknown item count shows the feed rather than hiding it', async () => {
@@ -510,6 +521,107 @@ test('items sort newest-published first', async () => {
     items.map((i) => i.title),
     ['Newest', 'Middle', 'Older'],
   );
+});
+
+// ── Which server, and how long we wait for it ──────────────────────────────────
+
+test('the FeedLand server is a parameter, defaulting to the one the site uses', async () => {
+  // It was `https://feedland.com` written into two fetch lines. The site talks to
+  // Dave's server now, so a restored reader would have quietly been asking a
+  // different FeedLand than the rest of the page.
+  const { calls, fetchStub } = feedland([feed()]);
+  const realm = await loadComponent(fetchStub);
+
+  await realm.getFeedListFromOpml('https://iheartrss.com/subscriptions.opml');
+  assert.match(calls[0].url, /^https:\/\/claude\.feedland\.org\/getfeedlistfromopml\?/);
+
+  await realm.getFeedListFromOpml('https://x/o', 'https://feedland.example');
+  assert.match(calls[1].url, /^https:\/\/feedland\.example\/getfeedlistfromopml\?/);
+
+  await realm.getFeedItems(
+    'https://alice.example/rss.xml',
+    5,
+    'https://feedland.example',
+  );
+  assert.match(calls[2].url, /^https:\/\/feedland\.example\/getfeeditems\?/);
+});
+
+test('both calls give up rather than hanging forever', async () => {
+  // `fetch` has no timeout of its own: a FeedLand that accepts the connection and
+  // then says nothing left the promise pending for the life of the page, with the
+  // reader neither rendering nor failing.
+  const { calls, fetchStub } = feedland([feed()]);
+  const realm = await loadComponent(fetchStub);
+
+  await realm.getFeedListFromOpml('https://x/o');
+  await realm.getFeedItems('https://alice.example/rss.xml', 5);
+
+  for (const call of calls) {
+    assert.ok(call.options?.signal, `${call.url} was sent with no abort signal`);
+  }
+});
+
+// ── Item links ─────────────────────────────────────────────────────────────────
+
+test('an item with no link falls back to its enclosure', async () => {
+  // A podcast item routinely has no `<link>` — the episode audio is the enclosure.
+  const realm = await loadComponent(feedlandItems([]));
+
+  const rendered = realm.listItemElement(
+    item({ link: undefined, enclosure: { url: 'https://alice.example/ep1.mp3' } }),
+  );
+
+  const anchor = rendered.children[0];
+  assert.equal(anchor.tag, 'a');
+  assert.equal(anchor.attrs.href, 'https://alice.example/ep1.mp3');
+});
+
+test('an item with no link and no enclosure is text, not a link to nowhere', async () => {
+  // This used to render `href="undefined"` — a relative URL that resolves against
+  // our own origin and 404s on iheartrss.com.
+  const realm = await loadComponent(feedlandItems([]));
+
+  const rendered = realm.listItemElement(item({ link: undefined }));
+
+  assert.equal(rendered.children[0].tag, 'span');
+  assert.equal(rendered.children[0].attrs.href, undefined);
+  // Still says what the item is.
+  assert.equal(rendered.children[0].textContent, 'A post');
+});
+
+// ── The socket ─────────────────────────────────────────────────────────────────
+
+test("FeedLand's socket frames are a command, a CR, then JSON", async () => {
+  const realm = await loadComponent(feedlandItems([]));
+
+  const message = realm.parseSocketMessage(
+    'updatedFeed\r{"feedUrl":"https://alice.example/rss.xml","whenUpdated":"2026-08-01T09:00:00.000Z"}',
+  );
+
+  assert.equal(message.command, 'updatedFeed');
+  assert.equal(message.payload.feedUrl, 'https://alice.example/rss.xml');
+});
+
+test('a frame that does not parse is ignored, not thrown', async () => {
+  // The socket is a live connection to someone else's server and the list is
+  // already on the page without it, so nothing arriving on it may take the page
+  // down: a keepalive, a truncated frame and a future command all have to be inert.
+  const realm = await loadComponent(feedlandItems([]));
+
+  for (const frame of ['', 'ping', 'updatedFeed\rnot json', 'updatedFeed', undefined]) {
+    assert.equal(realm.parseSocketMessage(frame), undefined, String(frame));
+  }
+});
+
+test('the socket URL is the server, upgraded to a websocket scheme', async () => {
+  const realm = await loadComponent(feedlandItems([]));
+
+  assert.equal(
+    realm.socketUrl('https://claude.feedland.org'),
+    'wss://claude.feedland.org/',
+  );
+  // http only ever means a local FeedLand, but it must not become `wss:` there.
+  assert.equal(realm.socketUrl('http://localhost:1408'), 'ws://localhost:1408/');
 });
 
 test('an item with no usable date renders a blank time, never the word "undefined"', async () => {
