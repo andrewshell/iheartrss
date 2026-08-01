@@ -936,8 +936,34 @@ blog-roll {
   cursor: pointer;
 }
 
-/* The cursor row: his whitesmoke is invisible in dark mode. */
+/*
+ * The cursor row — shown only while the blogroll has focus.
+ *
+ * `trBlogrollCursor` is not "the expanded row" and not "the row you clicked". It is
+ * blogroll.js's KEYBOARD CURSOR: the arrow keys move it, Return opens it, and its
+ * index is persisted in `localStorage` and restored on the next visit. Which is the
+ * problem with showing it unconditionally — a first-time visitor loads the page and
+ * one row is already shaded, marking a selection they did not make, and a returning
+ * visitor gets a row shaded because of something they did days ago.
+ *
+ * Deleting it outright is the wrong fix in the other direction: it is the ONLY
+ * indication of where the arrow keys are pointing, so without it the keyboard
+ * interface becomes invisible — you press ↓ and nothing on screen changes.
+ *
+ * So it is bound to the exact condition under which the keys actually do something.
+ * blogroll.js gates every keystroke on `isBlogrollFocus()`, which is
+ * `container.is(':focus')` — and it focuses the container on any click. So `:focus`
+ * here is not an approximation of "is the keyboard live", it is the same test.
+ *
+ * The first rule is not redundant: without it his `whitesmoke` still paints the row
+ * when the container is NOT focused — and whitesmoke is invisible in dark mode
+ * anyway, which is the other reason this cannot just be left to him.
+ */
 .divBlogrollContainer .trBlogrollCursor {
+  background-color: transparent;
+}
+
+#idBlogrollContainer:focus .trBlogrollCursor {
   background-color: var(--code-bg);
 }
 
