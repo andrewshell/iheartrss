@@ -20,6 +20,7 @@ import { readFile } from 'node:fs/promises';
 import { createContext, runInContext } from 'node:vm';
 
 import { createApp } from '../src/app.js';
+import { FEEDLAND_SERVER, FEEDLAND_SOCKET } from '../src/lib/feedland.js';
 
 const config = {
   port: 3000,
@@ -56,6 +57,46 @@ test('the homepage CSP admits blogroll.js and its hosts, and nothing wider', asy
   // `style=` attributes. If this line ever disappears the blogroll renders
   // unstyled, which is worth failing loudly rather than discovering by eye.
   assert.match(csp, /style-src [^;]*'unsafe-inline'/);
+});
+
+test('every copy of the FeedLand host agrees with lib/feedland.js', async () => {
+  // The host has ONE home. Everything server-side imports it; the two files in
+  // public/ cannot, because they are static files served to a browser rather than
+  // modules in this build — so they each keep a literal, and this is the only thing
+  // that can notice when one of them drifts.
+  //
+  // The failure that makes this worth a test is quiet: change the host in
+  // `lib/feedland.js` and miss a copy, and `connect-src` names the new host while
+  // the script calls the old one. The reader renders nothing, and the only evidence
+  // is a CSP violation in a console nobody has open.
+  const files = ['../public/blog-roll.js', '../public/feedland-blogroll.js'];
+
+  for (const file of files) {
+    const source = await readFile(new URL(file, import.meta.url), 'utf8');
+    const literals = [...source.matchAll(/'(https?:\/\/[^']*feedland[^']*)'/g)].map(
+      (match) => match[1],
+    );
+
+    assert.ok(literals.length > 0, `${file} names no FeedLand host at all`);
+    for (const literal of literals) {
+      assert.equal(literal, FEEDLAND_SERVER, `${file} is out of step`);
+    }
+  }
+});
+
+test('the homepage hands the browser the same host the CSP admits', async () => {
+  // The two have to agree per response, not just per repo: the attribute says who to
+  // call and the header says who may be called. Both are built from the same
+  // constant, and this is the assertion that they arrive together.
+  const app = createApp({ config });
+  const res = await app.request('/');
+  const html = await res.text();
+
+  assert.match(html, new RegExp(`data-feedland="${FEEDLAND_SERVER}"`));
+  assert.ok(res.headers.get('content-security-policy').includes(FEEDLAND_SERVER));
+  // And the socket origin, which the https entry does NOT cover — removing it gets
+  // `blockedURI: "wss://claude.feedland.org/"` from Chrome, verified in a browser.
+  assert.ok(res.headers.get('content-security-policy').includes(FEEDLAND_SOCKET));
 });
 
 test('the widened CSP is the homepage only', async () => {
@@ -222,6 +263,8 @@ async function loadStarter(items) {
     },
     window: {},
     console: { error: () => {} },
+    // The starter derives the socket origin from the server at load time.
+    URL,
   });
   runInContext(source, realm);
   return { realm, removed };

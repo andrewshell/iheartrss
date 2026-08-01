@@ -7,6 +7,8 @@
  * every kind the app produces.
  */
 
+import { FEEDLAND_SERVER, FEEDLAND_SOCKET } from './feedland.js';
+
 /**
  * The policy for every page but `/` — see `CSP_BLOGROLL` for that one, which is
  * wider for as long as Dave Winer's blogroll is on trial there.
@@ -36,12 +38,12 @@
  *    did onto `CSP_BLOGROLL` below; leaving the host here would have been a standing
  *    allowance with nothing using it.
  *
- *    Putting `/blog-roll.js` back on the homepage means putting its server back on
- *    this line — and that is now **two** entries, not one: the component defaults to
- *    `https://claude.feedland.org` (it follows the site onto Dave's server rather
- *    than staying on feedland.com), and it also opens a socket, so
- *    `wss://claude.feedland.org` is needed as well. A CSP cannot be derived from the
- *    element's `server` attribute, so the two have to be kept in step by hand.
+ *    Putting `/blog-roll.js` back on the homepage means putting FeedLand back on
+ *    this line — as `${FEEDLAND_SERVER} ${FEEDLAND_SOCKET}`, which is what
+ *    `CSP_BLOGROLL` below already does. Two entries, not one: the reader makes two
+ *    API calls and opens a live-update socket, and a `https://` source expression
+ *    does not cover a `wss://` URL. There is no host to type — `lib/feedland.js`
+ *    holds it.
  *  * `form-action 'self'`: /submit, /check, /report and /admin post to us. Note
  *    that CSP is a second line here, not the first — §6's `Sec-Fetch-Site`
  *    check is what actually stops a cross-origin form driving our fetcher.
@@ -90,10 +92,13 @@ const CSP = [
  *    on the page was Rancho, the script face of the title inside the box, and the
  *    title is turned off. `style-src` keeps `fonts.googleapis.com` off the list for
  *    the same reason.
- *  * `connect-src` swaps `feedland.com` for `claude.feedland.org`, https for the two
- *    API calls and `wss:` for the socket that keeps the "when" times live. Dave asked
- *    us onto his server, so the old host is not kept alongside it — nothing on the
- *    page calls it any more.
+ *  * `connect-src` names FeedLand twice, and takes both from `lib/feedland.js` rather
+ *    than spelling the host out: `FEEDLAND_SERVER` for the two API calls and
+ *    `FEEDLAND_SOCKET` for the socket that keeps the "when" times live. A `https:`
+ *    source expression does NOT admit a `wss:` URL to the same host — removing the
+ *    second entry gets `blockedURI: "wss://claude.feedland.org/"` from Chrome. Dave
+ *    asked us onto his server, so `feedland.com` is not kept alongside it; nothing on
+ *    the page calls it any more.
  *
  * `img-src` deliberately does NOT widen: blogroll.js emits no `<img>`, so if
  * something starts loading images from elsewhere we would rather see it refused and
@@ -106,7 +111,7 @@ const CSP_BLOGROLL = [
   "img-src 'self'",
   "font-src 'self' https://s3.amazonaws.com",
   "manifest-src 'self'",
-  "connect-src 'self' https://claude.feedland.org wss://claude.feedland.org",
+  `connect-src 'self' ${FEEDLAND_SERVER} ${FEEDLAND_SOCKET}`,
   "form-action 'self'",
   "frame-ancestors 'none'",
   "base-uri 'none'",

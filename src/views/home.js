@@ -1,5 +1,6 @@
 import { html } from 'hono/html';
 
+import { FEEDLAND_SERVER } from '../lib/feedland.js';
 import { layout } from './layout.js';
 
 /**
@@ -72,13 +73,20 @@ export function homePage({ config, memberCount = 0 }) {
 
        The tabindex IS load-bearing: blogroll.js binds arrow keys and Return on
        the document body and acts only when this element has focus, so without it the
-       keyboard interface is dead. data-opmlurl is ours; see
+       keyboard interface is dead.
+
+       Both data- attributes are ours, and both are here so the starter script does
+       not carry its own copy of something the server already knows: the OPML url
+       comes from config.siteUrl, and the FeedLand host from lib/feedland.js — the
+       same constant the CSP's connect-src is built from, so the host the script
+       calls and the host the browser will ALLOW it to call cannot drift apart. See
        public/feedland-blogroll.js. -->
   <div
     class="divBlogrollContainer"
     id="idBlogrollContainer"
     tabindex="0"
     data-opmlurl="${opmlUrl}"
+    data-feedland="${FEEDLAND_SERVER}"
   ></div>
   <noscript>
     <p>
