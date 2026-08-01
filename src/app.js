@@ -146,14 +146,21 @@ export function createApp({
     });
   });
 
-  app.get('/', (c) =>
-    c.html(
+  app.get('/', (c) => {
+    // The one page with a wider CSP, for as long as Dave Winer's blogroll is on
+    // trial there: it loads jQuery, bootstrap and blogroll.js from scripting.com's
+    // S3 bucket, which `script-src 'self'` refuses outright. See `lib/headers.js`
+    // for the profile itself — this asks for it by name so the policy strings stay
+    // in one file. Removing this line puts the homepage back on the strict policy.
+    c.set('cspProfile', 'blogroll');
+
+    return c.html(
       homePage({
         config,
         memberCount: queries === null ? 0 : queries.countSites(),
       }),
-    ),
-  );
+    );
+  });
   app.get('/about', (c) => c.html(aboutPage({ config })));
   app.get('/badge', (c) => c.html(badgePage({ config })));
 

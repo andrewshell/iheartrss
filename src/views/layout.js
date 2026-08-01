@@ -42,6 +42,13 @@ const SITE_NAME = 'I ♥ RSS';
  * one page that most needs to be fast is the wrong trade, external because the CSP
  * allows `script-src 'self'` and deliberately not `'unsafe-inline'`.
  *
+ * `head` is the escape hatch for the one thing `scripts` cannot express: markup in
+ * `<head>` that is not a same-origin script — third-party `<script>` and `<link>`
+ * tags, in a fixed order, unversioned because they are not ours to version. It
+ * exists for the blogroll trial on `/` (see `views/home.js`) and has exactly that
+ * one caller. It is raw markup, so anything passed here is trusted by
+ * construction: build it in a view, never from a request.
+ *
  * **The stylesheet and every script go through `assetUrl`**, which appends a digest
  * of the file's own bytes. Without it a visitor keeps `/style.css` for the week that
  * `routes/static.js` grants it and a deploy simply does not reach them — which is
@@ -73,7 +80,7 @@ export function wordmark({ width, height, alt }) {
     </picture>`;
 }
 
-export function layout({ title, body, config, description, scripts = [] }) {
+export function layout({ title, body, config, description, scripts = [], head = '' }) {
   const fullTitle = title ? `${title} — ${SITE_NAME}` : SITE_NAME;
   const feedUrl = new URL('/feed.xml', config.siteUrl).href;
   const opmlUrl = new URL('/subscriptions.opml', config.siteUrl).href;
@@ -94,6 +101,8 @@ ${description ? html`<meta name="description" content="${description}">` : ''}
     <link rel="icon" href="/favicon-16x16.png" type="image/png" sizes="16x16">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
     <link rel="manifest" href="/site.webmanifest">
+${head}
+<!-- Ours last, so it wins wherever a third-party sheet above collides with it. -->
 <link rel="stylesheet" href="${assetUrl('/style.css')}">
 ${scripts.map((src) => html`<script src="${assetUrl(src)}" defer></script>`)}
 </head>
