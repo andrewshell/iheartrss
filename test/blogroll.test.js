@@ -282,9 +282,46 @@ async function loadComponent(fetchStub) {
     customElements: { define: () => {} },
     fetch: fetchStub,
     console: { error: () => {} },
+    document: fakeDocument(),
   });
   runInContext(source, realm);
   return realm;
+}
+
+/**
+ * Just enough DOM for `listItemElement`, which is where the item date is read.
+ *
+ * `innerHTML` strips tags into `textContent` because `stripAndTruncate` uses a
+ * throwaway div as its HTML-to-text converter — with an inert setter every item
+ * title would come back empty and the assertions would pass for the wrong reason.
+ */
+function fakeDocument() {
+  const element = (tag) => ({
+    tag,
+    attrs: {},
+    children: [],
+    textContent: '',
+    setAttribute(name, value) {
+      this.attrs[name] = value;
+    },
+    appendChild(child) {
+      this.children.push(child);
+      return child;
+    },
+    set innerHTML(value) {
+      this.textContent = String(value).replace(/<[^>]*>/g, '');
+    },
+  });
+
+  return {
+    createElement: element,
+    createTextNode: (text) => ({ tag: '#text', textContent: text }),
+  };
+}
+
+/** The `<time>` inside a rendered `<li>`. */
+function timeOf(li) {
+  return li.children.find((child) => child.tag === 'time');
 }
 
 /** One entry shaped like FeedLand's, which is where the field names come from. */
@@ -363,6 +400,128 @@ test('a FeedLand answer with no feed list at all is empty, not an exception', as
   // `assert.equal` on the length rather than `deepEqual` against `[]`: this array is
   // built inside the vm realm, so it is not reference-equal to a host-realm literal.
   assert.equal(list.length, 0);
+});
+
+test('a feed FeedLand has never crawled at all is left out, not dated "undefined"', async () => {
+  // A DIFFERENT state from `ctItems: 0` above, and the one the count check waves
+  // through: FeedLand has never crawled the feed, so it comes back with `ctItems`,
+  // `whenUpdated` and `whenCreated` all ABSENT. This shape is taken from a real feed
+  // on our own list, and it used to render a row whose time was the string
+  // "undefined" — `timeAgo(undefined)` returns nothing, and `textContent = undefined`
+  // prints the word.
+  const { fetchStub } = feedland([
+    feed({ title: 'Crawled' }),
+    {
+      feedUrl: 'https://johnjohnston.info/blog/feed/',
+      title: "John's World Wide Wall Display",
+      htmlUrl: 'https://johnjohnston.info/blog/',
+    },
+  ]);
+
+  const list = await (await loadComponent(fetchStub)).getFeedListFromOpml('https://x/o');
+
+  assert.deepEqual(
+    list.map((f) => f.title),
+    ['Crawled'],
+  );
+});
+
+test('a feed whose update time is unparseable or a sentinel is left out too', async () => {
+  // The filter is on whether the date is USABLE, not on whether the key is present.
+  // The last two are the ones a NaN-only check misses: `new Date(null)` is the epoch,
+  // and FeedLand uses `1970-01-01T00:00:00.000Z` as a "never happened" value outright
+  // — both are finite, and both would have rendered as "56 years ago".
+  const { fetchStub } = feedland([
+    feed({ title: 'Fine' }),
+    feed({ title: 'Empty', whenUpdated: '' }),
+    feed({ title: 'Not a date', whenUpdated: 'never' }),
+    feed({ title: 'Null', whenUpdated: null }),
+    feed({ title: 'Epoch', whenUpdated: '1970-01-01T00:00:00.000Z' }),
+  ]);
+
+  const list = await (await loadComponent(fetchStub)).getFeedListFromOpml('https://x/o');
+
+  assert.deepEqual(
+    list.map((f) => f.title),
+    ['Fine'],
+  );
+});
+
+// ── Item dates ─────────────────────────────────────────────────────────────────
+
+/** One item shaped like FeedLand's `getfeeditems` answer, RFC-822 dates included. */
+function item(overrides = {}) {
+  return {
+    title: 'A post',
+    link: 'https://alice.example/a-post',
+    description: 'Some words.',
+    // Both fields, because the real answer carries both — and picking the wrong one
+    // is the bug these tests exist for.
+    pubDate: 'Sun, 26 Jul 2026 02:00:00 GMT',
+    whenUpdated: 'Fri, 31 Jul 2026 18:55:39 GMT',
+    ...overrides,
+  };
+}
+
+function feedlandItems(items) {
+  return async () => ({ ok: true, json: async () => items });
+}
+
+test('items are dated by when they were published, not when FeedLand crawled', async () => {
+  // The heart of it. `whenUpdated` on an ITEM is when FeedLand last touched the feed
+  // record it came from, so it is very nearly a per-feed constant: five real items
+  // from brennan.day spanning six days came back with five distinct `pubDate`s and
+  // two distinct `whenUpdated`s. Reading it per item stamped four posts with the same
+  // time and none of them with their own.
+  const realm = await loadComponent(feedlandItems([]));
+
+  const rendered = realm.listItemElement(
+    item({
+      pubDate: 'Sun, 26 Jul 2026 02:00:00 GMT',
+      whenUpdated: 'Fri, 31 Jul 2026 18:55:39 GMT',
+    }),
+  );
+
+  // The two dates are five days apart, so the rendered time tells us which was read
+  // without pinning the exact wording of a relative time.
+  const shown = timeOf(rendered).textContent;
+  assert.equal(shown, realm.timeAgo('Sun, 26 Jul 2026 02:00:00 GMT'));
+  assert.notEqual(shown, realm.timeAgo('Fri, 31 Jul 2026 18:55:39 GMT'));
+
+  // `datetime` has to be a valid HTML datetime, which the RFC-822 string FeedLand
+  // sends is not — so it is converted rather than passed through.
+  assert.equal(timeOf(rendered).attrs.datetime, '2026-07-26T02:00:00.000Z');
+});
+
+test('items sort newest-published first', async () => {
+  // Sorting on `whenUpdated` was very nearly a no-op — the values are mostly equal,
+  // so the order simply survived as whatever FeedLand sent. This pins the intent.
+  const realm = await loadComponent(
+    feedlandItems([
+      item({ title: 'Older', pubDate: 'Sun, 26 Jul 2026 02:00:00 GMT' }),
+      item({ title: 'Newest', pubDate: 'Fri, 31 Jul 2026 22:55:52 GMT' }),
+      item({ title: 'Middle', pubDate: 'Wed, 29 Jul 2026 02:00:00 GMT' }),
+    ]),
+  );
+
+  const items = await realm.getFeedItems('https://alice.example/rss.xml', 5);
+
+  assert.deepEqual(
+    items.map((i) => i.title),
+    ['Newest', 'Middle', 'Older'],
+  );
+});
+
+test('an item with no usable date renders a blank time, never the word "undefined"', async () => {
+  const realm = await loadComponent(feedlandItems([]));
+
+  for (const pubDate of [undefined, '', 'not a date']) {
+    const rendered = realm.listItemElement(item({ pubDate }));
+
+    assert.equal(timeOf(rendered).textContent, '', String(pubDate));
+    // No `datetime` at all beats an invalid one.
+    assert.equal(timeOf(rendered).attrs.datetime, undefined, String(pubDate));
+  }
 });
 
 test('/about names the third parties and what they get to see', async () => {

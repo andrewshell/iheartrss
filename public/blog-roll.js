@@ -1,3 +1,26 @@
+/**
+ * Is this a date we can actually render?
+ *
+ * FeedLand omits `whenUpdated` entirely on a feed it has never crawled — not null,
+ * not an empty string, absent — and `new Date(undefined)` is an Invalid Date whose
+ * `getTime()` is NaN. Every date this file touches goes through here first, because
+ * the alternative is discovering it downstream as the word "undefined" on the page.
+ */
+function isRenderableDate(value) {
+  const time = new Date(value).getTime();
+
+  // `> 0`, not merely finite, and both halves are load-bearing:
+  //
+  //   * `new Date(undefined)` is an Invalid Date — NaN — which is the never-crawled
+  //     feed described on `hasKnownUpdateTime`.
+  //   * `new Date(null)` is the EPOCH, which is finite and would sail through a
+  //     NaN-only check to render as "56 years ago". FeedLand also uses
+  //     `1970-01-01T00:00:00.000Z` as a "never happened" sentinel outright — it is
+  //     what `whenLastError` carries on a feed that has never errored — so the epoch
+  //     has to be treated as absent here rather than as a very old post.
+  return Number.isFinite(time) && time > 0;
+}
+
 function timeAgo(input) {
   const date = input instanceof Date ? input : new Date(input);
   const formatter = new Intl.RelativeTimeFormat('en', { style: 'short' });
@@ -18,6 +41,12 @@ function timeAgo(input) {
       return formatter.format(Math.round(delta), rangeType);
     }
   }
+
+  // Falling out of the loop means the gap is under a second — a post published
+  // while the page was loading, and the case an unusable date also lands in. The
+  // loop returning nothing put the string "undefined" on the page, because that is
+  // what `textContent = undefined` renders.
+  return isRenderableDate(date) ? 'just now' : '';
 }
 
 function compareDates(key, a, b) {
@@ -68,6 +97,28 @@ function hasBeenCrawled(feed) {
   return Number.isFinite(count) ? count > 0 : true;
 }
 
+/**
+ * Can this row say when the feed last changed?
+ *
+ * The companion to `hasBeenCrawled`, and NOT the same check — this is the one that
+ * was missing. There is a second, distinct state a feed can be in: FeedLand has
+ * never crawled it at all, and returns it with `ctItems`, `whenUpdated` and
+ * `whenCreated` all absent. A live example on our own list:
+ *
+ *     John's World Wide Wall Display   ctItems=∅   whenUpdated=∅   whenCreated=∅
+ *
+ * `hasBeenCrawled` waves that through on purpose — an absent count means "FeedLand
+ * didn't say", and failing open is right for a *count*. But the row then rendered
+ * its time from an absent date, and shipped the literal string "undefined" to the
+ * page. The count was never the field that mattered for rendering; this one is.
+ *
+ * Dave Winer's blogroll.js filters on exactly this — `theFeed.whenUpdated ===
+ * undefined` drops the feed — which is how the difference was found.
+ */
+function hasKnownUpdateTime(feed) {
+  return isRenderableDate(feed?.whenUpdated);
+}
+
 async function getFeedListFromOpml(url) {
   try {
     // Fetch the data from the API endpoint
@@ -83,9 +134,12 @@ async function getFeedListFromOpml(url) {
     // Parse the JSON data
     const data = await response.json();
 
-    // Return the parsed data, minus the feeds there is nothing to read behind yet.
+    // Return the parsed data, minus the feeds there is nothing to read behind yet
+    // and the ones FeedLand cannot date. Both filters, because they catch different
+    // states — see each function.
     return (data?.feedlist ?? [])
       .filter(hasBeenCrawled)
+      .filter(hasKnownUpdateTime)
       .sort(compareDates.bind(null, 'whenUpdated'));
   } catch (error) {
     console.error('Error fetching feed list from OPML:', error);
@@ -108,22 +162,43 @@ async function getFeedItems(url, maxItems) {
     // Parse the JSON data
     const data = await response.json();
 
-    // Return the parsed data
-    return data.sort(compareDates.bind(null, 'whenUpdated'));
+    // `pubDate` — when the post was published — and NOT `whenUpdated`, which on an
+    // item is when FeedLand last touched the feed record it came from. See
+    // `listItemElement`: sorting on `whenUpdated` here was very nearly a no-op,
+    // because most items in one feed carry the identical value.
+    return data.sort(compareDates.bind(null, 'pubDate'));
   } catch (error) {
     console.error('Error fetching feed list from OPML:', error);
     return [];
   }
 }
 
+/**
+ * One item in an expanded feed.
+ *
+ * **The date is `pubDate`, not `whenUpdated`.** An item carries both, and they mean
+ * different things: `pubDate` is when the post was published, `whenUpdated` is when
+ * FeedLand last touched the *feed record* the item came from. The second is very
+ * nearly a per-feed constant — five items from brennan.day spanning six days came
+ * back with five distinct `pubDate`s and two distinct `whenUpdated`s — so reading it
+ * per item stamped four posts with the same time, and none of them with their own.
+ * blogroll.js reads `pubDate`, which is how the difference was found.
+ *
+ * The `datetime` attribute gets an ISO string rather than the raw value. FeedLand
+ * sends RFC-822 here ("Fri, 31 Jul 2026 22:55:52 GMT"), which `new Date()` parses
+ * happily but which is not a valid HTML datetime — so the attribute was invalid for
+ * every item, whichever field it read.
+ */
 function listItemElement(item) {
   const link = document.createElement('a');
   link.setAttribute('href', item.link);
   link.textContent = stripAndTruncate(item.title || item.description, 100);
 
   const time = document.createElement('time');
-  time.setAttribute('datetime', item.whenUpdated);
-  time.textContent = timeAgo(item.whenUpdated);
+  if (isRenderableDate(item.pubDate)) {
+    time.setAttribute('datetime', new Date(item.pubDate).toISOString());
+  }
+  time.textContent = timeAgo(item.pubDate);
 
   const li = document.createElement('li');
   li.appendChild(link);
