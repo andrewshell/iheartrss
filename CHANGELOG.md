@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.4.0...iheartrss-v0.5.0) (2026-08-01)
+
+
+### Features
+
+* give the reader a timeout, a configurable server and live updates ([801fec1](https://github.com/andrewshell/iheartrss/commit/801fec14a1c6546774a5735b2cd7f0a9f3e0a85d))
+* style the blogroll as ours, and drop the markup it never needed ([1b6ad6c](https://github.com/andrewshell/iheartrss/commit/1b6ad6c6467268ac926af814c87f5b63991087be))
+* try Dave Winer's blogroll on the homepage ([8e25f92](https://github.com/andrewshell/iheartrss/commit/8e25f92589521745758f27a84f02b0c03d3286e3))
+
+
+### Bug Fixes
+
+* date reader items by publication, and drop feeds FeedLand cannot date ([adbe7bf](https://github.com/andrewshell/iheartrss/commit/adbe7bfd841c1e0db98219ef491f0b62c4e405be))
+* date reader items by publication; add timeout, live updates, and one home for the FeedLand host ([69383c5](https://github.com/andrewshell/iheartrss/commit/69383c5cad99725e1a749e3c8c817c66fc5d8897))
+* drop the blogroll menu item that can only show an error ([7852be2](https://github.com/andrewshell/iheartrss/commit/7852be25c7de3d938b8a404ebbb38ddf3016561d))
+* make the container healthcheck follow PORT ([1e4604c](https://github.com/andrewshell/iheartrss/commit/1e4604c2cd4152b5195e1d1f7a252790be5b02ac))
+
 ## [0.4.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.3.0...iheartrss-v0.4.0) (2026-07-31)
 
 
