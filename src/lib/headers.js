@@ -8,9 +8,12 @@
  */
 
 /**
- * There is still no inline JS and no inline `style=` anywhere in the app — every
- * page is server-rendered HTML linking a single same-origin stylesheet, and the one
- * script we serve is a separate same-origin file — so the policy stays close to the
+ * The policy for every page but `/` — see `CSP_BLOGROLL` for that one, which is
+ * wider for as long as Dave Winer's blogroll is on trial there.
+ *
+ * There is still no inline JS and no inline `style=` in anything we write — every
+ * page is server-rendered HTML linking a single same-origin stylesheet, and the
+ * scripts we serve are separate same-origin files — so the policy stays close to the
  * strict one §6 asks for rather than the `'unsafe-inline'` compromise most apps
  * settle for.
  *
@@ -28,11 +31,11 @@
  *    line the manifest inherits `default-src 'none'` and the browser refuses to
  *    load it — the exact fail-safe described above, doing its job on a fetch type
  *    we did in fact think about, just not when the list was written.
- *  * `connect-src 'self' https://feedland.com`: the feed reader runs in the
- *    visitor's browser and calls FeedLand's `getfeedlistfromopml` and
- *    `getfeeditems` from there. One host, https only, and no wildcard — a
- *    compromised script cannot exfiltrate to anywhere else. The privacy cost of
- *    that request (FeedLand sees the visitor's IP) is stated on /about.
+ *  * `connect-src 'self'`: no page under this policy talks to anyone else. It read
+ *    `'self' https://feedland.com` until the blogroll trial moved the one page that
+ *    did onto `CSP_BLOGROLL` below; leaving the host here would have been a standing
+ *    allowance with nothing using it. Putting `/blog-roll.js` back on the homepage
+ *    means putting `https://feedland.com` back on this line.
  *  * `form-action 'self'`: /submit, /check, /report and /admin post to us. Note
  *    that CSP is a second line here, not the first — §6's `Sec-Fetch-Site`
  *    check is what actually stops a cross-origin form driving our fetcher.
@@ -52,11 +55,66 @@ const CSP = [
   "img-src 'self'",
   "font-src 'self'",
   "manifest-src 'self'",
-  "connect-src 'self' https://feedland.com",
+  "connect-src 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
   "base-uri 'none'",
 ].join('; ');
+
+/**
+ * The homepage's policy while Dave Winer's blogroll is on trial there (see
+ * `views/home.js`). Every other route keeps `CSP` above unchanged — which is the
+ * whole reason there are two policies rather than one widened one.
+ *
+ * blogroll.js is not our code and does not run under the policy above. What it
+ * needs, and why each line is the narrowest form that works:
+ *
+ *  * `script-src`/`style-src` name `s3.amazonaws.com` and `code.scripting.com`.
+ *    Both hosts, because `code.scripting.com/blogroll/*` 302s to that S3 bucket and
+ *    CSP checks the redirect target too. **Still no `'unsafe-inline'` on
+ *    `script-src`** — that property is the one worth keeping, and keeping it is why
+ *    `feedland-blogroll.js` is a file rather than an inline tag like Dave's.
+ *  * `style-src` DOES take `'unsafe-inline'`, and this is the real concession. The
+ *    FeedLand includes build markup with `style=` attributes in it, which CSP blocks
+ *    whether it was parsed or injected; without this the blogroll renders unstyled
+ *    in ways that look like our bug. It buys an attacker style injection on this one
+ *    page — defacement and layout tricks, not script execution.
+ *  * `font-src` gains `fonts.gstatic.com` (Rancho, the script font on the title) and
+ *    the S3 bucket (Font Awesome's own font files).
+ *  * `connect-src` swaps `feedland.com` for `claude.feedland.org`, https for the two
+ *    API calls and `wss:` for the socket that keeps the "when" times live. Dave asked
+ *    us onto his server, so the old host is not kept alongside it — nothing on the
+ *    page calls it any more.
+ *
+ * `img-src` deliberately does NOT widen: blogroll.js emits no `<img>`, so if
+ * something starts loading images from elsewhere we would rather see it refused and
+ * come back here than have allowed it up front.
+ */
+const CSP_BLOGROLL = [
+  "default-src 'none'",
+  "script-src 'self' https://s3.amazonaws.com https://code.scripting.com",
+  "style-src 'self' 'unsafe-inline' https://s3.amazonaws.com https://code.scripting.com https://fonts.googleapis.com",
+  "img-src 'self'",
+  "font-src 'self' https://fonts.gstatic.com https://s3.amazonaws.com",
+  "manifest-src 'self'",
+  "connect-src 'self' https://claude.feedland.org wss://claude.feedland.org",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'none'",
+].join('; ');
+
+/**
+ * The policies a route may ask for by name, via `c.set('cspProfile', …)`.
+ *
+ * A name rather than the policy itself, so the strings stay in this file: a route
+ * that could hand `securityHeaders` an arbitrary CSP is a route that can weaken the
+ * site's headers, and reviewing "which pages are not strict?" would mean reading
+ * every route instead of this one map. An unknown name falls back to the strict
+ * policy — the fail-safe direction.
+ */
+const CSP_PROFILES = {
+  blogroll: CSP_BLOGROLL,
+};
 
 /**
  * `Cache-Control: no-cache` on HTML, and nothing else.
@@ -95,7 +153,8 @@ export function securityHeaders() {
 
     const headers = c.res.headers;
 
-    headers.set('Content-Security-Policy', CSP);
+    // Read after `next()`, because the route sets it while handling the request.
+    headers.set('Content-Security-Policy', CSP_PROFILES[c.get('cspProfile')] ?? CSP);
     // §6: nosniff everywhere. Several routes already set it themselves; this makes
     // it true of the ones that don't, including 404s and redirects.
     headers.set('X-Content-Type-Options', 'nosniff');

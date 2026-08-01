@@ -3,8 +3,15 @@
  *
  * The seams are the ones a browser actually sees: the response headers that decide
  * whether the component may run at all, and the served HTML of the pages. Nothing
- * here touches feedland.com — the network call is the browser's, not ours, and a
- * test that made it would be a test of somebody else's uptime.
+ * here touches FeedLand — the network call is the browser's, not ours, and a test
+ * that made it would be a test of somebody else's uptime.
+ *
+ * **The homepage is currently running Dave Winer's blogroll.js instead of our own
+ * `<blog-roll>`**, on trial. So the page-level tests below describe his setup, while
+ * the component tests at the bottom still describe `public/blog-roll.js` — which is
+ * still served, still ours, and is what we go back to if the trial comes off. That
+ * split is deliberate: if the component's own tests had been deleted along with the
+ * tag on the homepage, going back would mean rewriting them from memory.
  */
 
 import { test } from 'node:test';
@@ -20,23 +27,50 @@ const config = {
   linkbackHosts: ['iheartrss.com', 'www.iheartrss.com'],
 };
 
-test('the CSP admits our own script and FeedLand, and widens nothing else', async () => {
+test('the homepage CSP admits blogroll.js and its hosts, and nothing wider', async () => {
   const app = createApp({ config });
   const csp = (await app.request('/')).headers.get('content-security-policy');
 
-  // The two widenings §10 needs, and exactly those two: the component is a
-  // same-origin file, and it talks to one third-party host.
-  assert.match(csp, /(?:^|;\s*)script-src 'self'(?:;|$)/);
-  assert.match(csp, /(?:^|;\s*)connect-src 'self' https:\/\/feedland\.com(?:;|$)/);
+  // The hosts blogroll.js actually comes from. Both are named because
+  // code.scripting.com 302s to the S3 bucket and CSP checks the redirect target.
+  assert.match(
+    csp,
+    /(?:^|;\s*)script-src 'self' https:\/\/s3\.amazonaws\.com https:\/\/code\.scripting\.com(?:;|$)/,
+  );
+  // Dave's server, not feedland.com — and the socket, which is what keeps the
+  // "when" times live.
+  assert.match(
+    csp,
+    /(?:^|;\s*)connect-src 'self' https:\/\/claude\.feedland\.org wss:\/\/claude\.feedland\.org(?:;|$)/,
+  );
 
-  // Still fails safe, and still refuses inline script — there is no inline JS in
-  // the app and 'self' is not a step toward allowing any.
+  // Still fails safe, and script is still ours-plus-two-named-hosts: no wildcard,
+  // no 'unsafe-inline', no 'unsafe-eval'. `feedland-blogroll.js` is a file rather
+  // than the inline tag Dave's page uses precisely so this stays true.
   assert.match(csp, /(?:^|;\s*)default-src 'none'(?:;|$)/);
-  assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval/);
-  assert.doesNotMatch(csp, /script-src[^;]*\*/);
+  assert.doesNotMatch(csp, /script-src[^;]*(?:\*|unsafe-inline|unsafe-eval)/);
+  assert.doesNotMatch(csp, /unsafe-eval/);
+  assert.doesNotMatch(csp, /\*/);
+
+  // The one concession, and it is scoped to style: the FeedLand includes emit
+  // `style=` attributes. If this line ever disappears the blogroll renders
+  // unstyled, which is worth failing loudly rather than discovering by eye.
+  assert.match(csp, /style-src [^;]*'unsafe-inline'/);
 });
 
-test('/blog-roll.js is served as JavaScript', async () => {
+test('the widened CSP is the homepage only', async () => {
+  const app = createApp({ config });
+
+  for (const path of ['/about', '/sites', '/submit', '/badge', '/guide', '/blog']) {
+    const csp = (await app.request(path)).headers.get('content-security-policy');
+    assert.match(csp, /(?:^|;\s*)script-src 'self'(?:;|$)/, path);
+    assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval|amazonaws|scripting\.com/, path);
+  }
+});
+
+test('/blog-roll.js is still served as JavaScript', async () => {
+  // Our own reader is not on the homepage while the trial runs, but the file has
+  // not moved: swapping back should be one line in `views/home.js`, not a restore.
   const app = createApp({ config });
   const res = await app.request('/blog-roll.js');
 
@@ -48,11 +82,12 @@ test('/blog-roll.js is served as JavaScript', async () => {
   assert.match(await res.text(), /customElements\.define\('blog-roll'/);
 });
 
-test("the homepage's reader points at this deployment's own OPML", async () => {
+test("the blogroll points at this deployment's own OPML", async () => {
   // A deliberately non-default origin: the OPML URL has to be built from
   // `config.siteUrl`, and a hardcoded https://iheartrss.com/subscriptions.opml
   // would pass happily against the default config while being wrong everywhere
-  // else — staging, a renamed domain, the operator's own box.
+  // else — staging, a renamed domain, the operator's own box. Dave's code.js does
+  // hardcode it; `data-opmlurl` is why ours does not have to.
   const app = createApp({
     config: { ...config, siteUrl: 'https://ring.example.test/' },
   });
@@ -60,29 +95,50 @@ test("the homepage's reader points at this deployment's own OPML", async () => {
 
   assert.match(
     html,
-    /<blog-roll[^>]*opmlurl="https:\/\/ring\.example\.test\/subscriptions\.opml"/,
+    /<div[^>]*id="idBlogrollContainer"[\s\S]*?data-opmlurl="https:\/\/ring\.example\.test\/subscriptions\.opml"/,
   );
 });
 
-test('the reader script is loaded by the homepage and by no other page', async () => {
+test('the homepage loads blogroll.js and its includes, and no other page does', async () => {
   const app = createApp({ config });
-
-  // `defer`: the element is further down the document than the tag, and a blocking
-  // script on the one page whose whole point is to be fast is the wrong trade.
   const home = await (await app.request('/')).text();
-  // `?v=<digest>`: stale reader logic against a live third-party API fails in ways
-  // stale colours do not, so the script is versioned like the stylesheet.
+
+  // Order is load-bearing: these are classic scripts reading each other's globals
+  // at load time. jQuery first, blogroll.js after the FeedLand includes, and our
+  // starter — deferred, so it runs after all of them — last.
+  const order = [
+    'jquery-1.9.1.min.js',
+    'feedland/home/api.js',
+    'code.scripting.com/blogroll/blogroll.js',
+  ].map((needle) => home.indexOf(needle));
+  assert.ok(
+    order.every((at) => at > -1),
+    'the homepage is missing one of blogroll.js’s includes',
+  );
+  assert.deepEqual(
+    [...order].sort((a, b) => a - b),
+    order,
+    'includes are out of order',
+  );
+
+  // `defer` plus `?v=<digest>`: it has to run after the parser-blocking includes
+  // above, and stale starter logic against a live third-party API fails in ways
+  // stale colours do not.
   assert.match(
     home,
-    /<script\b[^>]*\bsrc="\/blog-roll\.js\?v=[0-9a-f]+"[^>]*><\/script>/,
+    /<script\b[^>]*\bsrc="\/feedland-blogroll\.js\?v=[0-9a-f]+"[^>]*\bdefer\b[^>]*><\/script>/,
   );
-  assert.match(home, /<script\b[^>]*\bdefer\b[^>]*><\/script>/);
 
-  // The shared layout renders every page, so the script has to be opted into
-  // rather than inherited — otherwise /about downloads and runs a feed reader it
-  // has no element for.
+  // The shared layout renders every page, so all of this has to be opted into
+  // rather than inherited — otherwise /about pulls jQuery and bootstrap down for
+  // an element it does not have.
+  //
+  // Matched on the tags rather than the words: /about talks about the blogroll in
+  // prose, and a bare /blogroll/i would call that a regression.
   for (const path of ['/about', '/sites', '/submit', '/badge', '/guide', '/blog']) {
-    assert.doesNotMatch(await (await app.request(path)).text(), /blog-roll\.js/, path);
+    const html = await (await app.request(path)).text();
+    assert.doesNotMatch(html, /<(?:script|link)[^>]*(?:amazonaws|scripting\.com)/i, path);
+    assert.doesNotMatch(html, /feedland-blogroll\.js/, path);
   }
 });
 
@@ -93,21 +149,15 @@ test('the section survives both no-JS and a FeedLand outage', async () => {
   const section = html.match(/<section class="blogroll">([\s\S]*?)<\/section>/)?.[1];
   assert.ok(section, 'the homepage has no blogroll section');
 
-  // Inside the element: what a visitor sees with JavaScript off, or before the
-  // fetch returns. The component replaces it, so it costs a rendered reader
-  // nothing — and it is the difference between an empty box and two useful links.
-  const inside = section.match(/<blog-roll\b[^>]*>([\s\S]*?)<\/blog-roll>/)?.[1];
-  assert.ok(inside, 'the blogroll section has no <blog-roll> element');
-  assert.match(inside, /href="\/sites"/);
-  assert.match(inside, /href="\/subscriptions\.opml"/);
-
-  // Outside it: when FeedLand is down the component clears the element and appends
-  // nothing, so everything asserted above is gone at runtime. What is left has to
-  // still be a section with a heading and somewhere to go — scoped to this section
-  // deliberately, since the hero above also links both of these.
+  // blogroll.js appends into the container and says nothing at all when FeedLand is
+  // unreachable — so unlike our own component, which replaced its own fallback,
+  // everything a visitor needs on a bad day has to live OUTSIDE the container and
+  // stay on the page forever. Scoped to this section deliberately, since the hero
+  // above also links both of these.
   const outside = section
-    .replace(/<blog-roll\b[\s\S]*?<\/blog-roll>/, '')
+    .replace(/<div class="divBlogrollContainerContainer">[\s\S]*?<\/div>\s*<\/div>/, '')
     .replace(/<noscript>[\s\S]*?<\/noscript>/, '');
+  assert.doesNotMatch(outside, /idBlogrollContainer/);
   assert.match(outside, /<h2>/);
   assert.match(outside, /href="\/sites"/);
   assert.match(outside, /href="\/subscriptions\.opml"/);
@@ -216,21 +266,24 @@ test('a FeedLand answer with no feed list at all is empty, not an exception', as
   assert.equal(list.length, 0);
 });
 
-test('/about names FeedLand and what it gets to see', async () => {
+test('/about names the third parties and what they get to see', async () => {
   const app = createApp({ config });
   const html = await (await app.request('/about')).text();
 
   // The old wording — "no third-party scripts and no tracking of any kind" — was
-  // still *literally* true (blog-roll.js is ours, self-hosted) and had stopped
-  // being honest: the homepage now makes browser-side requests to feedland.com,
-  // which hands a stranger the visitor's IP. It must not survive unqualified.
+  // still *literally* true when the reader was ours and self-hosted. It stopped
+  // being true the day the homepage started pulling jQuery, bootstrap and
+  // blogroll.js off somebody else's bucket, and it must not survive unqualified.
   assert.doesNotMatch(html, /no third-party scripts and no tracking of any kind/);
 
   const paragraph = html
     .match(/<p>[\s\S]*?<\/p>/g)
-    ?.find((p) => /FeedLand/.test(p) && !/href/.test(p.slice(0, 8)));
-  assert.ok(paragraph, '/about does not mention FeedLand at all');
-  assert.match(paragraph, /IP address/i);
+    ?.find((p) => /IP address/i.test(p) && /blogroll/i.test(p));
+  assert.ok(paragraph, '/about does not say the homepage loads third-party code');
+  // Naming FeedLand alone would now be an understatement: the scripts come from a
+  // different party than the API calls do, and both see the visitor.
+  assert.match(paragraph, /claude\.feedland\.org/);
+  assert.match(paragraph, /scripting\.com|Amazon S3/);
 
   // The parts that are still true have to still be said, or the correction reads
   // as a retreat from a promise that was never broken.

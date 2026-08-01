@@ -730,6 +730,43 @@ blog-roll {
   max-width: var(--measure);
 }
 
+/*
+ * ── The trial: Dave Winer's blogroll.js ──────────────────────────────────────
+ *
+ * Everything above styles OUR reader, which is not on the page right now. It stays
+ * because the component does, and putting it back should not also mean rewriting
+ * its CSS.
+ *
+ * What follows is the box blogroll.js paints into. Only three rules, adapted from
+ * https://news.rss.chat/blogroll/styles.css: the border scripting.com gives the box,
+ * and the centering. The rest of his sheet is page styling — body font, a 550px
+ * column, `display: none` on the page until the blogroll paints — and none of that
+ * can come over, because on his page the blogroll IS the page and here it is one
+ * section of ours.
+ *
+ * NOTHING here may be named `span…`. The FeedLand includes float every element whose
+ * class name starts with "span" — Dave's readme calls it out as the trap they hit,
+ * and it applies to our sheet now that theirs loads alongside it.
+ *
+ * The blogroll's own colours are light-mode only: it paints a white box with a
+ * silver border, and blogroll.css sets the text colour inside it. So this box keeps
+ * a white background in dark mode too, deliberately — a dark box with unreadable
+ * dark text would be worse. That is one of the things the trial is meant to surface.
+ */
+.divBlogrollContainerContainer {
+  display: table;
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 100%;
+}
+
+.divBlogrollContainer {
+  border: 1px solid silver;
+  background-color: white;
+  padding-left: 2px;
+  padding-right: 2px;
+}
+
 blog-roll details {
   border-bottom: 1px solid var(--border);
 }

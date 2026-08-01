@@ -121,18 +121,19 @@ export function aboutPage({ config }) {
     <strong>Submission records are deleted after 90 days.</strong>
   </p>
   <p>
-    <strong>One third party sees you: FeedLand.</strong> The reader on our homepage is
-    served from this domain, but it asks
-    <a href="https://feedland.com/">feedland.com</a> for the list of member feeds and
-    for their latest items, and that request comes from your browser &mdash; so
-    FeedLand sees your IP address and that you loaded our homepage. It is how the
-    reader works, and we would rather say so than hide behind the fact that the script
-    itself is ours.
+    <strong>The homepage loads other people&rsquo;s code, and it is worth being plain
+    about that.</strong> We are trying Dave Winer&rsquo;s blogroll software there in
+    place of our own reader. Your browser fetches it &mdash; jQuery, Bootstrap and
+    <code>blogroll.js</code> &mdash; from <code>scripting.com</code>&rsquo;s files on
+    Amazon S3, one font from Google Fonts, and then asks
+    <a href="https://claude.feedland.org/">claude.feedland.org</a> for the list of
+    member feeds and their latest items. Those hosts see your IP address and that you
+    loaded our homepage.
   </p>
   <p>
     That is the only page it happens on. Every other page here makes no third-party
-    requests at all. There are no analytics and no tracking of any kind, and browsing
-    this site sets no cookies.
+    requests at all. Nobody in that list is asked to track you, we run no analytics,
+    and browsing this site sets no cookies.
   </p>
 </section>
 

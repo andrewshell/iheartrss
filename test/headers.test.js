@@ -60,14 +60,23 @@ test('every response carries the four §6 security headers', async () => {
     const csp = res.headers.get('content-security-policy');
     assert.ok(csp, `${path} has no Content-Security-Policy`);
 
-    // Restrictive means restrictive: there is no inline JS anywhere in the app,
-    // so nothing needs 'unsafe-inline' or 'unsafe-eval', and a policy that
-    // allows them is not the one §6 asked for.
-    assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval|\*/, path);
-    // §10's feed reader moved this from 'none' to 'self': the app now serves one
-    // script, `/blog-roll.js`, and it is ours on our origin. The property that
-    // matters — an *injected* inline script still cannot run — is unchanged, which
-    // is what the 'unsafe-inline' assertion above is guarding.
+    // Restrictive means restrictive: nothing we write is inline, so nothing needs
+    // 'unsafe-inline' or 'unsafe-eval', and a policy that allows them is not the
+    // one §6 asked for.
+    //
+    // `/` is exempt from the style half of that while Dave Winer's blogroll is on
+    // trial there — the FeedLand includes emit `style=` attributes, and the trial
+    // cannot run without them. The exemption is one page, one directive, and
+    // `blogroll.test.js` pins both the widening and its blast radius. Script is
+    // NOT exempt: no page, this one included, may run an inline script.
+    assert.doesNotMatch(csp, /script-src[^;]*(?:unsafe-inline|unsafe-eval|\*)/, path);
+    assert.doesNotMatch(csp, /unsafe-eval|\*/, path);
+    if (path !== '/') assert.doesNotMatch(csp, /unsafe-inline/, path);
+    // §10's feed reader moved this from 'none' to 'self': the app serves its own
+    // scripts, on our origin. The property that matters — an *injected* inline
+    // script still cannot run — is unchanged, which is what the assertions above
+    // are guarding. On `/`, 'self' is joined by the two hosts blogroll.js is
+    // fetched from, so this is a prefix match rather than an exact one.
     assert.match(csp, /(?:^|;\s*)script-src 'self'/, path);
     assert.match(csp, /frame-ancestors 'none'/, path);
     assert.match(csp, /base-uri 'none'/, path);

@@ -54,24 +54,26 @@ export function homePage({ config, memberCount = 0 }) {
      starts at or near the fold rather than three screens down. -->
 <section class="blogroll">
   <h2>What members are writing</h2>
-  <!-- Deliberately OUTSIDE the reader element, and it stays on the page forever.
-       The component clears its own innerHTML before rendering — including when
-       FeedLand errors and it has nothing to render — so anything inside the
-       element is gone the moment the script runs. Without a line out here, a
-       FeedLand outage leaves a heading above an empty box and no way onward. -->
+  <!-- Deliberately OUTSIDE the container, and it stays on the page forever.
+       blogroll.js appends into the container and says nothing when FeedLand is
+       unreachable, so without a line out here an outage leaves a heading above an
+       empty box and no way onward. -->
   <p class="blogroll__note">
-    Newest first, from the <a href="/subscriptions.opml">members&rsquo; OPML list</a>.
-    Open a name to see its recent items, or <a href="/sites">browse every member</a>.
+    From the <a href="/subscriptions.opml">members&rsquo; OPML list</a>. Open a name
+    to see its recent items, or <a href="/sites">browse every member</a>.
   </p>
-  <blog-roll opmlurl="${opmlUrl}">
-    <!-- Inside the element, so it is replaced the moment the reader renders. This
-         is what a visitor without JavaScript — or before the fetch returns — gets:
-         not a spinner, but the two links that do the same job by hand. -->
-    <p>
-      <a href="/sites">See every member site</a>, or subscribe to
-      <a href="/subscriptions.opml">the whole list as OPML</a> in your own reader.
-    </p>
-  </blog-roll>
+  <!-- The one thing blogroll.js needs: a div with class divBlogrollContainer. The
+       id is what idWhereToAppend names, and the tabindex is Dave's — the blogroll
+       is keyboard-navigable and has to be focusable to receive the keys.
+       data-opmlurl is ours; see public/feedland-blogroll.js. -->
+  <div class="divBlogrollContainerContainer">
+    <div
+      class="divBlogrollContainer"
+      id="idBlogrollContainer"
+      tabindex="0"
+      data-opmlurl="${opmlUrl}"
+    ></div>
+  </div>
   <noscript>
     <p>
       The reader needs JavaScript. Without it, <a href="/sites">the member list</a>
@@ -87,8 +89,50 @@ export function homePage({ config, memberCount = 0 }) {
       'A directory for people who love RSS. Add the badge, submit your site, get listed in a public OPML subscription list.',
     body,
     config,
+    head: blogrollIncludes(),
     // Only this page. See `layout`'s note: the shell renders every page, and the
-    // reader has an element to attach to on exactly one of them.
-    scripts: ['/blog-roll.js'],
+    // blogroll has an element to attach to on exactly one of them.
+    //
+    // `/blog-roll.js` — our own reader — is deliberately NOT loaded while the trial
+    // runs. The file is still served and still tested; nothing but this line has to
+    // change to put it back.
+    scripts: ['/feedland-blogroll.js'],
   });
+}
+
+/**
+ * The `<head>` includes blogroll.js needs, copied from Dave's index.html.
+ *
+ * Order is load-bearing and these are parser-blocking on purpose: they are classic
+ * scripts that read each other's globals at load time, and jQuery has to be defined
+ * before bootstrap, the FeedLand includes before blogroll.js, and all of them before
+ * `/feedland-blogroll.js` — which the layout adds `defer`red, so it runs after every
+ * one of these regardless.
+ *
+ * The cost is real and worth naming: this is the page we most wanted to be fast, and
+ * it now blocks on jQuery, bootstrap, four FeedLand includes and blogroll.js from
+ * hosts that are not ours. That is the trade the trial is asking about.
+ *
+ * `code.scripting.com/blogroll/*` 302s to the same S3 bucket as everything else, and
+ * CSP checks the redirect target as well as the request — which is why `script-src`
+ * and `style-src` name both hosts in `lib/headers.js`.
+ */
+function blogrollIncludes() {
+  return html`<script src="https://s3.amazonaws.com/scripting.com/code/includes/jquery-1.9.1.min.js"></script>
+<link href="https://s3.amazonaws.com/scripting.com/code/includes/bootstrap.css" rel="stylesheet">
+<script src="https://s3.amazonaws.com/scripting.com/code/includes/bootstrap.min.js"></script>
+<link rel="stylesheet" href="https://s3.amazonaws.com/scripting.com/code/fontawesome/css/all.css">
+<script src="https://s3.amazonaws.com/scripting.com/code/includes/basic/code.js"></script>
+<link href="https://s3.amazonaws.com/scripting.com/code/includes/basic/styles.css" rel="stylesheet" type="text/css">
+<link href="https://fonts.googleapis.com/css?family=Rancho" rel="stylesheet">
+<!-- The feed-list machinery: blogroll.js calls into these. -->
+<script src="https://s3.amazonaws.com/scripting.com/code/feedland/home/api.js"></script>
+<script src="https://s3.amazonaws.com/scripting.com/code/feedland/home/misc.js"></script>
+<link href="https://s3.amazonaws.com/scripting.com/code/feedland/home/misc.css" rel="stylesheet" type="text/css">
+<script src="https://s3.amazonaws.com/scripting.com/code/feedland/home/subscriptionlog.js"></script>
+<link href="https://s3.amazonaws.com/scripting.com/code/feedland/home/mobile.css" rel="stylesheet" type="text/css">
+<script src="https://s3.amazonaws.com/scripting.com/code/feedland/home/viewfeedlist.js"></script>
+<link href="https://s3.amazonaws.com/scripting.com/code/feedland/home/viewfeedlist.css" rel="stylesheet" type="text/css">
+<link href="https://code.scripting.com/blogroll/blogroll.css" rel="stylesheet">
+<script src="https://code.scripting.com/blogroll/blogroll.js"></script>`;
 }
