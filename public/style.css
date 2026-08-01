@@ -788,23 +788,26 @@ blog-roll {
      already has a measure; his is the page. */
   width: 100%;
   box-sizing: border-box; /* his sheet sets content-box on this element */
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--surface);
+  /* NO card. His sheet draws a bordered box because on scripting.com the blogroll IS
+     the page and needs an edge; here it is one section of ours, and the reader it
+     replaced had no box either — the rows simply sat in the column with a hairline
+     between them. Putting the card back is this rule plus a background. */
+  border: 0;
+  background: none;
   color: var(--text);
   /* His `font-family: Ubuntu` was for a font we no longer load, so it was resolving
      to whatever Ubuntu-ish thing the machine had. Ours is the page's own stack. */
   font-family: inherit;
   font-size: var(--step-0);
-  padding: 0.25rem 0.75rem 0.5rem;
+  padding: 0;
 }
 
-/* See note 3 above: his :focus paints the box white and adds a blue Bootstrap glow.
-   The global :focus-visible rule already gives keyboard users a ring, and that is the
-   one that should show — a click should not repaint the box. */
+/* His `:focus` paints the box white and adds a blue Bootstrap glow, and the container
+   takes focus on an ordinary click — so in dark mode it flashed white under the
+   pointer. The global `:focus-visible` rule already gives keyboard users a ring, and
+   that is the one that should show. */
 #idBlogrollContainer:focus {
-  background: var(--surface);
-  border-color: var(--border);
+  background: none;
   box-shadow: none;
   outline: 0;
 }
@@ -848,7 +851,9 @@ blog-roll {
      off by exactly the width added. */
   clear: both;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  /* 0.9rem is the size the old reader used for every piece of secondary text — the
+     relative times and, now, these headers. */
+  font-size: 0.9rem;
   line-height: 1.4;
   padding: 0.4rem 0;
   border-bottom: 1px solid var(--border);
@@ -884,8 +889,18 @@ blog-roll {
   margin: 0;
 }
 
+/*
+ * Row rhythm, matched to the reader this replaced.
+ *
+ * `0.65rem` is not arbitrary: the old `<blog-roll>` gave every summary an explicit
+ * `min-height: var(--tap)` — the 44px floor §6.3 holds the whole site to — and these
+ * rows are `<td>`s, which ignore `min-height`. Padding is the only lever a table
+ * cell answers to, so the number is chosen to reach the same total: 0.65rem top and
+ * bottom around an 18.4px title at 1.3 line-height lands just past 44px. Change the
+ * title size and this has to move with it.
+ */
 .divBlogrollContainer .trBlogrollFeed td {
-  padding: 0.45rem 0;
+  padding: 0.65rem 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -898,21 +913,57 @@ blog-roll {
    become a full 44px without the rows looking like buttons, but it can stop being
    the smallest thing on the page. */
 .divBlogrollContainer .trBlogrollFeed .tdBlogrollWedge {
-  width: 1.75rem;
-  padding-left: 0.25rem;
+  width: 1.5rem;
+  padding-left: 0;
   padding-right: 0.25rem;
   color: var(--brand-text);
+  /* The caret is an icon-font glyph, so it scales with the cell's font size — this
+     is what makes it the same weight as the CSS triangle the old reader drew. */
+  font-size: var(--step-1);
   cursor: pointer;
 }
 
+/*
+ * The feed titles, at `--step-1` — the size the old reader used, and the single
+ * biggest reason this looked like somebody else's widget: his sheet sets 15px, which
+ * against our 16px body text read as small print rather than as the headings they
+ * are. These are the main thing anyone reads on the homepage.
+ */
 .divBlogrollContainer .trBlogrollFeed .tdBlogrollFeedTitle {
-  font-size: var(--step-0);
+  font-size: var(--step-1);
+  line-height: 1.3;
   color: inherit;
   cursor: pointer;
 }
 
-/* The cursor row: his whitesmoke is invisible in dark mode. */
+/*
+ * The cursor row — shown only while the blogroll has focus.
+ *
+ * `trBlogrollCursor` is not "the expanded row" and not "the row you clicked". It is
+ * blogroll.js's KEYBOARD CURSOR: the arrow keys move it, Return opens it, and its
+ * index is persisted in `localStorage` and restored on the next visit. Which is the
+ * problem with showing it unconditionally — a first-time visitor loads the page and
+ * one row is already shaded, marking a selection they did not make, and a returning
+ * visitor gets a row shaded because of something they did days ago.
+ *
+ * Deleting it outright is the wrong fix in the other direction: it is the ONLY
+ * indication of where the arrow keys are pointing, so without it the keyboard
+ * interface becomes invisible — you press ↓ and nothing on screen changes.
+ *
+ * So it is bound to the exact condition under which the keys actually do something.
+ * blogroll.js gates every keystroke on `isBlogrollFocus()`, which is
+ * `container.is(':focus')` — and it focuses the container on any click. So `:focus`
+ * here is not an approximation of "is the keyboard live", it is the same test.
+ *
+ * The first rule is not redundant: without it his `whitesmoke` still paints the row
+ * when the container is NOT focused — and whitesmoke is invisible in dark mode
+ * anyway, which is the other reason this cannot just be left to him.
+ */
 .divBlogrollContainer .trBlogrollCursor {
+  background-color: transparent;
+}
+
+#idBlogrollContainer:focus .trBlogrollCursor {
   background-color: var(--code-bg);
 }
 
@@ -928,17 +979,22 @@ blog-roll {
   overflow: visible;
 }
 
-/* The relative time, floated right by his sheet. */
+/* The relative time, floated right by his sheet. 0.9rem muted is what the old reader
+   used for exactly this. The top margin is optical: a 14.4px time floated beside an
+   18.4px title sits high on the line without it. */
 .divBlogrollContainer .trBlogrollFeed .tdBlogrollFeedTitle .spWhenUpdated {
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
+  margin-top: 0.15em;
   padding-left: 0.5rem;
 }
 
 /* ── An expanded feed's five items ── */
 
+/* The expanded items ran at 0.95rem, which made them a third size on a page that
+   only needs two. Body size, like the old reader's item links. */
 .divBlogrollContainer .divNewsPod {
-  font-size: 0.95rem;
+  font-size: var(--step-0);
   padding: 0.2rem 0 0.3rem;
   margin-top: 0;
 }
@@ -952,7 +1008,7 @@ blog-roll {
 
 .divBlogrollContainer .liFeedItem {
   margin-bottom: 0.5rem;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
 .divBlogrollContainer .liFeedItem:last-child {
@@ -969,6 +1025,8 @@ blog-roll {
    `text-decoration: underline !important`, so this has to be at least as specific. */
 .divBlogrollContainer .divNewsPod .spItemPubdate a {
   color: var(--brand-text);
+  /* 0.9rem again: every relative time on the page is this size and this colour. */
+  font-size: 0.9rem;
   white-space: nowrap;
 }
 
