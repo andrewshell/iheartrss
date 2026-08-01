@@ -48,9 +48,24 @@ function startBlogroll() {
     urlFeedlandServer: appConsts.urlFeedlandServer,
     urlSocketServer: appConsts.urlSocketServer, //realtime — the times update as feeds change
     idWhereToAppend: 'idBlogrollContainer',
-    title: 'I ♥ RSS',
-    flDisplayTitle: true, //the script-font title inside the box, like scripting.com
+
+    // NO title inside the box. Dave's copy paints "I ♥ RSS" in Rancho at the top,
+    // which is right on his page — there the blogroll IS the page and needs to say
+    // whose it is. Here the masthead says "I ♥ RSS" and the `<h2>` immediately above
+    // the box says "What members are writing", so a third label would be the same
+    // words a third time. Turning it off also drops the only Google Fonts request
+    // the page made, which is why `font-src` no longer names one.
+    flDisplayTitle: false,
+    title: 'I ♥ RSS', //unused while flDisplayTitle is false; kept so turning it back on says the right thing
+
     flQuietMode: false, //so the Title and When headers show — they are also the sort controls
+
+    // 25 (his default) suits a 240px box. Ours is as wide as the page column, so
+    // the titles that were being cut mid-word now fit; CSS wraps whatever is longer
+    // than this rather than truncating it.
+    maxTitleLength: 60,
+
+    flViewOptions: false, //his default dumps the whole options object to the console on every page load
   });
 }
 

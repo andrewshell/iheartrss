@@ -79,8 +79,11 @@ const CSP = [
  *    whether it was parsed or injected; without this the blogroll renders unstyled
  *    in ways that look like our bug. It buys an attacker style injection on this one
  *    page — defacement and layout tricks, not script execution.
- *  * `font-src` gains `fonts.gstatic.com` (Rancho, the script font on the title) and
- *    the S3 bucket (Font Awesome's own font files).
+ *  * `font-src` gains the S3 bucket, for Font Awesome's own font files — the wedge
+ *    carets are glyphs in an icon font. It does NOT name Google: the one Google font
+ *    on the page was Rancho, the script face of the title inside the box, and the
+ *    title is turned off. `style-src` keeps `fonts.googleapis.com` off the list for
+ *    the same reason.
  *  * `connect-src` swaps `feedland.com` for `claude.feedland.org`, https for the two
  *    API calls and `wss:` for the socket that keeps the "when" times live. Dave asked
  *    us onto his server, so the old host is not kept alongside it — nothing on the
@@ -93,9 +96,9 @@ const CSP = [
 const CSP_BLOGROLL = [
   "default-src 'none'",
   "script-src 'self' https://s3.amazonaws.com https://code.scripting.com",
-  "style-src 'self' 'unsafe-inline' https://s3.amazonaws.com https://code.scripting.com https://fonts.googleapis.com",
+  "style-src 'self' 'unsafe-inline' https://s3.amazonaws.com https://code.scripting.com",
   "img-src 'self'",
-  "font-src 'self' https://fonts.gstatic.com https://s3.amazonaws.com",
+  "font-src 'self' https://s3.amazonaws.com",
   "manifest-src 'self'",
   "connect-src 'self' https://claude.feedland.org wss://claude.feedland.org",
   "form-action 'self'",

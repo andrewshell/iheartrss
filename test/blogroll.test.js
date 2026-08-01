@@ -99,6 +99,37 @@ test("the blogroll points at this deployment's own OPML", async () => {
   );
 });
 
+test('the homepage fetches nothing from Google', async () => {
+  // Dave's page links three Google fonts; only Rancho was the blogroll's, and only
+  // for the title inside the box, which we turn off. Dropping it took a whole third
+  // party off the page — and `lib/headers.js` and /about both now say so. If a font
+  // link comes back, those two statements quietly become false.
+  const app = createApp({ config });
+  const home = await (await app.request('/')).text();
+  const csp = (await app.request('/')).headers.get('content-security-policy');
+
+  assert.doesNotMatch(home, /fonts\.googleapis\.com|fonts\.gstatic\.com/);
+  assert.doesNotMatch(csp, /googleapis|gstatic/);
+});
+
+test('the container is the only markup the blogroll needs', async () => {
+  // blogroll.js builds the menu, the sort headers, the table and the footer itself.
+  // The div is empty on purpose: anything we put inside it would sit above content
+  // appended after it, not be replaced by it. (Our own component worked the other
+  // way round — see the fallback test below for where that content lives now.)
+  const app = createApp({ config });
+  const home = await (await app.request('/')).text();
+
+  const container = home.match(
+    /<div\b[^>]*id="idBlogrollContainer"[^>]*>([\s\S]*?)<\/div>/,
+  );
+  assert.ok(container, 'the homepage has no blogroll container');
+  assert.equal(container[1].trim(), '');
+  // Not decoration: blogroll.js binds arrow keys and Return on `body` and acts only
+  // while this element has focus, so without it the keyboard interface is dead.
+  assert.match(container[0], /tabindex="0"/);
+});
+
 test('the homepage loads blogroll.js and its includes, and no other page does', async () => {
   const app = createApp({ config });
   const home = await (await app.request('/')).text();
@@ -155,7 +186,7 @@ test('the section survives both no-JS and a FeedLand outage', async () => {
   // stay on the page forever. Scoped to this section deliberately, since the hero
   // above also links both of these.
   const outside = section
-    .replace(/<div class="divBlogrollContainerContainer">[\s\S]*?<\/div>\s*<\/div>/, '')
+    .replace(/<div\b[^>]*id="idBlogrollContainer"[\s\S]*?<\/div>/, '')
     .replace(/<noscript>[\s\S]*?<\/noscript>/, '');
   assert.doesNotMatch(outside, /idBlogrollContainer/);
   assert.match(outside, /<h2>/);

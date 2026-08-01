@@ -734,37 +734,259 @@ blog-roll {
  * ── The trial: Dave Winer's blogroll.js ──────────────────────────────────────
  *
  * Everything above styles OUR reader, which is not on the page right now. It stays
- * because the component does, and putting it back should not also mean rewriting
- * its CSS.
+ * because the component does, and putting it back should not also mean rewriting its
+ * CSS.
  *
- * What follows is the box blogroll.js paints into. Only three rules, adapted from
- * https://news.rss.chat/blogroll/styles.css: the border scripting.com gives the box,
- * and the centering. The rest of his sheet is page styling — body font, a 550px
- * column, `display: none` on the page until the blogroll paints — and none of that
- * can come over, because on his page the blogroll IS the page and here it is one
- * section of ours.
+ * What follows restyles the box blogroll.js paints into, so it belongs to this site
+ * rather than sitting on it. Dave said the CSS is ours to write; this is that. It
+ * replaces, rather than extends, the presentation half of blogroll.css — his sheet
+ * still loads (it does layout work these rules do not repeat) and ours loads after
+ * it, so equal specificity resolves our way.
  *
- * NOTHING here may be named `span…`. The FeedLand includes float every element whose
- * class name starts with "span" — Dave's readme calls it out as the trap they hit,
- * and it applies to our sheet now that theirs loads alongside it.
+ * THE MARKUP WE ARE STYLING. blogroll.js builds all of it inside our one empty div,
+ * and none of these class names are ours to change:
  *
- * The blogroll's own colours are light-mode only: it paints a white box with a
- * silver border, and blogroll.css sets the text colour inside it. So this box keeps
- * a white background in dark mode too, deliberately — a dark box with unreadable
- * dark text would be worse. That is one of the things the trial is meant to surface.
+ *   #idBlogrollContainer.divBlogrollContainer   ← the only thing in home.js
+ *     div.divBlogrollMenu.dropdown                the ⋮ menu (Bootstrap dropdown)
+ *     div.divBlogroll
+ *       div.divBlogrollSortLinks                  "Title" / "When" — also the sort controls
+ *         span.spTitleLink, span.spWhenLink       `.selected` marks the active sort
+ *       table.divBlogrollTable > tbody
+ *         tr.trBlogrollFeed[data-feedurl]         `.trBlogrollCursor` = the selected row
+ *           td.tdBlogrollWedge > i.fa-caret-right the open/close control
+ *           td.tdBlogrollFeedTitle
+ *             span.spTimeContainer > span.spWhenUpdated   the relative time, floated right
+ *             span.spTitleString                          the feed title
+ *             div.divNewsPod                              hidden until the wedge opens
+ *               ul.ulFeedItems > li.liFeedItem
+ *                 span.spTextPreview                      item text — NOT a link
+ *                 span.spItemPubdate > a                  the date IS the link
+ *       div.divBlogrollFooter > a                 "Powered by FeedLand."
+ *
+ * FOUR THINGS TO KNOW BEFORE EDITING THIS BLOCK:
+ *
+ *  1. **Nothing here may be named `span…`.** The FeedLand includes float every
+ *     element whose class name starts with "span". Dave's readme names this as the
+ *     trap they hit, and it applies to our sheet now that theirs loads alongside it.
+ *     (His own classes are `sp…`, which is why they are safe and `span…` is not.)
+ *  2. **The container rules are written as `#idBlogrollContainer`,** not as
+ *     `.divBlogrollContainer`. His sheet sets the box's width in a phone media query
+ *     with class specificity; an id beats it at any width and in any order, which is
+ *     the difference between a fluid box and a 180px one.
+ *  3. **His `:focus` rule forces `background-color: white`,** and the container takes
+ *     focus on an ordinary click — so in dark mode the box flashed white under the
+ *     pointer until the override below.
+ *  4. **The `.divBlogrollFooter` credit stays.** It is his software and his server;
+ *     styling it to match is fair, hiding it is not.
+ *
+ * The whole block is written in our tokens, so dark mode follows automatically —
+ * which it could not while the box was hardcoded white.
  */
-.divBlogrollContainerContainer {
-  display: table;
-  margin-left: auto;
-  margin-right: auto;
-  max-width: 100%;
+
+#idBlogrollContainer {
+  /* Full width of our column, not his 240px card. Ours is a section of a page that
+     already has a measure; his is the page. */
+  width: 100%;
+  box-sizing: border-box; /* his sheet sets content-box on this element */
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  /* His `font-family: Ubuntu` was for a font we no longer load, so it was resolving
+     to whatever Ubuntu-ish thing the machine had. Ours is the page's own stack. */
+  font-family: inherit;
+  font-size: var(--step-0);
+  padding: 0.25rem 0.75rem 0.5rem;
 }
 
-.divBlogrollContainer {
-  border: 1px solid silver;
-  background-color: white;
-  padding-left: 2px;
-  padding-right: 2px;
+/* See note 3 above: his :focus paints the box white and adds a blue Bootstrap glow.
+   The global :focus-visible rule already gives keyboard users a ring, and that is the
+   one that should show — a click should not repaint the box. */
+#idBlogrollContainer:focus {
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: none;
+  outline: 0;
+}
+
+/* His inner wrapper is a fixed 220px centred column. */
+.divBlogrollContainer .divBlogroll {
+  width: 100%;
+}
+
+/* ── The ⋮ menu ── */
+
+/* Genuinely useful — "View this list in OPML" is in there — so it is restyled rather
+   than hidden. It floats, so it needs to clear the first row. */
+.divBlogrollContainer .divBlogrollMenu {
+  margin-top: 0;
+  margin-right: 0;
+}
+
+.divBlogrollContainer .divBlogrollMenu a {
+  color: var(--text-muted);
+  font-size: var(--step-0);
+}
+
+/* Bootstrap opens a dropdown to the RIGHT of its toggle, and this toggle sits at the
+   right edge of the box — so the panel hung outside it, and on a phone it hung
+   outside the viewport and dragged the page sideways. Anchoring it to the right edge
+   makes it open inward instead. */
+.divBlogrollContainer .divBlogrollMenu .dropdown-menu {
+  left: auto;
+  right: 0;
+}
+
+/* ── "Title" / "When", which are also the sort controls ── */
+
+.divBlogrollContainer .divBlogrollSortLinks {
+  /* `clear` is the fix for a collision our own change caused. The ⋮ is floated right
+     at the top of the container, and on Dave's page the title sits beside it and
+     holds the line open. With the title off, "When" floated up into the same line and
+     landed under the ⋮. Clearing gives the menu its own band and keeps "When"
+     aligned with the times it sorts — which padding on this row would have thrown
+     off by exactly the width added. */
+  clear: both;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* They are clickable and look like plain text, so they get the cursor and a hover
+   that says so. `.selected` (his class) marks the active sort. */
+.divBlogrollContainer .divBlogrollSortLinks .spTitleLink,
+.divBlogrollContainer .divBlogrollSortLinks .spWhenLink {
+  cursor: pointer;
+}
+
+.divBlogrollContainer .divBlogrollSortLinks .spTitleLink {
+  /* Aligned with the titles below, which start after the wedge column. */
+  margin-left: 1.75rem;
+}
+
+.divBlogrollContainer .divBlogrollSortLinks .spTitleLink:hover,
+.divBlogrollContainer .divBlogrollSortLinks .spWhenLink:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.divBlogrollContainer .divBlogrollSortLinks .selected {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* ── The feed rows ── */
+
+.divBlogrollContainer .divBlogrollTable {
+  width: 100%;
+  margin: 0;
+}
+
+.divBlogrollContainer .trBlogrollFeed td {
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.divBlogrollContainer .trBlogrollFeed:last-child td {
+  border-bottom: 0;
+}
+
+/* The wedge is the open/close control and his is a 12px column — a tap target less
+   than a third of the 44px floor the rest of this stylesheet holds to. It cannot
+   become a full 44px without the rows looking like buttons, but it can stop being
+   the smallest thing on the page. */
+.divBlogrollContainer .trBlogrollFeed .tdBlogrollWedge {
+  width: 1.75rem;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+  color: var(--brand-text);
+  cursor: pointer;
+}
+
+.divBlogrollContainer .trBlogrollFeed .tdBlogrollFeedTitle {
+  font-size: var(--step-0);
+  color: inherit;
+  cursor: pointer;
+}
+
+/* The cursor row: his whitesmoke is invisible in dark mode. */
+.divBlogrollContainer .trBlogrollCursor {
+  background-color: var(--code-bg);
+}
+
+/* His truncates the title to 155px (115px on phones) and cuts it with an ellipsis.
+   In a full-width box there is room to just say the whole thing, so long titles wrap
+   under the floated time instead of being cut. `maxTitleLength` in
+   feedland-blogroll.js is raised to match — CSS cannot undo a string the script
+   already shortened. */
+.divBlogrollContainer .trBlogrollFeed .tdBlogrollFeedTitle .spTitleString {
+  display: inline;
+  max-width: none;
+  white-space: normal;
+  overflow: visible;
+}
+
+/* The relative time, floated right by his sheet. */
+.divBlogrollContainer .trBlogrollFeed .tdBlogrollFeedTitle .spWhenUpdated {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding-left: 0.5rem;
+}
+
+/* ── An expanded feed's five items ── */
+
+.divBlogrollContainer .divNewsPod {
+  font-size: 0.95rem;
+  padding: 0.2rem 0 0.3rem;
+  margin-top: 0;
+}
+
+.divBlogrollContainer .ulFeedItems {
+  margin: 0.4rem 0 0;
+  padding-left: 0.9rem;
+  max-width: none;
+  border-left: 2px solid var(--border);
+}
+
+.divBlogrollContainer .liFeedItem {
+  margin-bottom: 0.5rem;
+  line-height: 1.45;
+}
+
+.divBlogrollContainer .liFeedItem:last-child {
+  margin-bottom: 0;
+}
+
+/* The item text is deliberately NOT styled as a link, because it is not one — only
+   the date is clickable. Making it look clickable would be a lie about the markup. */
+.divBlogrollContainer .liFeedItem .spTextPreview {
+  color: var(--text);
+}
+
+/* The date, which IS the link to the post. His sheet sets `color: inherit` and
+   `text-decoration: underline !important`, so this has to be at least as specific. */
+.divBlogrollContainer .divNewsPod .spItemPubdate a {
+  color: var(--brand-text);
+  white-space: nowrap;
+}
+
+/* ── The credit ── */
+
+.divBlogrollContainer .divBlogrollFooter {
+  border-top: 1px solid var(--border);
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  font-size: 0.85rem;
+  /* His 0.5 opacity on our darker text is under 4.5:1. A muted colour says the same
+     thing and stays readable. */
+  opacity: 1;
+  color: var(--text-muted);
+}
+
+.divBlogrollContainer .divBlogrollFooter a {
+  color: var(--text-muted);
 }
 
 blog-roll details {

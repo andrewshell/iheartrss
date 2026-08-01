@@ -125,10 +125,11 @@ export function aboutPage({ config }) {
     about that.</strong> We are trying Dave Winer&rsquo;s blogroll software there in
     place of our own reader. Your browser fetches it &mdash; jQuery, Bootstrap and
     <code>blogroll.js</code> &mdash; from <code>scripting.com</code>&rsquo;s files on
-    Amazon S3, one font from Google Fonts, and then asks
+    Amazon S3, and then asks
     <a href="https://claude.feedland.org/">claude.feedland.org</a> for the list of
-    member feeds and their latest items. Those hosts see your IP address and that you
-    loaded our homepage.
+    member feeds and their latest items. Those two hosts see your IP address and that
+    you loaded our homepage. Nothing else is fetched from anywhere else: the fonts,
+    the stylesheet and the icons are all served from here.
   </p>
   <p>
     That is the only page it happens on. Every other page here makes no third-party

@@ -62,18 +62,24 @@ export function homePage({ config, memberCount = 0 }) {
     From the <a href="/subscriptions.opml">members&rsquo; OPML list</a>. Open a name
     to see its recent items, or <a href="/sites">browse every member</a>.
   </p>
-  <!-- The one thing blogroll.js needs: a div with class divBlogrollContainer. The
-       id is what idWhereToAppend names, and the tabindex is Dave's — the blogroll
-       is keyboard-navigable and has to be focusable to receive the keys.
-       data-opmlurl is ours; see public/feedland-blogroll.js. -->
-  <div class="divBlogrollContainerContainer">
-    <div
-      class="divBlogrollContainer"
-      id="idBlogrollContainer"
-      tabindex="0"
-      data-opmlurl="${opmlUrl}"
-    ></div>
-  </div>
+  <!-- THE ONLY MARKUP blogroll.js needs, and this is all of it: one div carrying
+       the class its stylesheet targets and the id idWhereToAppend names.
+       Everything visible — the menu, the sort headers, the table, the footer — is
+       built into it at runtime. Dave's page wraps this in a second div to centre a
+       fixed-width box on an otherwise empty page; ours is a section of a page that
+       already has a column, so the wrapper is gone and the box is simply as wide as
+       everything else here.
+
+       The tabindex IS load-bearing: blogroll.js binds arrow keys and Return on
+       the document body and acts only when this element has focus, so without it the
+       keyboard interface is dead. data-opmlurl is ours; see
+       public/feedland-blogroll.js. -->
+  <div
+    class="divBlogrollContainer"
+    id="idBlogrollContainer"
+    tabindex="0"
+    data-opmlurl="${opmlUrl}"
+  ></div>
   <noscript>
     <p>
       The reader needs JavaScript. Without it, <a href="/sites">the member list</a>
@@ -116,6 +122,24 @@ export function homePage({ config, memberCount = 0 }) {
  * `code.scripting.com/blogroll/*` 302s to the same S3 bucket as everything else, and
  * CSP checks the redirect target as well as the request — which is why `script-src`
  * and `style-src` name both hosts in `lib/headers.js`.
+ *
+ * Dave's page also links Ubuntu, Oswald and Rancho from Google Fonts. **None of them
+ * are here.** Ubuntu and Oswald styled his page, not the blogroll, and Rancho was
+ * only ever the script font of the title inside the box — which we turn off. Dropping
+ * the last one takes Google off this page entirely.
+ *
+ * What each of the rest is actually for, since none of it is obvious and all of it is
+ * somebody else's:
+ *
+ *   * **jQuery** — blogroll.js is jQuery throughout, and grabs it as `const $` on
+ *     entry.
+ *   * **bootstrap** (css + js) — the ⋮ menu is a Bootstrap dropdown and the feed
+ *     tooltips are Bootstrap popovers. Both are dead without the JS.
+ *   * **Font Awesome** — the wedge carets (`fa-caret-right`) and the ⋮ glyph
+ *     (`fa-ellipsis-v`) are icon-font characters, not images. Without it the rows
+ *     lose the one affordance that says they open.
+ *   * **basic/code.js + the four `feedland/home/` files** — `servercall`, the string
+ *     helpers and the date formatting blogroll.js calls without defining.
  */
 function blogrollIncludes() {
   return html`<script src="https://s3.amazonaws.com/scripting.com/code/includes/jquery-1.9.1.min.js"></script>
@@ -124,7 +148,6 @@ function blogrollIncludes() {
 <link rel="stylesheet" href="https://s3.amazonaws.com/scripting.com/code/fontawesome/css/all.css">
 <script src="https://s3.amazonaws.com/scripting.com/code/includes/basic/code.js"></script>
 <link href="https://s3.amazonaws.com/scripting.com/code/includes/basic/styles.css" rel="stylesheet" type="text/css">
-<link href="https://fonts.googleapis.com/css?family=Rancho" rel="stylesheet">
 <!-- The feed-list machinery: blogroll.js calls into these. -->
 <script src="https://s3.amazonaws.com/scripting.com/code/feedland/home/api.js"></script>
 <script src="https://s3.amazonaws.com/scripting.com/code/feedland/home/misc.js"></script>
