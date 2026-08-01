@@ -196,6 +196,74 @@ test('the section survives both no-JS and a FeedLand outage', async () => {
   assert.match(section, /<noscript>/);
 });
 
+// ── The starter's one piece of logic ────────────────────────────────────────────
+//
+// `public/feedland-blogroll.js` is browser code with no exports, loaded into a `vm`
+// realm the same way the component below is. `startBlogroll` runs at the bottom of
+// the file, so `document.getElementById` has to answer — returning null makes it
+// take its own early exit, which is the behaviour we want here anyway.
+
+async function loadStarter(items) {
+  const source = await readFile(
+    new URL('../public/feedland-blogroll.js', import.meta.url),
+    'utf8',
+  );
+  const removed = [];
+  const realm = createContext({
+    document: {
+      getElementById: () => null,
+      querySelectorAll: () =>
+        items.map((text) => ({
+          textContent: text,
+          remove() {
+            removed.push(text);
+          },
+        })),
+    },
+    window: {},
+    console: { error: () => {} },
+  });
+  runInContext(source, realm);
+  return { realm, removed };
+}
+
+test('the ⋮ menu loses the item that can only show an error', async () => {
+  // "View list in FeedLand..." reads an option with no default and pops
+  // "…the URL hasn't been specified in the software." at whoever clicks it. It
+  // cannot be configured away: FeedLand addresses a list as a category belonging to
+  // an account, and ours is an OPML file on our own server.
+  const { realm, removed } = await loadStarter([
+    'Blogroll home..',
+    'How to use..',
+    '',
+    'View this list in OPML..',
+    'View list in FeedLand...',
+    '',
+    'Developer info..',
+  ]);
+
+  realm.dropUnconfiguredMenuItem();
+
+  // Exactly one item, and not the one directly above it that opens OUR OPML file.
+  assert.deepEqual(removed, ['View list in FeedLand...']);
+});
+
+test('a reworded menu removes nothing rather than the wrong thing', async () => {
+  // The items carry no id, class or data attribute, so the match is on text. If Dave
+  // rewords the label this stops firing and the error dialog comes back — which is
+  // the direction to fail: a menu item we did not mean to remove is worse than one
+  // we failed to remove.
+  const { realm, removed } = await loadStarter([
+    'Blogroll home..',
+    'Open the list in FeedLand..',
+    'Developer info..',
+  ]);
+
+  realm.dropUnconfiguredMenuItem();
+
+  assert.deepEqual(removed, []);
+});
+
 // ── The component's own logic ───────────────────────────────────────────────────
 //
 // `public/blog-roll.js` is browser code with no exports, so it is loaded into a `vm`

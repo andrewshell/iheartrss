@@ -66,7 +66,49 @@ function startBlogroll() {
     maxTitleLength: 60,
 
     flViewOptions: false, //his default dumps the whole options object to the console on every page load
+
+    // Fires once the blogroll is built, which is the first moment the ⋮ menu exists
+    // in the DOM.
+    blogrollDisplayedCallback: dropUnconfiguredMenuItem,
   });
+}
+
+/**
+ * Remove the ⋮ menu's "View list in FeedLand..." item, which cannot work here.
+ *
+ * It reads `urlFeedlandViewBlogroll`, an option with no default, and pops an error
+ * dialog when it is unset: "Can't view the blogroll in FeedLand, because the URL
+ * hasn't been specified in the software." We are not leaving that in front of
+ * visitors.
+ *
+ * **We cannot simply set the option.** FeedLand addresses a list as a *category
+ * belonging to an account* — `?screenname=…&catname=…`, which is the shape of Dave's
+ * own `urlBlogrollOpml`. Our list is not that: it is an OPML file on our server that
+ * claude.feedland.org subscribes to as a reading list, and nothing in the blogroll
+ * or FeedLand includes derives a viewer URL from an OPML url. If Dave tells us the
+ * URL his server serves our list at, this function goes away and the option gets set
+ * instead — that is the fix, and this is the stopgap.
+ *
+ * Matched on the item's TEXT because the menu is built from a flat list of `<li>`s
+ * with no ids, classes or data attributes to tell one from another — `:nth-child`
+ * would silently remove the wrong item the day Dave adds one above it. If the label
+ * is ever reworded this stops matching and the item comes back, which is the safe
+ * direction to fail: a menu item we did not intend to remove is worse than one we
+ * failed to.
+ *
+ * The other four items all work and all stay. "View this list in OPML.." opens our
+ * own /subscriptions.opml.
+ */
+function dropUnconfiguredMenuItem() {
+  const items = document.querySelectorAll(
+    '#idBlogrollContainer .divBlogrollMenu .dropdown-menu li',
+  );
+
+  for (const item of items) {
+    if (item.textContent.trim().toLowerCase().startsWith('view list in feedland')) {
+      item.remove();
+    }
+  }
 }
 
 startBlogroll();
