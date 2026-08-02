@@ -21,6 +21,13 @@
      has to be *lighter*, and no single transform gives both. */
   --brand-text-hover: #7d3b00;
 
+  /* The text colour that sits ON a brand fill — the filled buttons, and nothing else.
+     It has to be a token because it inverts between schemes: white clears 4.5:1 on the
+     dark brown `--brand-text` uses on white (5.9:1), and fails badly on the light
+     orange it becomes in dark mode (2.4:1). The fill is the thing that changes, so the
+     text on it has to change with it. */
+  --on-brand: #fff;
+
   --bg: #fdfcfa;
   --surface: #fff;
   --text: #1b1a18;
@@ -44,6 +51,10 @@
   :root {
     --brand-text: #f0913c;
     --brand-text-hover: #f7a75e;
+    /* Near-black rather than pure black: it matches the page background, so a filled
+       button reads as a lit panel rather than as a hole punched in the page. 7.6:1 on
+       the resting fill and 9.2:1 on the hover one. */
+    --on-brand: #15161a;
     --bg: #15161a;
     --surface: #1c1e23;
     --text: #eceae7;
@@ -461,7 +472,7 @@ pre.code code,
   border: 1px solid transparent;
   border-radius: 0.5rem;
   background: var(--brand-text);
-  color: #fff;
+  color: var(--on-brand);
   font-size: max(1rem, 16px);
   font-family: inherit;
   font-weight: 600;
@@ -506,7 +517,7 @@ pre.code code,
  */
 .button:hover,
 .button:focus {
-  color: #fff;
+  color: var(--on-brand);
 }
 
 /* Same rule, same reason. The skip link is *only* ever seen focused, and on the
