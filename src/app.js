@@ -15,6 +15,7 @@ import { registerStatic } from './routes/static.js';
 import { registerSubmit } from './routes/submit.js';
 import { createFetcher } from './verify/fetch.js';
 import { createVerifier } from './verify/index.js';
+import { createRenderer } from './verify/render.js';
 import { createPersister } from './verify/persist.js';
 import { aboutPage } from './views/about.js';
 import { badgePage } from './views/badge.js';
@@ -89,6 +90,9 @@ export function createApp({
       createVerifier({
         safeFetch: createFetcher({ lookup, config }),
         config,
+        // §5 Step 5's fallback. `null` unless RENDER_ENABLED=true, so this is a no-op
+        // on a deploy that has not opted in.
+        renderPage: createRenderer({ config, log }),
         isBanned:
           queries === null
             ? undefined

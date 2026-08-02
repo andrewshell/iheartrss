@@ -28,6 +28,7 @@ Two things to know before you touch anything:
 | Site is broken and the last thing you did was deploy | [Roll back to a previous image](#roll-back-to-a-previous-image)           |
 | healthchecks.io alerted, container looks fine        | [Scheduler wedged or falling behind](#scheduler-wedged-or-falling-behind) |
 | A listed site is serving malware or spam             | [Taking a member down](#taking-a-member-down)                             |
+| Several members failing at once with no common host  | [The rendering fallback is down](#the-rendering-fallback-is-down)         |
 | Disk is full                                         | [Disk filling up](#disk-filling-up)                                       |
 
 ```sh
@@ -391,6 +392,55 @@ Set `HEALTHCHECK_PING_URL` (healthchecks.io or self-hosted) in `.env`. It is pin
 the end of every batch, which covers "container dead" and "scheduler wedged" at once.
 Without it, `restart: unless-stopped` turns a crash loop into something you find out
 about from a member's email.
+
+---
+
+## The rendering fallback is down
+
+Some members build their page body in JavaScript, so the HTML we fetch carries no link
+back to us. For those, and **only** those, verification asks a hosted rendering service
+(Cloudflare Browser Rendering by default) for the finished page. See `RENDER_*` in
+`.env.example`.
+
+When that service is unreachable the result is `render_unavailable`, which
+`classify()` treats as **transient** — deliberately, because the alternative is that a
+provider outage looks identical to every JS-rendered member removing their badge on
+the same afternoon, and three of those in a row is `dropped`.
+
+So the symptom is not removals. It is a cluster of members that quietly stop passing,
+with no host in common:
+
+```sh
+docker compose logs iheartrss | grep -E 'render\.(failed|rejected|too_large|unreadable)'
+```
+
+| Log line                                      | Means                                                             | Do                                                                                                   |
+| --------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `render.rejected` with `status: 401` or `403` | The token is wrong, expired, or lacks `Browser Rendering - Edit`. | Reissue it in the Cloudflare dashboard, update `RENDER_API_TOKEN`, redeploy.                         |
+| `render.rejected` with `status: 429`          | Quota wall — the daily browser-time allowance is spent.           | Wait for the reset, or raise the plan. Nothing is lost; the affected members retry on the next tick. |
+| `render.failed`                               | The request never completed: DNS, TLS, or a timeout.              | Check whether the provider is up. If it is a sustained outage, see below.                            |
+| `render.unreadable`                           | The endpoint answered with something that is not HTML.            | Usually `RENDER_API_URL` pointing somewhere unexpected. Check it.                                    |
+
+**Nothing is being removed while this is broken.** Transient failures accumulate
+strikes and three of them mark a site `dropped`, so a multi-day outage is not free —
+but a few hours is genuinely harmless, and doing nothing is a valid response.
+
+To stop the strike accumulation during a long outage, switch the fallback off rather
+than leaving it failing:
+
+```sh
+# in the stack .env
+RENDER_ENABLED=false
+```
+
+```sh
+docker compose up -d
+```
+
+That returns those members to plain-HTML checking, which for a JS-rendered site means
+`no_linkback` — an **opt-out** sighting, which is worse than a transient one. Only do
+this if you intend to switch it back on before the 24h opt-out follow-up confirms.
+Leaving the renderer failing is the safer of the two bad options.
 
 ---
 

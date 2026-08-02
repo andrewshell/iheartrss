@@ -392,9 +392,19 @@ export function createRevalidator({
  * `canonical_*` reasons cannot arise on this path (canonical resolution does not
  * run), and §8 says that if one somehow does it is Transient — which is where
  * anything unrecognised falls anyway.
+ *
+ * `render_unavailable` is the same argument reaching one step further. Once Step 5
+ * has a JS-rendering fallback, "the served HTML has no link-back" stops being the
+ * last word — and a rendering outage produces a result that, on the old two-code
+ * scheme, would have been indistinguishable from every member who removed their
+ * badge that afternoon. Three ticks of that is `dropped`, for every JS-rendered
+ * member at once, caused entirely by a third party we chose. It is listed
+ * explicitly rather than left to the default so that a future edit has to argue
+ * with this paragraph before moving it.
  */
 export function classify(result) {
   if (result.ok) return 'pass';
+  if (result.reason === 'render_unavailable') return 'transient';
   if (result.reason === 'no_linkback') return 'optout';
   if (result.reason === 'blocked_by_site') return 'blocked';
   return 'transient';
