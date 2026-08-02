@@ -23,6 +23,7 @@ import { loadIpHmacKey } from './lib/iphash.js';
 import { ensureDataDirectory, probeDataDirectory } from './storage.js';
 import { createFetcher } from './verify/fetch.js';
 import { createVerifier } from './verify/index.js';
+import { createRenderer } from './verify/render.js';
 
 const config = loadConfig();
 
@@ -85,6 +86,10 @@ const revalidation = createRevalidator({
   verifySite: createVerifier({
     safeFetch: createFetcher({ lookup, config }),
     config,
+    // Its own renderer, matching the "own fetcher and verifier" rule above. Nothing
+    // is shared with the app's, because nothing about the scheduler's outbound path
+    // may be contended for by a public request.
+    renderPage: createRenderer({ config, log }),
     isBanned: ({ host, path }) => queries.findBan({ host, path }) !== undefined,
   }),
   log,

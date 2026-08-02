@@ -21,8 +21,17 @@ import { normalizeUrl } from './url.js';
  * @param {object} deps.config - `submitBudgetMs`, `linkbackHosts`.
  * @param {Function} [deps.isBanned] - `({host, path}) => boolean`, injected so Step 0.6
  *   can consult `banned_hosts` (§4) without this module taking a database dependency.
+ * @param {Function|null} [deps.renderPage] - from `createRenderer`; the JS-rendering
+ *   fallback for Step 5, or `null` when rendering is not configured. Null is the
+ *   default so a deploy without credentials runs the pipeline exactly as it did
+ *   before `render.js` existed.
  */
-export function createVerifier({ safeFetch, config, isBanned = () => false }) {
+export function createVerifier({
+  safeFetch,
+  config,
+  isBanned = () => false,
+  renderPage = null,
+}) {
   /**
    * @param {string} submittedUrl - raw user input.
    * @param {object} [options]
@@ -160,7 +169,41 @@ export function createVerifier({ safeFetch, config, isBanned = () => false }) {
     // Not "either page": accepting it on the submitted page would break the consent
     // property, since being listed under a URL would no longer require that page's
     // owner to have opted in.
-    const linkBack = findLinkBack(canonicalHtml, canonicalUrl, config.linkbackHosts);
+    let linkBack = findLinkBack(canonicalHtml, canonicalUrl, config.linkbackHosts);
+    let linkBackRendered = false;
+
+    // The JS-rendering fallback (`render.js`). Only ever reached when the served HTML
+    // carries no link-back, which keeps the cost proportional to the failures rather
+    // than the members: a site that passes on its own markup never touches it.
+    //
+    // The rendered document is resolved against `canonicalUrl`, not against whatever
+    // the renderer ended up on. `canonicalUrl` is already post-redirect — `safeFetch`
+    // followed and re-guarded every hop to get it — and it is the URL we publish, so
+    // it is the only correct base for deciding whether *that page* links to us.
+    if (linkBack === null && renderPage !== null) {
+      const rendered = await renderPage(canonicalUrl, { budget });
+
+      // §8's outcome table is ORDERED, and this is the ordering that matters most in
+      // this file: a render that did not happen must never fall through to
+      // `no_linkback`. `no_linkback` means "we read the page and the badge is gone",
+      // which starts a member's removal clock; a Cloudflare outage is not evidence
+      // about anybody's page. `classify` sends every other reason to `transient`, so
+      // returning a distinct code here is the whole mechanism.
+      if (!rendered.ok) {
+        return {
+          ok: false,
+          reason: 'render_unavailable',
+          renderReason: rendered.reason,
+          url: canonicalUrl,
+          submittedUrl: submitted.url,
+          feedUrl,
+        };
+      }
+
+      linkBack = findLinkBack(rendered.html, canonicalUrl, config.linkbackHosts);
+      linkBackRendered = linkBack !== null;
+    }
+
     if (linkBack === null) {
       return {
         ok: false,
@@ -168,6 +211,10 @@ export function createVerifier({ safeFetch, config, isBanned = () => false }) {
         url: canonicalUrl,
         submittedUrl: submitted.url,
         feedUrl,
+        // Distinguishes "the page has no badge" from "the page has no badge and we
+        // rendered it to be sure". Without it the logs cannot answer whether the
+        // fallback is earning its keep.
+        rendered: renderPage !== null,
       };
     }
 
@@ -180,6 +227,10 @@ export function createVerifier({ safeFetch, config, isBanned = () => false }) {
       title: winningFeed.title,
       description: winningFeed.description,
       linkBack,
+      // True when the link was only visible after rendering. Carried so a member who
+      // depends on the fallback is *visible* — in the logs, and to anyone asking why
+      // the render quota is being spent.
+      linkBackRendered,
       features: winningFeed.features,
       // §8's conditional GETs. `feedUnchanged` means the feed answered 304: it is
       // byte-identical to the document we already validated, so it still validates —

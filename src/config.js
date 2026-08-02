@@ -50,6 +50,53 @@ export function loadConfig(env = process.env) {
     errors,
   );
 
+  // §5 Step 5's JS-rendering fallback (`verify/render.js`).
+  //
+  // OFF by default, and off under NODE_ENV=test for the same reason as
+  // REVALIDATE_ENABLED and RSSCLOUD_ENABLED: a test run must never spend an
+  // operator's rendering quota, and must never hand a fixture URL to a third party.
+  //
+  // Unlike the other switches this one cannot default to on even in production —
+  // it needs credentials, and a feature that silently does nothing is worse than one
+  // an operator had to choose. `renderPage` is `null` when this is false, and
+  // `verifySite` then runs exactly as it did before rendering existed.
+  const renderEnabled = env.RENDER_ENABLED === 'true' && env.NODE_ENV !== 'test';
+  // Read with `parseCredential`, not `parseNonEmpty`: an operator who leaves
+  // `RENDER_ACCOUNT_ID=` in the .env while the feature is off has not made a mistake,
+  // and stopping the boot over it would be a config validator failing a feature that
+  // is switched off. Emptiness only becomes an error below, and only when enabled.
+  const renderAccountId = parseCredential(env.RENDER_ACCOUNT_ID);
+  const renderApiToken = parseCredential(env.RENDER_API_TOKEN);
+  // Overridable so the choice of provider is not welded into the source. The default
+  // is Cloudflare's `/content` endpoint, which needs the account id in its path; any
+  // endpoint that accepts `{url}` and answers with HTML (or a `{result}` envelope)
+  // works without touching this file.
+  const renderApiUrl =
+    parseOptionalUrl(env.RENDER_API_URL, 'RENDER_API_URL', errors) ??
+    (renderAccountId === ''
+      ? null
+      : `https://api.cloudflare.com/client/v4/accounts/${renderAccountId}/browser-rendering/content`);
+  const renderTimeoutMs = parsePositiveInt(
+    env.RENDER_TIMEOUT_MS,
+    20000,
+    'RENDER_TIMEOUT_MS',
+    errors,
+  );
+
+  // Validated only when switched on: these are the two ways to enable a renderer that
+  // can never succeed, and both would surface as every JS-rendered member going
+  // permanently `transient` — a failure mode with no error message anywhere.
+  if (renderEnabled) {
+    if (renderApiToken === '') {
+      errors.push('RENDER_API_TOKEN is required when RENDER_ENABLED=true');
+    }
+    if (renderApiUrl === null) {
+      errors.push(
+        'RENDER_ACCOUNT_ID (or an explicit RENDER_API_URL) is required when RENDER_ENABLED=true',
+      );
+    }
+  }
+
   // §6/§9, phase 5. `adminToken` is nullable by design: "no admin UI is served at
   // all if ADMIN_TOKEN is unset" — an absent token disables the routes, a *weak*
   // one stops the boot.
@@ -227,10 +274,19 @@ export function loadConfig(env = process.env) {
     rsscloudProtocol,
     contentDir,
     contentPollMs,
+    renderEnabled,
+    renderApiUrl,
+    renderApiToken,
+    renderTimeoutMs,
     // The IP-HMAC key's require-or-generate rule branches on this, and it has to
     // branch on something the deploy actually sets.
     production,
   });
+}
+
+/** An optional secret or identifier: absent, blank and whitespace all mean "unset". */
+function parseCredential(raw) {
+  return raw === undefined ? '' : String(raw).trim();
 }
 
 function parseNonEmpty(raw, fallback, name, errors) {

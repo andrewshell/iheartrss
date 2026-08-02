@@ -13,6 +13,7 @@ import { lookup } from 'node:dns';
 import { loadConfig } from '../src/config.js';
 import { createFetcher } from '../src/verify/fetch.js';
 import { createVerifier } from '../src/verify/index.js';
+import { createRenderer } from '../src/verify/render.js';
 
 const [, , target, ...rest] = process.argv;
 
@@ -23,7 +24,18 @@ if (target === undefined || target === '' || rest.length > 0) {
 
 const config = loadConfig(process.env);
 const safeFetch = createFetcher({ lookup, config });
-const verifySite = createVerifier({ safeFetch, config });
+// §5 Step 5's rendering fallback, wired here for the same reason the real `dns.lookup`
+// is: this CLI is only useful if it is the code path `/submit` takes. Left out, it
+// reports `no_linkback` for every JS-rendered site while the running app passes them —
+// the one discrepancy that makes the tool actively misleading.
+// Logs to stderr, not the swallowed no-op the app uses: "why did this say no
+// link-back" is the question this CLI exists to answer, and a 401 from the rendering
+// provider is the answer often enough to be worth the two lines.
+const renderPage = createRenderer({
+  config,
+  log: (msg, fields) => process.stderr.write(`${JSON.stringify({ msg, ...fields })}\n`),
+});
+const verifySite = createVerifier({ safeFetch, config, renderPage });
 
 const started = Date.now();
 const result = await verifySite(target);
@@ -46,6 +58,9 @@ if (result.ok) {
   say('title', result.title);
   say('description', result.description);
   say('link-back found', result.linkBack);
+  // Named on a pass too, not just a failure: a member silently depending on the
+  // rendering quota is exactly the thing worth knowing before the quota runs out.
+  say('link-back source', result.linkBackRendered ? 'rendered page' : 'served HTML');
 
   const f = result.features ?? {};
   lines.push('');
@@ -60,6 +75,12 @@ if (result.ok) {
 } else {
   say('reason', result.reason);
   say('status', result.status === undefined ? undefined : String(result.status));
+  // On `render_unavailable` this is the actual cause; on `no_linkback` it answers the
+  // first question anyone asks, which is whether the fallback ran at all.
+  say('render failure', result.renderReason);
+  if (result.reason === 'no_linkback') {
+    say('rendering', result.rendered ? 'ran, still no link' : 'not configured');
+  }
   say('url', result.url);
   say('feed url', result.feedUrl);
   say('channel link', result.channelLink);

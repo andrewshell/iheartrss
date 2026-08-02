@@ -256,6 +256,22 @@ const MESSAGES = {
     </p>`,
   }),
 
+  // Deliberately worded as *our* failure, and deliberately not adjacent to any advice
+  // about badges. A member who reads this and "fixes" their page is fixing something
+  // that was never broken — we simply could not finish looking.
+  render_unavailable: ({ result }) => ({
+    heading: "We couldn't finish checking that page",
+    body: html`<p>
+      <code>${result.url}</code> loaded and we found your feed, but the page builds its
+      content with JavaScript &mdash; so we asked our rendering service for the
+      finished version, and it didn't answer.
+    </p>
+    <p>
+      This is on us, not on you, and it's temporary. Nothing about your listing has
+      changed; try again in a few minutes.
+    </p>`,
+  }),
+
   no_linkback: ({ result, config }) => ({
     heading: "We couldn't find a link back to us",
     body: html`<p>

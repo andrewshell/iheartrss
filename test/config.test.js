@@ -286,3 +286,68 @@ test('RSSCLOUD_ENABLED is off under NODE_ENV=test', () => {
   // ask a stranger's server to fetch anything.
   assert.equal(loadConfig({ NODE_ENV: 'test' }).rsscloudEnabled, false);
 });
+
+// §5 Step 5's rendering fallback. The failure this section guards is a renderer that
+// is switched ON but cannot possibly succeed: every JS-rendered member then goes
+// permanently `transient`, which produces no error message anywhere.
+
+test('rendering is off unless RENDER_ENABLED is exactly "true"', () => {
+  assert.equal(loadConfig({}).renderEnabled, false);
+  assert.equal(loadConfig({ RENDER_ENABLED: 'false' }).renderEnabled, false);
+  assert.equal(loadConfig({ RENDER_ENABLED: '1' }).renderEnabled, false);
+});
+
+test('rendering is forced off under NODE_ENV=test', () => {
+  // Same rule as REVALIDATE_ENABLED and RSSCLOUD_ENABLED: no test run may spend an
+  // operator's rendering quota, or hand a fixture URL to a third party.
+  const config = loadConfig({
+    NODE_ENV: 'test',
+    RENDER_ENABLED: 'true',
+    RENDER_ACCOUNT_ID: 'acct',
+    RENDER_API_TOKEN: 'tok',
+  });
+
+  assert.equal(config.renderEnabled, false);
+});
+
+test('RENDER_ACCOUNT_ID builds the Cloudflare endpoint', () => {
+  const config = loadConfig({
+    RENDER_ENABLED: 'true',
+    RENDER_ACCOUNT_ID: 'abc123',
+    RENDER_API_TOKEN: 'tok',
+  });
+
+  assert.equal(
+    config.renderApiUrl,
+    'https://api.cloudflare.com/client/v4/accounts/abc123/browser-rendering/content',
+  );
+});
+
+test('an explicit RENDER_API_URL wins, so the provider is not welded into the source', () => {
+  const config = loadConfig({
+    RENDER_ENABLED: 'true',
+    RENDER_ACCOUNT_ID: 'abc123',
+    RENDER_API_TOKEN: 'tok',
+    RENDER_API_URL: 'https://chrome.example/content',
+  });
+
+  assert.equal(config.renderApiUrl, 'https://chrome.example/content');
+});
+
+test('rendering enabled without credentials stops the boot', () => {
+  assert.throws(
+    () => loadConfig({ RENDER_ENABLED: 'true', RENDER_ACCOUNT_ID: 'abc123' }),
+    /RENDER_API_TOKEN/,
+  );
+  assert.throws(
+    () => loadConfig({ RENDER_ENABLED: 'true', RENDER_API_TOKEN: 'tok' }),
+    /RENDER_ACCOUNT_ID/,
+  );
+});
+
+test('blank render credentials are only an error once rendering is switched on', () => {
+  // An operator who leaves `RENDER_ACCOUNT_ID=` in the .env with the feature off has
+  // not made a mistake, and a config validator that fails a boot over a disabled
+  // feature is worse than the feature.
+  assert.doesNotThrow(() => loadConfig({ RENDER_ACCOUNT_ID: '', RENDER_API_TOKEN: '' }));
+});
