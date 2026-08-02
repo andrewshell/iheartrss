@@ -9,11 +9,11 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "node --watch src/server.js",
-    "start": "node src/server.js",
+    "dev": "node --env-file-if-exists=.env --watch src/server.js",
+    "start": "node --env-file-if-exists=.env src/server.js",
     "test": "node --test \"test/**/*.test.js\"",
-    "verify": "node bin/verify.js",
-    "rsscloud:ping": "node bin/rsscloud.js",
+    "verify": "node --env-file-if-exists=.env bin/verify.js",
+    "rsscloud:ping": "node --env-file-if-exists=.env bin/rsscloud.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
