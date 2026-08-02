@@ -37,6 +37,7 @@ export function submitForm({ action = '/submit', value = '', autofocus = false }
       Just test it, don&rsquo;t list me
     </button>
   </div>
+  <p class="submit-form__status" role="status"></p>
 </form>`;
 }
 
@@ -98,6 +99,10 @@ export function submitPage({ config, result = null, submitted = '' }) {
     description: 'Add your site to the I ♥ RSS directory.',
     body,
     config,
+    // Progressive enhancement only: the pending state. Verification is a synchronous
+    // POST that can run several seconds once the rendering fallback is involved, and
+    // an unmarked form invites a second click that spends a second verification.
+    scripts: ['/submit-pending.js'],
   });
 }
 
