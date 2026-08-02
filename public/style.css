@@ -467,6 +467,49 @@ pre.code code,
   margin: 0 0 0.75rem;
 }
 
+/* The pending state, driven by submit-pending.js. Everything here is inert until
+   that file adds the spinner and the disabled attribute, so a no-JS browser sees
+   none of it. */
+.submit-form button[disabled] {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.submit-form__spinner {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 0.5em;
+  vertical-align: -0.1em;
+  /* `currentColor` on three sides and a transparent fourth: the ring reads on both
+     the filled primary button and the outlined secondary one without either needing
+     its own rule. */
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: submit-form-spin 0.7s linear infinite;
+}
+
+@keyframes submit-form-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* The live region is for screen readers; the button beside it already carries the
+   message visually, and printing it twice would be the redundancy. It cannot be
+   `display: none` — a hidden live region is not announced. */
+.submit-form__status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .panel {
   border: 1px solid var(--border);
   border-left: 4px solid var(--border);

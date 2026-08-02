@@ -67,6 +67,23 @@ test('GET /submit renders a form built for a phone', async () => {
   assert.match(html, /<label[^>]+for="url"/);
 });
 
+test('/submit ships the pending-state script and the region it speaks through', async () => {
+  // Progressive enhancement, so nothing here is load-bearing for the form itself —
+  // which is exactly why it can rot unnoticed. If the `scripts:` entry is dropped or
+  // the file renamed, the form keeps working and simply stops telling anyone that a
+  // four-second verification is in progress, which is the state that invites the
+  // second click this was added to prevent.
+  const { app } = appWith();
+  const html = await (await app.request('/submit')).text();
+
+  // Cache-busted by `assetUrl`, hence the loose tail.
+  assert.match(html, /<script src="\/submit-pending\.js\?v=[0-9a-f]+" defer><\/script>/);
+
+  // `role="status"` rather than a bare <p>: a disabled button's label change is not
+  // reliably announced, and the click may have moved focus off it.
+  assert.match(html, /<p class="submit-form__status" role="status"><\/p>/);
+});
+
 test('the homepage points at /submit rather than embedding the form', async () => {
   // §10: the form and the three "how to join" steps that end in it now live
   // together on /submit. The homepage used to embed the form and explain the steps
