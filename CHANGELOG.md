@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.5.0...iheartrss-v0.6.0) (2026-08-02)
+
+
+### Features
+
+* verify JS-rendered pages through a hosted rendering service ([af7a46f](https://github.com/andrewshell/iheartrss/commit/af7a46fe24bdefd2c47ca86c45262fa162e0046f))
+* verify JS-rendered pages through a hosted rendering service ([e8ca522](https://github.com/andrewshell/iheartrss/commit/e8ca522a627850b994699ce8e660586dce13f2d1))
+
+
+### Bug Fixes
+
+* load .env in the local entry points ([f35b1e6](https://github.com/andrewshell/iheartrss/commit/f35b1e65a86d6c83abbadf7dd2745b353319cbd0))
+
 ## [0.5.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.4.0...iheartrss-v0.5.0) (2026-08-01)
 
 
