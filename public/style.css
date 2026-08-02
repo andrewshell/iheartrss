@@ -16,6 +16,11 @@
      clears 4.5:1 on white; use it anywhere text carries meaning. */
   --brand-text: #a04c00;
 
+  /* The hover variant of the brand colour, hand-picked per scheme rather than derived
+     with a filter: on white the feedback has to be *darker* and on the dark surface it
+     has to be *lighter*, and no single transform gives both. */
+  --brand-text-hover: #7d3b00;
+
   --bg: #fdfcfa;
   --surface: #fff;
   --text: #1b1a18;
@@ -38,6 +43,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --brand-text: #f0913c;
+    --brand-text-hover: #f7a75e;
     --bg: #15161a;
     --surface: #1c1e23;
     --text: #eceae7;
@@ -110,10 +116,34 @@ ol {
   max-width: var(--measure);
 }
 
+/*
+ * `layout.js` loads this sheet last, "so it wins wherever a third-party sheet above
+ * collides with it". That is true, but only PER PROPERTY — being later settles a
+ * collision on a property both sheets declare, and does nothing about one only the
+ * other sheet declares. The homepage loads bootstrap.css for the blogroll widget, and
+ * both of the declarations below exist because of that gap:
+ *
+ *   * `text-decoration-line`. Bootstrap sets `a { text-decoration: none }`. We set
+ *     thickness and offset but never the line itself, so the underline came from the
+ *     UA default everywhere — and on the homepage, where bootstrap overrode it, links
+ *     were the one place on the site with no underline at all.
+ *   * The colour on `:hover`/`:focus`. Bootstrap's `a:hover, a:focus` sets a colour;
+ *     our hover rule declared only thickness. Result: resting links were brand (ours
+ *     wins, same specificity, later) and hovered links went bootstrap blue.
+ *
+ * The rule of thumb for anything added here: declare the property in the same STATE
+ * you want to control, not just on the base selector.
+ */
 a {
   color: var(--brand-text);
+  text-decoration-line: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.15em;
+}
+
+a:hover,
+a:focus {
+  color: var(--brand-text);
 }
 
 a:hover {
@@ -436,6 +466,11 @@ pre.code code,
   font-family: inherit;
   font-weight: 600;
   cursor: pointer;
+  /* Neutralised by the `prefers-reduced-motion` block above. */
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .button {
@@ -443,8 +478,48 @@ pre.code code,
   text-decoration: none;
 }
 
-.button:hover {
-  text-decoration: underline;
+/* Hover feedback for both button shapes.
+ *
+ * `.button:hover` used to be `text-decoration: underline` — the only hover state any
+ * button on the site had, and an underline reads as a link rather than as a control
+ * about to be pressed. Darkening the fill instead makes the homepage CTA and the two
+ * submit buttons respond the same way, which is the point: they mean the same thing.
+ *
+ * `:not([disabled])` is load-bearing. `submit-pending.js` disables both submit buttons
+ * for the length of a verification, and a control that still lights up under the
+ * cursor reads as clickable at exactly the moment it is not. */
+.button:hover,
+.submit-form button:not([disabled]):hover {
+  background: var(--brand-text-hover);
+}
+
+/*
+ * `.button` is an <a>, and an anchor styled as a button has to restate its colour in
+ * every state it can be in. A single class is (0,1,0); a bare `a:hover`/`a:focus` is
+ * (0,1,1) and outranks it — so the label gets repainted by whatever the last such rule
+ * says. Both candidates are real: ours, above, and bootstrap's on the homepage. Left
+ * alone the CTA goes brand-brown on the brand-brown hover fill.
+ *
+ * Background stays on `:hover` only. `:focus` already announces itself with the global
+ * focus ring, and a fill that changes when a click moves focus to the control reads as
+ * a stuck hover.
+ */
+.button:hover,
+.button:focus {
+  color: #fff;
+}
+
+/* Same rule, same reason. The skip link is *only* ever seen focused, and on the
+   homepage bootstrap's `a:focus` was already repainting it blue. */
+.skip-link:hover,
+.skip-link:focus {
+  color: var(--text);
+}
+
+.submit-form .button-secondary:not([disabled]):hover {
+  background: var(--code-bg);
+  border-color: var(--brand-text);
+  color: var(--brand-text);
 }
 
 .submit-form .button-secondary {
