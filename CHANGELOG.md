@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.7.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.6.0...iheartrss-v0.7.0) (2026-08-02)
+
+
+### Features
+
+* tell people the submit form is working ([82bafb2](https://github.com/andrewshell/iheartrss/commit/82bafb22e87ba40d0473801d42c58d4c0e052456))
+* tell people the submit form is working ([a5cecbe](https://github.com/andrewshell/iheartrss/commit/a5cecbe466b23e2816d62ebd4d7b5ef8aa467cc9))
+
+
+### Bug Fixes
+
+* make the filled buttons readable in dark mode ([16b6efe](https://github.com/andrewshell/iheartrss/commit/16b6efe0093ff6c919dfe4961334ace5ce9d9052))
+* make the filled buttons readable in dark mode ([0a491af](https://github.com/andrewshell/iheartrss/commit/0a491afa70a29423356e035e7d29db4d1eafbde8))
+* stop the homepage's third-party CSS repainting our links ([09bd5ed](https://github.com/andrewshell/iheartrss/commit/09bd5ed8b6cc52afdf3bdbae1a2bb933861e3d79))
+* stop the homepage's third-party CSS repainting our links ([5091560](https://github.com/andrewshell/iheartrss/commit/509156017e788163d0b828097836434a4bcd340d))
+
 ## [0.6.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.5.0...iheartrss-v0.6.0) (2026-08-02)
 
 
