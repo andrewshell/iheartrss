@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.7.0...iheartrss-v0.8.0) (2026-08-03)
+
+
+### Features
+
+* store the feed URL a permanent redirect points at ([42a360c](https://github.com/andrewshell/iheartrss/commit/42a360cf4b879a9ecb6d358b6385bbb346ddbfef))
+* store the feed URL a permanent redirect points at ([3724dfc](https://github.com/andrewshell/iheartrss/commit/3724dfc69f8cd1b5cdbe05b590d004449a7fc013))
+
 ## [0.7.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.6.0...iheartrss-v0.7.0) (2026-08-02)
 
 
