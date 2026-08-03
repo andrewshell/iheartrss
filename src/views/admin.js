@@ -325,13 +325,35 @@ function sitesSection(heading, rows, csrf) {
                 row.last_error ? html`<code>${row.last_error}</code>` : '',
                 row.last_checked_at ? html`checked ${stamp(row.last_checked_at)}` : '',
               ])}
+              ${
+                // The OPML `xmlUrl`. Shown because it is the field Revalidate exists to
+                // repair — a row carrying a pre-redirect feed URL is invisible from the
+                // title and the status, which is how they stay stale.
+                row.feed_url
+                  ? html`<code class="admin-row__feed">${row.feed_url}</code>`
+                  : ''
+              }
             </div>
-            <form class="admin-inline" method="post"
-                  action="/admin/sites/${row.id}/${row.status === 'hidden' ? 'unhide' : 'hide'}">
-              ${csrfField(csrf)}
-              <input name="reason" type="text" placeholder="reason" aria-label="reason">
-              <button type="submit">${row.status === 'hidden' ? 'Unhide' : 'Hide'}</button>
-            </form>
+            <div class="admin-actions">
+              <form class="admin-inline" method="post"
+                    action="/admin/sites/${row.id}/${row.status === 'hidden' ? 'unhide' : 'hide'}">
+                ${csrfField(csrf)}
+                <input name="reason" type="text" placeholder="reason" aria-label="reason">
+                <button type="submit">${row.status === 'hidden' ? 'Unhide' : 'Hide'}</button>
+              </form>
+              ${
+                // Not offered on a hidden row: `markRevalidationPass` is guarded on
+                // `status <> 'hidden'`, so the button would do nothing. Unhide is the
+                // action there, and it re-verifies on its own.
+                row.status === 'hidden'
+                  ? ''
+                  : html`<form class="admin-inline" method="post"
+                              action="/admin/sites/${row.id}/revalidate">
+                    ${csrfField(csrf)}
+                    <button type="submit">Revalidate</button>
+                  </form>`
+              }
+            </div>
           </li>`,
         )}
       </ul>`

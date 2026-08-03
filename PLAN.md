@@ -1203,6 +1203,7 @@ signals with `AbortSignal.any([...])`; `SUBMIT_BUDGET_MS` is the only real ceili
 | GET | `/admin` | Token-gated dashboard: recent submissions, failing sites, ban list. |
 | POST | `/admin/sites/:id/hide` | Set `status = 'hidden'`. |
 | POST | `/admin/sites/:id/unhide` | Back to `active` and re-verify. |
+| POST | `/admin/sites/:id/revalidate` | Run §8's check on one row now, instead of waiting for the scheduler to reach it. The motivating case is a stale `feed_url` — a row listed before Step 2's redirect normalisation carries the spelling subscribers are redirected *from*. Pass-only in both directions: a pass writes the fresh columns, and **any** other outcome writes nothing at all, so an admin cannot start a member's 3-strike clock or complete an opt-out by pressing a button while that member's host is 403-ing. `fixedCanonical`, so it cannot move the row onto another row's URL. Refused on a `hidden` row, where `markRevalidationPass` would silently no-op — unhide is the action there, and it re-verifies on its own. |
 | POST | `/admin/ban` | Add host to `banned_hosts` and hide all its sites. |
 
 #### What `/about` has to say

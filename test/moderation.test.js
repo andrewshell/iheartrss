@@ -963,3 +963,152 @@ test('an unhide whose re-verification fails still unhides, and writes no failure
   assert.equal(row.failure_count, 0);
   assert.equal(row.last_error, null);
 });
+
+// ── The revalidate button ────────────────────────────────────────────────────
+// Its motivating case: §5 Step 2 stores the URL a permanent redirect points at, so a
+// row listed before that rule carries a feed URL every subscriber is redirected from.
+// The scheduler repairs it on its own tick; this is how an admin makes that happen on
+// a row in front of them.
+
+test('POST /admin/sites/:id/revalidate applies a pass and repairs a stale feed_url', async () => {
+  const asked = [];
+  const { app, db, id } = adminApp({
+    verifySite: async (url, options) => {
+      asked.push({ url, options });
+      return {
+        ok: true,
+        url,
+        // The scheduler's shape for the almaren.ch case: discovery found the declared
+        // `/rss.xml`, and the fetch of it landed on the redirect target.
+        feedUrl: 'https://spammer.example/rss.xml/',
+        title: 'Spam',
+        description: undefined,
+        features: { has_source_ns: false, has_rsscloud: false, rsscloud_style: null },
+      };
+    },
+  });
+
+  const before = await app.request('/subscriptions.opml');
+  const res = await adminPost(app, `/admin/sites/${id}/revalidate`);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), {
+    ok: true,
+    id,
+    revalidated: true,
+    feed_url: 'https://spammer.example/rss.xml/',
+  });
+
+  // §8's two properties, kept: the canonical URL is never re-derived...
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].url, 'https://spammer.example/');
+  assert.equal(asked[0].options.fixedCanonical, true);
+  // ...and the stored validators go with it, so a repair is usually one 304.
+  assert.equal(asked[0].options.conditional.feedUrl, 'https://spammer.example/rss.xml');
+
+  const row = db.prepare('SELECT * FROM sites WHERE id = ?').get(id);
+  assert.equal(row.feed_url, 'https://spammer.example/rss.xml/');
+  assert.equal(row.status, 'active');
+
+  // The OPML is what the repair was for: the new xmlUrl has to reach subscribers,
+  // which it cannot do from behind an unchanged ETag.
+  const after = await app.request('/subscriptions.opml');
+  assert.match(await after.text(), /rss\.xml\//);
+  assert.notEqual(after.headers.get('etag'), before.headers.get('etag'));
+});
+
+test('a revalidate that fails writes NOTHING', async () => {
+  const { app, db, id } = adminApp({
+    verifySite: async () => ({ ok: false, reason: 'timeout' }),
+  });
+
+  const res = await adminPost(app, `/admin/sites/${id}/revalidate`);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), {
+    ok: true,
+    id,
+    revalidated: false,
+    reason: 'timeout',
+  });
+
+  // The same rule the unhide re-verification and /recheck follow: an admin pressing a
+  // button while the member's host is momentarily 403-ing must not start that
+  // member's 3-strike removal clock.
+  const row = db.prepare('SELECT * FROM sites WHERE id = ?').get(id);
+  assert.equal(row.failure_count, 0);
+  assert.equal(row.last_error, null);
+  assert.equal(row.last_checked_at, row.created_at);
+});
+
+test('revalidate can never remove a row or complete an opt-out', async () => {
+  // §6/§8: only the scheduler may finish an opt-out. A no-linkback answer here is a
+  // report, not a removal — otherwise the button is a one-click delist.
+  const { app, db, id } = adminApp({
+    verifySite: async () => ({
+      ok: false,
+      reason: 'no_linkback',
+      url: 'https://spammer.example/',
+    }),
+  });
+
+  await adminPost(app, `/admin/sites/${id}/revalidate`);
+
+  const row = db.prepare('SELECT * FROM sites WHERE id = ?').get(id);
+  assert.equal(row.status, 'active');
+  assert.equal(row.optout_seen_at, null);
+});
+
+test('revalidate refuses a hidden row rather than silently no-opping', async () => {
+  // `markRevalidationPass` is guarded on `status <> 'hidden'`, so a pass would be
+  // written and dropped. Unhide is the action for a hidden row, and it re-verifies.
+  const { app, queries, id } = adminApp({
+    verifySite: async () => {
+      throw new Error('must not be asked');
+    },
+  });
+  queries.hideSite(id, 'spam');
+
+  const res = await adminPost(app, `/admin/sites/${id}/revalidate`);
+  assert.deepEqual(await res.json(), {
+    ok: true,
+    id,
+    revalidated: false,
+    reason: 'hidden',
+  });
+});
+
+test('revalidate is behind the same auth and CSRF gate as every other admin POST', async () => {
+  const { app, id } = adminApp();
+
+  assert.equal(
+    (await adminPost(app, `/admin/sites/${id}/revalidate`, {}, null)).status,
+    401,
+  );
+  assert.equal((await adminPost(app, '/admin/sites/9999/revalidate')).status, 404);
+
+  const unconfigured = adminApp({ adminToken: null });
+  assert.equal(
+    (await adminPost(unconfigured.app, `/admin/sites/${unconfigured.id}/revalidate`))
+      .status,
+    404,
+  );
+});
+
+test('the dashboard shows each listing its feed URL and a Revalidate button', async () => {
+  const { app, queries, id } = adminApp();
+  const { page, cookie, csrf } = await adminSession(app);
+
+  // The feed URL is the field Revalidate exists to repair, and a row carrying a
+  // pre-redirect one is invisible from its title and status.
+  assert.match(page, /https:\/\/spammer\.example\/rss\.xml/);
+  assert.match(page, new RegExp(`action="/admin/sites/${id}/revalidate"`));
+
+  // The button works from the browser path too, CSRF and all.
+  const res = await sessionPost(app, `/admin/sites/${id}/revalidate`, { csrf }, cookie);
+  assert.equal(res.status, 303);
+
+  // A hidden row gets Unhide instead: Revalidate would be a silent no-op there.
+  queries.hideSite(id, 'spam');
+  const hidden = await (await app.request('/admin', { headers: { cookie } })).text();
+  assert.ok(!new RegExp(`action="/admin/sites/${id}/revalidate"`).test(hidden));
+  assert.match(hidden, new RegExp(`action="/admin/sites/${id}/unhide"`));
+});
