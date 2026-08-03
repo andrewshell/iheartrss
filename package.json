@@ -1,6 +1,6 @@
 {
   "name": "iheartrss",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "description": "A webring-style directory for people who love RSS.",
   "type": "module",
