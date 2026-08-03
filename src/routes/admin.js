@@ -210,6 +210,75 @@ export function registerAdmin(
   });
 
   /**
+   * Run one row's §8 check now, instead of waiting for the scheduler to reach it.
+   *
+   * The motivating case is a stale `feed_url`: §5 Step 2 stores the URL a permanent
+   * redirect points at, so a row listed before that rule — `/feed` where the site
+   * really serves `/feed/` — carries a spelling every subscriber is redirected from.
+   * The weekly tick repairs it on its own, and so does a resubmit, but neither is
+   * something an admin looking at the row can *make happen*.
+   *
+   * It is the scheduler's check, with the scheduler's two safety properties kept:
+   *
+   *  * **`fixedCanonical`**, so this cannot re-derive `sites.url` and move the row
+   *    onto another row's URL (§8).
+   *  * **A failure writes NOTHING** — not `failure_count`, not `last_error`, not
+   *    `last_checked_at`. Same reason `/recheck` and the unhide re-verification write
+   *    nothing: an admin pressing a button while the member's host is momentarily
+   *    403-ing would otherwise start that member's 3-strike removal clock. The
+   *    scheduler will reach the row on its own cadence and judge it properly.
+   *
+   * And it is pass-only in the other direction too: it can never remove a row or
+   * confirm an opt-out. Only the scheduler may do that (§6, §8).
+   */
+  app.post('/admin/sites/:id/revalidate', async (c) => {
+    const form = await parseForm(c);
+    const denial = deny(c, form);
+    if (denial !== null) return denial;
+    if (queries === null) return c.json({ ok: false, reason: 'no_database' }, 503);
+
+    const id = Number(c.req.param('id'));
+    if (!Number.isInteger(id) || id < 1) {
+      return c.json({ ok: false, reason: 'bad_id' }, 400);
+    }
+
+    const site = queries.getSiteById(id);
+    if (site === undefined) return c.json({ ok: false, reason: 'not_found' }, 404);
+
+    // `markRevalidationPass` carries a `status <> 'hidden'` guard, so this would be a
+    // silent no-op on a hidden row. Say so instead: `hidden` is cleared by unhide,
+    // which re-verifies on its own.
+    if (site.status === 'hidden') {
+      return done(c, { id, revalidated: false, reason: 'hidden' });
+    }
+
+    const verified = await reverify(site);
+
+    if (verified === null || classify(verified) !== 'pass') {
+      log('admin.revalidate_unverified', {
+        site_id: id,
+        url: site.url,
+        reason: verified?.reason ?? 'error',
+      });
+      return done(c, { id, revalidated: false, reason: verified?.reason ?? 'error' });
+    }
+
+    const columns = passColumns(site, verified);
+    queries.recordRevalidationPass(id, columns, { now: now().toISOString() });
+
+    log('admin.revalidate', {
+      site_id: id,
+      url: site.url,
+      feed_url: columns.feed_url,
+      // The whole point of the button, and invisible without it: did the check
+      // actually move the feed URL, or was it already canonical?
+      feed_url_changed: columns.feed_url !== site.feed_url,
+    });
+
+    return done(c, { id, revalidated: true, feed_url: columns.feed_url });
+  });
+
+  /**
    * §4/§5: the per-domain listing cap is "admin-overridable", and this is where that
    * override lives — a `domain_limits` row, not an env var, because
    * `MAX_LISTINGS_PER_DOMAIN=5` otherwise refuses the 6th Substack or Micro.blog
@@ -397,8 +466,9 @@ export function registerAdmin(
   }
 
   /**
-   * Re-run verification for an unhide. Returns the result, or `null` when we could
-   * not even ask — a thrown fetcher must not take the unhide down with it.
+   * Re-run §8's check for a row, in the two places an admin can trigger one: an
+   * unhide and the revalidate button. Returns the result, or `null` when we could not
+   * even ask — a thrown fetcher must not take the surrounding action down with it.
    */
   async function reverify(site) {
     if (verifySite === null) return null;
@@ -414,7 +484,7 @@ export function registerAdmin(
         },
       });
     } catch (err) {
-      log('admin.unhide_verify_error', { site_id: site.id, error: err.message });
+      log('admin.reverify_error', { site_id: site.id, error: err.message });
       return null;
     }
   }

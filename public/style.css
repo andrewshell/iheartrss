@@ -1505,6 +1505,26 @@ blog-roll li a {
   overflow-wrap: anywhere;
 }
 
+/* Two controls in one action track. They stack rather than splitting 18rem between
+   them, so neither the reason box nor "Revalidate" gets squeezed to a few characters
+   on a narrow window. */
+.admin-actions {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+/* The `xmlUrl`, one line down from the meta. `code` is a flex item here, so it needs
+   the same align-self escape as the histogram's codes or it stretches into a
+   full-width tinted bar. */
+.admin-row__feed {
+  align-self: start;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 0.85em;
+}
+
 /* An inline form inside a list row: the reason box and its button stay on one
    line on a desktop and stack on a phone rather than overflowing. It fills its grid
    track, so the buttons of every row in a section end on the same edge however wide

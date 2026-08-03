@@ -84,7 +84,7 @@ export function createQueries(db) {
      */
     listRecentSites: db.prepare(`
       SELECT id, url, host, path, title, status, failure_count, last_error,
-             optout_seen_at, created_at, last_checked_at
+             optout_seen_at, created_at, last_checked_at, feed_url
         FROM sites
        ORDER BY created_at DESC, id DESC
        LIMIT :limit
@@ -93,7 +93,7 @@ export function createQueries(db) {
     /** §4's `failing`/`blocked` rows: the two states that need an admin's eye. */
     listSitesNeedingAttention: db.prepare(`
       SELECT id, url, host, title, status, failure_count, last_error, optout_seen_at,
-             last_checked_at
+             last_checked_at, feed_url
         FROM sites
        WHERE status IN ('failing', 'blocked')
        ORDER BY CASE status WHEN 'blocked' THEN 0 ELSE 1 END, last_checked_at
