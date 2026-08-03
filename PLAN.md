@@ -630,6 +630,29 @@ The trailing-slash normalisation is load-bearing: WordPress's canonical feed URL
 `/feed/` **with** the slash, so a naive `endsWith('/feed')` misses the single most common
 platform on the web and only lands correctly via the shortest-path tiebreak, by luck.
 
+**The winning URL is then normalised through its permanent redirects.** `almaren.ch/feed`
+301s to `almaren.ch/feed/`, and the target is the URL to store: publishing the declared
+spelling sends every OPML subscriber through a redirect forever, and leaves one feed able to
+hold two rows under two spellings — `UNIQUE(feed_url)` only guards a URL against itself.
+**Only 301 and 308 move it.** A 302/303/307 says the URL we asked for is still the right
+one, so a mirror or a maintenance page must never become a member's identity; `safeFetch`
+therefore reports `permanentUrl` — the URL after the *leading run* of permanent hops —
+alongside the final `url`, and a temporary hop freezes it where it stands.
+
+The declared spelling is **not** carried past the fetch that resolved it. Nothing downstream
+needs it: the OPML `htmlUrl` still comes from `<channel><link>`, revalidation still checks
+the badge on that page, and a redirect that appears later is picked up the same way it is
+picked up the first time. Two places pay a small price for that, both deliberately. Feed
+rediscovery on a canonical page that declares the pre-redirect spelling spends one extra
+request, which resolves to the same feed. And Step 7's incumbent re-check can no longer
+match the old spelling exactly, so it widens instead — see there.
+
+Two more consequences. §8's conditional GETs are still sent **only** for an exact `feed_url`
+match, so a row whose declared feed URL redirects misses the 304 until the two agree — a
+full fetch, never a validator honoured for a document we have not read. And because the feed
+URL is not read from the feed's body but from where the fetch landed, it is the one field a
+304 pass may still update.
+
 Discovered feeds and the winning score are logged so the heuristic can be revisited against
 real data. **The chosen `xmlUrl` and `htmlUrl` are always shown in the success panel** with
 a "wrong feed?" link — sites like `manton.org` (`/feed.xml` + `/podcast.xml`) and
@@ -1071,6 +1094,15 @@ whenever the victim's host is momentarily 403-ing, rate-limiting or mid-deploy �
 attacker can wait for, and on some hosts induce by burning the victim's rate limit. This
 re-check is the last gate behind the shared-host variant (an attacker page on the victim's
 *own* origin passes the host-level mutual check by construction), so it has to fail closed.
+
+"Still declares the feed" means the exact URL **or any feed on the same origin as it**. The
+second arm is there because Step 2 stores `feed_url` post-permanent-redirect while a page
+goes on declaring the spelling it always declared: an exact-only test would read a page
+saying `/feed` against a row stored as `/feed/` as having dropped the feed, and hand the row
+over. Same-origin is coarser than the true answer and refuses some moves the exact test would
+allow — an old page that still advertises *some* feed on the contested host. That is the
+correct direction for a gate that must fail closed, and the cost is one `ambiguous_identity`
+on `/admin` for a human to look at, in a branch that is rare to begin with.
 
 The re-check is what stops a row-takeover: without it, "last party to declare a feed owns
 its row" is the whole game, and the mutual-declaration rule in Step 4 is the only thing

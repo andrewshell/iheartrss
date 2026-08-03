@@ -50,7 +50,9 @@ export function createVerifier({
    * @param {object} [options.conditional] - `{ feedUrl, etag, lastModified }` from the
    *   row. Sent as `If-None-Match`/`If-Modified-Since` **only** when discovery lands
    *   on the same `feedUrl`: a validator belongs to one URL, and sent for another it
-   *   would produce a 304 for a document we have never seen.
+   *   would produce a 304 for a document we have never seen. A row whose declared feed
+   *   URL permanently redirects therefore misses the 304 until the redirect target is
+   *   what the page declares — a full fetch, never a wrong one.
    */
   return async function verifySite(
     submittedUrl,
@@ -90,6 +92,8 @@ export function createVerifier({
     if (!start.ok) return start;
 
     const { submittedResourceWasFeed, feed } = start;
+    // What we publish: the declared URL after its permanent redirects. The declared
+    // spelling itself is not carried past this point — nothing downstream needs it.
     let feedUrl = start.feedUrl;
 
     // ── Step 4 — resolve the canonical URL from `<channel><link>` ────────────────
@@ -256,7 +260,7 @@ export function createVerifier({
       return {
         ok: true,
         submittedResourceWasFeed: true,
-        feedUrl: submitted.url,
+        feedUrl: submitted.permanentUrl ?? submitted.url,
         feed: parsed,
       };
     }
@@ -278,7 +282,7 @@ export function createVerifier({
     return {
       ok: true,
       submittedResourceWasFeed: false,
-      feedUrl: discovered.feedUrl,
+      feedUrl: fetched.feedUrl,
       feed: fetched.feed,
       feedUnchanged: fetched.feedUnchanged,
       feedEtag: fetched.etag,
@@ -299,9 +303,12 @@ export function createVerifier({
     });
     if (!discovered.ok) return discovered;
 
-    // No extra fetch if it's the URL we already validated.
+    // No extra fetch if it's the URL we already validated. A page declaring the
+    // *pre-redirect* spelling of that same feed misses this and costs one more
+    // request, which resolves to the same feed — the price of not carrying the
+    // declared spelling around for the sake of one comparison.
     if (discovered.feedUrl === alreadyValidated.feedUrl) {
-      return { ok: true, feedUrl: discovered.feedUrl, feed: alreadyValidated.feed };
+      return { ok: true, feedUrl: alreadyValidated.feedUrl, feed: alreadyValidated.feed };
     }
 
     const fetched = await fetchAndParseFeed(discovered.feedUrl, {
@@ -311,7 +318,7 @@ export function createVerifier({
     });
     if (!fetched.ok) return { ...fetched, feedUrl: discovered.feedUrl };
 
-    return { ok: true, feedUrl: discovered.feedUrl, feed: fetched.feed };
+    return { ok: true, feedUrl: fetched.feedUrl, feed: fetched.feed };
   }
 
   async function fetchAndParseFeed(
@@ -326,12 +333,23 @@ export function createVerifier({
     });
     if (!response.ok) return { ...response, feedUrl };
 
+    // §5 Step 2's normalisation: a feed declared as `/feed` that 301s to `/feed/` has
+    // exactly one canonical URL, and it is the target. Publishing the declared
+    // spelling instead sends every subscriber through a redirect forever, and lets
+    // the same feed hold two rows under two spellings — `feed_url` is UNIQUE, but
+    // only against itself. Only *permanent* hops move it (see `safeFetch`).
+    const resolvedUrl = response.permanentUrl ?? response.url ?? feedUrl;
+
     // A 304 is the cheapest possible way to honour the "good citizen" claim (§8):
     // the bytes are the ones we validated, so Step 3 has already been run on them.
     // `feed` carries no metadata, which is what `feedUnchanged` warns the caller of.
     if (response.status === 304) {
       return {
         ok: true,
+        // Still the resolved URL: a validator is only ever sent to the URL it came
+        // from, so a 304 behind a permanent redirect is that same document answering
+        // from its canonical URL — which is the one to publish.
+        feedUrl: resolvedUrl,
         feed: { channelLink: undefined, features: {} },
         feedUnchanged: true,
         etag: response.etag ?? conditional?.etag,
@@ -351,6 +369,7 @@ export function createVerifier({
 
     return {
       ok: true,
+      feedUrl: resolvedUrl,
       feed: parsed,
       etag: response.etag,
       lastModified: response.lastModified,

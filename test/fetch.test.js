@@ -313,8 +313,81 @@ test('safeFetch follows redirects manually and reports the final URL', async () 
       assert.equal(result.status, 200);
       // Step 2 parses the *final* URL and Step 4 compares origins against it.
       assert.equal(result.url, `${origin}/c`);
+      // ...but the canonical spelling froze at the temporary hop: `/a` was answered
+      // with a 302, so `/a` is still the URL to keep, whatever came after it.
+      assert.equal(result.permanentUrl, `${origin}/a`);
       assert.equal(result.body, '<html>final</html>');
       assert.deepEqual(hits, ['/a', '/b', '/c']);
+    },
+  );
+});
+
+test('permanentUrl advances through 301 and 308 hops', async () => {
+  await withFixture(
+    (req, res) => {
+      if (req.url === '/feed') {
+        res.writeHead(301, { location: '/feed/' });
+        return res.end();
+      }
+      if (req.url === '/feed/') {
+        res.writeHead(308, { location: '/feed/index.xml' });
+        return res.end();
+      }
+      res.writeHead(200, { 'content-type': 'application/rss+xml' });
+      res.end('<rss/>');
+    },
+    async ({ origin, hits }) => {
+      const safeFetch = reachableFetcher();
+      const result = await safeFetch(`${origin}/feed`, { kind: 'feed' });
+
+      assert.equal(result.ok, true, JSON.stringify(result));
+      // Every hop said "use that one forever", so the last one is the canonical URL.
+      assert.equal(result.permanentUrl, `${origin}/feed/index.xml`);
+      assert.equal(result.url, result.permanentUrl);
+      assert.deepEqual(hits, ['/feed', '/feed/', '/feed/index.xml']);
+    },
+  );
+});
+
+test('permanentUrl stops at the first temporary hop, even if a 301 follows', async () => {
+  await withFixture(
+    (req, res) => {
+      if (req.url === '/feed') {
+        res.writeHead(307, { location: '/mirror' });
+        return res.end();
+      }
+      if (req.url === '/mirror') {
+        res.writeHead(301, { location: '/mirror/' });
+        return res.end();
+      }
+      res.writeHead(200, { 'content-type': 'application/rss+xml' });
+      res.end('<rss/>');
+    },
+    async ({ origin }) => {
+      const safeFetch = reachableFetcher();
+      const result = await safeFetch(`${origin}/feed`, { kind: 'feed' });
+
+      assert.equal(result.ok, true, JSON.stringify(result));
+      // The 301 is `/mirror`'s statement about `/mirror`, not about `/feed` — and
+      // `/feed` was told it is still the right URL. Following the chain past a
+      // temporary hop would move a member's stored feed URL onto a mirror.
+      assert.equal(result.permanentUrl, `${origin}/feed`);
+      assert.equal(result.url, `${origin}/mirror/`);
+    },
+  );
+});
+
+test('permanentUrl equals the URL asked for when nothing redirects', async () => {
+  await withFixture(
+    (req, res) => {
+      res.writeHead(200, { 'content-type': 'text/html' });
+      res.end('<html>hi</html>');
+    },
+    async ({ origin }) => {
+      const safeFetch = reachableFetcher();
+      const result = await safeFetch(`${origin}/blog`);
+
+      assert.equal(result.permanentUrl, `${origin}/blog`);
     },
   );
 });

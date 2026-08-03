@@ -236,7 +236,9 @@ function passColumns(row, result) {
     return {
       title: row.title,
       description: row.description,
-      feed_url: row.feed_url,
+      // Not from the body — it's where the fetch landed — so a 304 can still normalise
+      // it onto a permanent redirect's target, exactly as in §8's loop.
+      feed_url: result.feedUrl ?? row.feed_url,
       has_source_ns: row.has_source_ns,
       has_rsscloud: row.has_rsscloud,
       rsscloud_style: row.rsscloud_style,

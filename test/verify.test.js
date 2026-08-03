@@ -236,6 +236,92 @@ test('the final post-redirect URL of the canonical page becomes the listed URL',
   );
 });
 
+test('a declared feed URL that 301s is stored as its redirect target', async () => {
+  // §5 Step 2: `almaren.ch/feed` really does 301 to `almaren.ch/feed/`. Publishing the
+  // declared spelling would send every OPML subscriber through a redirect forever, and
+  // leave the same feed able to hold two rows under two spellings.
+  await withSites(
+    (url) => ({
+      'example.com': {
+        '/': { body: html({ feedHref: '/feed' }) },
+        '/feed': { status: 301, location: '/feed/', body: '' },
+        '/feed/': {
+          type: FEED_TYPE,
+          body: rss({ title: 'A blog', channelLink: url('example.com', '/') }),
+        },
+      },
+    }),
+    async ({ url, safeFetch }) => {
+      const verifySite = createVerifier({ safeFetch, config: CONFIG });
+      const result = await verifySite(url('example.com', '/'));
+
+      assert.equal(result.ok, true, JSON.stringify(result));
+      assert.equal(result.feedUrl, url('example.com', '/feed/'));
+    },
+  );
+});
+
+test('a declared feed URL that 302s keeps the declared URL', async () => {
+  // The mirror image, and the reason the fetcher distinguishes the two: a 302 says the
+  // URL we asked for is still the right one. Storing the target would move a member's
+  // identity onto a maintenance page for as long as the outage lasts.
+  await withSites(
+    (url) => ({
+      'example.com': {
+        '/': { body: html({ feedHref: '/feed.xml' }) },
+        '/feed.xml': { status: 302, location: '/tmp-feed.xml', body: '' },
+        '/tmp-feed.xml': {
+          type: FEED_TYPE,
+          body: rss({ title: 'A blog', channelLink: url('example.com', '/') }),
+        },
+      },
+    }),
+    async ({ url, safeFetch }) => {
+      const verifySite = createVerifier({ safeFetch, config: CONFIG });
+      const result = await verifySite(url('example.com', '/'));
+
+      assert.equal(result.ok, true, JSON.stringify(result));
+      assert.equal(result.feedUrl, url('example.com', '/feed.xml'));
+    },
+  );
+});
+
+test('a canonical page declaring the pre-redirect spelling still lands on one feed', async () => {
+  // The canonical page declares `/feed`, which is what we already followed to `/feed/`.
+  // Rediscovery compares declared-to-declared, so this costs one extra request — the
+  // accepted price of not carrying the declared spelling around. What matters is that
+  // the second fetch resolves to the same feed and the published URL is the target.
+  await withSites(
+    (url) => ({
+      'blog.example': {
+        '/': { body: html({ feedHref: '/feed' }) },
+        '/feed': { status: 301, location: '/feed/', body: '' },
+        '/feed/': {
+          type: FEED_TYPE,
+          body: rss({ title: 'A blog', channelLink: url('blog.example', '/home') }),
+        },
+        '/home': { body: html({ feedHref: '/feed' }) },
+      },
+    }),
+    async ({ url, safeFetch, hits }) => {
+      const verifySite = createVerifier({ safeFetch, config: CONFIG });
+      const result = await verifySite(url('blog.example', '/'));
+
+      assert.equal(result.ok, true, JSON.stringify(result));
+      assert.equal(result.url, url('blog.example', '/home'));
+      assert.equal(result.feedUrl, url('blog.example', '/feed/'));
+      assert.deepEqual(hits, [
+        'blog.example/',
+        'blog.example/feed',
+        'blog.example/feed/',
+        'blog.example/home',
+        'blog.example/feed',
+        'blog.example/feed/',
+      ]);
+    },
+  );
+});
+
 test("a canonical page declaring a DIFFERENT feed: the canonical page's feed wins", async () => {
   // §5 Step 4: "the feed we publish must come from the page we publish". The feed recorded
   // against `example.com/` is the one `example.com/` itself declares — never one asserted

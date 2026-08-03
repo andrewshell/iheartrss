@@ -322,6 +322,55 @@ test('a feed_url collision is ambiguous_identity while the incumbent still decla
   );
 });
 
+test('an incumbent declaring the PRE-redirect spelling still holds its row', async () => {
+  // `feed_url` is stored post-permanent-redirect (§5 Step 2), and a page goes on
+  // declaring the spelling it always declared. An exact-URL-only test would read
+  // "still mine, spelled the old way" as "no longer declares it" — and this gate
+  // failing open is exactly how a row gets handed to someone else. The same-origin
+  // arm is what catches it.
+  //
+  // This is the shared-host variant, and it is the only shape where the collision
+  // branch is reachable at all: the feed carries NO `<channel><link>`, so the
+  // canonical URL falls back to the attacker's own page instead of resolving onto the
+  // victim's. With a channel link, the attacker's submission simply refreshes the
+  // victim's row and never gets here.
+  await withSites(
+    () => ({
+      'victim.com': {
+        '/': { body: html({ feedHref: '/feed' }) },
+        '/feed': { status: 301, location: '/feed/', body: '' },
+        '/feed/': {
+          type: FEED_TYPE,
+          body: rss({ title: 'Victim blog', channelLink: null }),
+        },
+        // The attacker's page, on the victim's own origin — it passes every
+        // host-level check in Step 4 by construction.
+        '/~evil/': { body: html({ feedHref: '/feed' }) },
+      },
+    }),
+    async ({ url, safeFetch }) => {
+      const feedUrl = url('victim.com', '/feed/');
+
+      await withIncumbent(
+        { incumbentUrl: url('victim.com', '/'), feedUrl, safeFetch },
+        async ({ db, persist, incumbentId }) => {
+          const outcome = await persist(
+            claim({ url: url('victim.com', '/~evil/'), feedUrl }),
+          );
+
+          assert.equal(outcome.outcome, 'rejected');
+          assert.equal(outcome.reason, 'ambiguous_identity');
+          assert.equal(outcome.detail.why, 'still_declares_feed');
+          assert.equal(
+            db.prepare('SELECT url FROM sites WHERE id = ?').get(incumbentId).url,
+            url('victim.com', '/'),
+          );
+        },
+      );
+    },
+  );
+});
+
 test('an unreachable incumbent fails CLOSED, on every unreachable shape there is', async () => {
   // A 403 (bot protection — the reason `blocked` exists), a 404, a 500 and a
   // connection that never answers. An implementer who writes the condition as
