@@ -10,6 +10,7 @@ import { getDomain } from 'tldts';
 
 import { DESCRIPTION_MAX, normalizeMetaText, TITLE_MAX } from '../lib/xml.js';
 import { parsePage } from './page.js';
+import { sameOrigin } from './url.js';
 
 export function createPersister({
   queries,
@@ -133,12 +134,25 @@ export function createPersister({
     }
 
     // A conclusive 2xx. Does it still declare the feed?
+    //
+    // Exact URL, **or any feed on the same origin as the contested one**. The second
+    // arm exists because `feed_url` is stored post-permanent-redirect (§5 Step 2)
+    // while a page goes on declaring the spelling it always declared: a row stored as
+    // `/feed/` against a page that still says `/feed` would read as "no longer
+    // declares it", and this gate failing open is precisely how a row gets handed to
+    // someone else. Same-origin is deliberately coarser than the true answer — it
+    // refuses a move the exact test would have allowed, when the old page still
+    // advertises *some* feed on the contested host. That direction is the safe one: a
+    // refusal is `ambiguous_identity`, which surfaces on /admin and gets looked at.
     const page = parsePage(response.body, response.url);
-    const declares = [
+    const declared = [
       page.feedUrl,
       ...page.rssCandidates.map((c) => c.url),
       ...page.otherFormatCandidates.map((c) => c.url),
-    ].includes(verification.feedUrl);
+    ];
+    const declares =
+      declared.includes(verification.feedUrl) ||
+      declared.some((url) => sameOrigin(url, verification.feedUrl));
 
     return declares
       ? { ok: false, detail: { incumbent: incumbent.url, why: 'still_declares_feed' } }

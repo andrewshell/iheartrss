@@ -88,6 +88,14 @@ export function createFetcher({ lookup, config, isAddressAllowed = isAllowedAddr
     // connection itself failed — a 4xx/5xx is an answer.
     let receivedResponse = false;
 
+    // The canonical spelling of this resource: `current`, but advanced through a hop
+    // only while every hop so far has been *permanent*. A 301/308 is the server
+    // saying "this URL is wrong, use that one forever", which is exactly what we want
+    // to store; a 302/303/307 says the URL we asked for is still the right one, so it
+    // freezes this value where it stands.
+    let permanent = url;
+    let permanentSoFar = true;
+
     // Manual redirects so every hop is re-guarded. `redirect: 'follow'` would hand
     // the whole chain to undici, and a redirect to an IP literal is the easiest way
     // to miss half 2.
@@ -136,6 +144,7 @@ export function createFetcher({ lookup, config, isAddressAllowed = isAllowedAddr
             ok: true,
             status: response.status,
             url: current,
+            permanentUrl: permanent,
             body: decode(bytes, charset),
             contentType,
             charset,
@@ -160,6 +169,12 @@ export function createFetcher({ lookup, config, isAddressAllowed = isAllowedAddr
       if (hopBlocked !== null) {
         return { result: { ok: false, reason: hopBlocked }, receivedResponse };
       }
+
+      if (permanentSoFar && isPermanentRedirect(response.status)) {
+        permanent = current;
+      } else {
+        permanentSoFar = false;
+      }
     }
 
     return { result: { ok: false, reason: 'too_many_redirects' }, receivedResponse };
@@ -175,9 +190,12 @@ export function createFetcher({ lookup, config, isAddressAllowed = isAllowedAddr
    *   defaults. §8's revalidation sends `If-None-Match` / `If-Modified-Since` here;
    *   a `304` then comes back as a completed exchange with an empty body.
    *
-   * Resolves to `{ ok: true, status, url, body, contentType, charset }` for any
-   * completed exchange — `url` is the **final** URL after redirects, which is what
-   * Step 2 parses and Step 4 compares origins against — or
+   * Resolves to `{ ok: true, status, url, permanentUrl, body, contentType, charset }`
+   * for any completed exchange — `url` is the **final** URL after redirects, which is
+   * what Step 2 parses and Step 4 compares origins against, and `permanentUrl` is the
+   * URL after following only the leading run of **301/308** hops, which is the one
+   * spelling of the resource the server has told us to keep (Step 2's feed-URL
+   * normalisation). They are equal when nothing redirected — or
    * `{ ok: false, reason }` with one of `ssrf_blocked`, `unsupported_scheme`,
    * `invalid_url`, `timeout`, `too_many_redirects`, `page_too_large` /
    * `feed_too_large`, `fetch_failed`. A 403 or 500 is a completed exchange, not a
@@ -345,6 +363,16 @@ function isRedirect(status) {
   return (
     status === 301 || status === 302 || status === 303 || status === 307 || status === 308
   );
+}
+
+/**
+ * Only 301 and 308. A 303 is "see this other thing about your request" and a 302/307
+ * is explicitly temporary — treating either as canonical would rewrite a member's
+ * stored feed URL onto a maintenance page or a per-request one-off, and `feed_url` is
+ * the row's identity (§5 Step 7).
+ */
+function isPermanentRedirect(status) {
+  return status === 301 || status === 308;
 }
 
 function ssrfBlocked(hostname) {
