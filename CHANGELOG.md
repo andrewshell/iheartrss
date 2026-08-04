@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.8.0...iheartrss-v0.9.0) (2026-08-03)
+
+
+### Features
+
+* add a Revalidate button to each admin listing ([5978ca8](https://github.com/andrewshell/iheartrss/commit/5978ca81cd756e87a6bb48a38e23111a7f6a35df))
+* add a Revalidate button to each admin listing ([9c8e6f8](https://github.com/andrewshell/iheartrss/commit/9c8e6f824cd387ba43e7ca4fb754f35add54f540))
+
 ## [0.8.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.7.0...iheartrss-v0.8.0) (2026-08-03)
 
 
