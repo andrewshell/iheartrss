@@ -252,6 +252,38 @@ test('a feed with no posts omits the channel pubDate rather than inventing one',
   assert.equal(parseFeed(xml).ok, true);
 });
 
+test('every real post links absolutely, because a feed reader is not on our origin', () => {
+  // THE ONLY TEST HERE THAT READS THE ACTUAL content/ DIRECTORY, and it has to.
+  // Every other test in this file builds a fixture and checks the machinery; this one
+  // checks the posts themselves, because the mistake it catches is made in prose, not
+  // in code.
+  //
+  // A relative `/subscriptions.opml` is correct on our own pages and broken the
+  // moment the post is read anywhere else: RSS does not define a base for the HTML
+  // inside `<description>`, so a reader resolves it against its own origin, its own
+  // domain, or nothing at all. The generous ones use the item's `<link>`; plenty do
+  // not. The link 404s in somebody else's app and we never hear about it.
+  //
+  // The fix is absolute URLs in the markdown rather than rewriting at render time,
+  // so that `<description>` and `<source:markdown>` say the same thing — and because
+  // rewriting markdown means parsing around fenced code blocks, one of which is full
+  // of paths that must NOT become links.
+  const posts = createBlog({ dir: 'content' }).posts();
+  assert.ok(posts.length > 0, 'no posts found — is the content directory there?');
+
+  const offenders = [];
+  for (const post of posts) {
+    for (const [, url] of post.html.matchAll(/(?:href|src)="([^"]*)"/g)) {
+      // A scheme, a protocol-relative URL, or a same-page fragment are all fine.
+      if (/^[a-z][a-z0-9+.-]*:/i.test(url)) continue;
+      if (url.startsWith('//') || url.startsWith('#')) continue;
+      offenders.push(`${post.filename}: ${url}`);
+    }
+  }
+
+  assert.deepEqual(offenders, [], `relative URLs will break in a feed reader`);
+});
+
 test('the channel carries an image, with the three sub-elements the spec requires', () => {
   // RSS 2.0: `<url>`, `<title>` and `<link>` are required; `<width>`/`<height>`/
   // `<description>` are optional. The spec also says the image's title and link

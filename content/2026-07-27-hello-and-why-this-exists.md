@@ -11,7 +11,7 @@ of how sites are built.
 So: **iheartrss.com is a directory of people who love RSS.** Put the badge on your
 homepage, submit your URL, and once we have checked that the link back exists and
 found your feed, you are on the list. The list is published as
-[an OPML subscription list](/subscriptions.opml) that any reader can subscribe to in
+[an OPML subscription list](https://iheartrss.com/subscriptions.opml) that any reader can subscribe to in
 one action. Not a page of links you have to click through one at a time — a file your
 reader understands.
 
@@ -25,14 +25,14 @@ A few things we decided early, and will keep saying out loud:
 
 - **RSS 2.0 only.** Not because Atom is bad — it is a fine format — but because the
   ecosystem we want to plug into speaks 2.0, and "we accept everything" is how a
-  directory ends up unable to promise anything. [The guide](/guide) explains how to
+  directory ends up unable to promise anything. [The guide](https://iheartrss.com/guide) explains how to
   publish an RSS 2.0 feed on every common platform.
 - **No accounts, no email, no tracking.** Browsing this site sets no cookies at all.
-  What we store is on [the about page](/about), in plain language, including exactly
+  What we store is on [the about page](https://iheartrss.com/about), in plain language, including exactly
   what we do with your IP address (hash it, truncated and keyed, and throw the record
   away after 90 days).
 - **Everything readable as a feed.** Including this blog, which you can find at
-  [/feed.xml](/feed.xml). A site about loving RSS that did not publish one would be
+  [/feed.xml](https://iheartrss.com/feed.xml). A site about loving RSS that did not publish one would be
   a bad joke.
 
 If you have been meaning to start a blog again, this is your excuse. Publish a feed,

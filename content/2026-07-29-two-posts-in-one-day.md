@@ -16,7 +16,7 @@ change. Two lines of regex now, no broken links later. Same reasoning as publish
 feed before there was anything in it.
 
 If you want to see what a feed reader gets from this, the raw markdown of every post
-travels alongside the rendered HTML in [our feed](/feed.xml):
+travels alongside the rendered HTML in [our feed](https://iheartrss.com/feed.xml):
 
 ```xml
 <item>
@@ -31,5 +31,5 @@ travels alongside the rendered HTML in [our feed](/feed.xml):
 
 `source:markdown` is from the [source namespace](https://source.scripting.com/) —
 the same namespace we look for when we check other people's feeds, and one of the two
-badges you can earn on [the members page](/sites). It costs us nothing to include: we
+badges you can earn on [the members page](https://iheartrss.com/sites). It costs us nothing to include: we
 are holding the source text anyway.
