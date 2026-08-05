@@ -118,6 +118,67 @@ const CSP_BLOGROLL = [
 ].join('; ');
 
 /**
+ * `/river`'s policy — FeedLand's `riverviewer.js`, the display wp.feedland.org runs,
+ * pointed at our own OPML file. See `views/river.js` for the include list.
+ *
+ * It is a THIRD policy rather than a reuse of `CSP_BLOGROLL` because the two pages
+ * do not need the same things, and the differences all run in the narrowing
+ * direction. Reusing the blogroll's would have handed this page a script host and a
+ * websocket origin it never contacts.
+ *
+ *  * `script-src` names `s3.amazonaws.com` and **not** `code.scripting.com`. The
+ *    blogroll needs both because `code.scripting.com/blogroll/*` 302s to the bucket
+ *    and CSP checks the redirect target; every river include is a bucket URL to begin
+ *    with. Still no `'unsafe-inline'` — `feedland-river.js` is a file rather than the
+ *    inline `startup()` call Dave's page ends with, precisely so this stays true.
+ *  * `style-src` takes `'unsafe-inline'`, the same real concession the blogroll
+ *    makes: riverviewer.js positions with `style=` attributes (`.css()` calls on the
+ *    "more" button and the like count), which CSP blocks whether parsed or injected.
+ *    It buys an attacker style injection on this page — defacement, not execution.
+ *  * `img-src` is `'self' https:`, and it is **by far the widest line in this file** —
+ *    every host on the web, provided it speaks TLS. It is deliberate, and it is the
+ *    only directive here that is not the narrowest form that works.
+ *
+ *    Two things need it. Every river section shows the feed's favicon, which
+ *    `getUrlIconImage` fetches from `https://icons.duckduckgo.com/ip3/<domain>.ico`.
+ *    And the items themselves carry the author's own HTML, `<img>` and image
+ *    enclosures included, served from whatever host that member happens to use —
+ *    their own domain, their CDN, their image bucket. There is no list to write: the
+ *    set of hosts is the set of places ~150 independent bloggers keep their pictures,
+ *    and it changes without us.
+ *
+ *    Naming hosts as they turn up was the alternative, and it fails in the direction
+ *    that does not get noticed — the next member to embed from somewhere new gets a
+ *    broken image on our page and a violation in a console nobody has open. Refusing
+ *    them all was the other, and it was tried: three items of 174 rendered the
+ *    browser's broken-image glyph, which reads to a visitor as our bug.
+ *
+ *    **What it costs, stated plainly.** A member's server — or anyone their feed
+ *    embeds from — learns the IP address of everyone reading the river, and a
+ *    tracking pixel in a feed would work. It buys an attacker nothing executable:
+ *    `img-src` governs images, and `script-src` is unchanged and still names one
+ *    host. /about says all of this in the visitor's words.
+ *  * `connect-src` names FeedLand **once**, not twice. The blogroll opens a
+ *    websocket to keep its "when" column live; the river does not — the socket
+ *    plumbing lives in FeedLand's own app shell, which `views/river.js` does not
+ *    load. `FEEDLAND_SOCKET` would be a standing allowance with nothing using it.
+ *  * `font-src` gains the bucket for Font Awesome's font files, which is where the
+ *    footer glyphs come from.
+ */
+const CSP_RIVER = [
+  "default-src 'none'",
+  "script-src 'self' https://s3.amazonaws.com",
+  "style-src 'self' 'unsafe-inline' https://s3.amazonaws.com",
+  "img-src 'self' https:",
+  "font-src 'self' https://s3.amazonaws.com",
+  "manifest-src 'self'",
+  `connect-src 'self' ${FEEDLAND_SERVER}`,
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'none'",
+].join('; ');
+
+/**
  * The policies a route may ask for by name, via `c.set('cspProfile', …)`.
  *
  * A name rather than the policy itself, so the strings stay in this file: a route
@@ -128,6 +189,7 @@ const CSP_BLOGROLL = [
  */
 const CSP_PROFILES = {
   blogroll: CSP_BLOGROLL,
+  river: CSP_RIVER,
 };
 
 /**

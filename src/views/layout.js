@@ -115,6 +115,7 @@ ${scripts.map((src) => html`<script src="${assetUrl(src)}" defer></script>`)}
   <nav class="site-nav" aria-label="Main">
     <ul>
       <li><a href="/">Home</a></li>
+      <li><a href="/river">River</a></li>
       <li><a href="/blog">Blog</a></li>
       <li><a href="/sites">Members</a></li>
       <li><a href="/submit">Submit</a></li>
@@ -130,6 +131,7 @@ ${body}
 <footer class="site-footer">
   <p>
     <a href="/about">About</a> &middot;
+    <a href="/river">River</a> &middot;
     <a href="/blog">Blog</a> &middot;
     <a href="/badge">Badge</a> &middot;
     <a href="/guide">Guide</a> &middot;

@@ -122,20 +122,37 @@ export function aboutPage({ config }) {
     <strong>Submission records are deleted after 90 days.</strong>
   </p>
   <p>
-    <strong>The homepage loads other people&rsquo;s code, and it is worth being plain
-    about that.</strong> We are trying Dave Winer&rsquo;s blogroll software there in
-    place of our own reader. Your browser fetches it &mdash; jQuery, Bootstrap and
-    <code>blogroll.js</code> &mdash; from <code>scripting.com</code>&rsquo;s files on
-    Amazon S3, and then asks
-    <a href="${FEEDLAND_SERVER}/">${new URL(FEEDLAND_SERVER).host}</a> for the list of
-    member feeds and their latest items. Those two hosts see your IP address and that
-    you loaded our homepage. Nothing else is fetched from anywhere else: the fonts,
-    the stylesheet and the icons are all served from here.
+    <strong>Two pages load other people&rsquo;s code, and it is worth being plain
+    about that.</strong> The homepage runs Dave Winer&rsquo;s blogroll software in
+    place of our own reader, and <a href="/river">the river</a> runs FeedLand&rsquo;s
+    river display. Your browser fetches both &mdash; along with jQuery, Bootstrap and
+    Font Awesome &mdash; from <code>scripting.com</code>&rsquo;s files on Amazon S3,
+    and then asks <a href="${FEEDLAND_SERVER}/">${new URL(FEEDLAND_SERVER).host}</a>
+    for the member feeds and their latest items. Those two hosts see your IP address
+    and which of our two pages you loaded.
   </p>
   <p>
-    That is the only page it happens on. Every other page here makes no third-party
-    requests at all. Nobody in that list is asked to track you, we run no analytics,
-    and browsing this site sets no cookies.
+    <strong>The river also loads images from the sites it is showing you.</strong>
+    Each feed is listed with its site&rsquo;s favicon, which comes from
+    <a href="https://duckduckgo.com/">DuckDuckGo&rsquo;s</a> icon service &mdash; so
+    <code>icons.duckduckgo.com</code> is told which member domains have items in the
+    river you are reading. And where a post contains a picture, your browser fetches
+    it from wherever that author keeps it, which means
+    <strong>a member&rsquo;s server can see your IP address when their post appears
+    in the river</strong>. That is how the pictures get there, and it is the one place
+    on this site where we cannot tell you in advance who is being contacted &mdash; it
+    is whoever published the post you are reading.
+  </p>
+  <p>
+    If you would rather that did not happen, blocking images on this page costs you
+    nothing else: the river is text first, and every headline links to the post at
+    the source. Nothing else on either page is fetched from anywhere else, and the
+    fonts, the stylesheet and our own icons are all served from here.
+  </p>
+  <p>
+    Those two pages are the only ones it happens on. Every other page here makes no
+    third-party requests at all. Nobody in that list is asked to track you,
+    we run no analytics, and browsing this site sets no cookies.
   </p>
 </section>
 
