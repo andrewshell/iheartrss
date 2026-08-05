@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.2](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.10.1...iheartrss-v0.10.2) (2026-08-05)
+
+
+### Bug Fixes
+
+* **blog:** link absolutely, so posts work outside our own origin ([ff9cc9f](https://github.com/andrewshell/iheartrss/commit/ff9cc9fe91868113977db7007f03db3e4bd13457))
+
 ## [0.10.1](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.10.0...iheartrss-v0.10.1) (2026-08-05)
 
 
