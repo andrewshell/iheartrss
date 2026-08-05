@@ -31,12 +31,26 @@ const CONTENT_TYPES = {
   '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
-// Plan §6/§6.1: the three brand files exist to be hotlinked from other people's
-// sites, so they get permissive CORS and a cross-origin resource policy.
+// Plan §6/§6.1: the brand files exist to be hotlinked from other people's sites, so
+// they get permissive CORS and a cross-origin resource policy.
+//
+// `apple-touch-icon.png` is here for a second reason, and it is not a brand file in
+// the same sense: it is the `<image>` of `/feed.xml`. A channel image is hotlinked BY
+// DEFINITION — every browser-based reader loads it from its own origin — and without
+// this entry it is served the site-wide `Cross-Origin-Resource-Policy: same-origin`
+// and the reader's own browser refuses it. Nothing appears in our logs when that
+// happens; the icon is simply missing in somebody else's app. See `channelImage` in
+// `blog/feed.js`, which is the other half of this.
+//
+// Worth knowing before adding more: everything in this set also gets a **one-year
+// immutable** cache below, and none of these URLs are versioned by `lib/assets.js`
+// (deliberately — they are a published interface). So a file listed here cannot be
+// visually changed in place; changing it means a new URL.
 const HOTLINKABLE = new Set([
   'iheartrss.svg',
   'iheartrss-dark.svg',
   'iheartrss-icon.svg',
+  'apple-touch-icon.png',
 ]);
 
 export function registerStatic(app) {

@@ -212,6 +212,102 @@ test('the feed lists posts newest first with RFC 822 pubDates', async () => {
   );
 });
 
+test('the channel carries its own pubDate, dated by the newest post', async () => {
+  // The symptom that found this: our feed's section in the river printed a literal
+  // "[ no date ]" beside its title. FeedLand stores a feed's CHANNEL-level pubDate
+  // and riverviewer.js renders it there; ours had no such element, so the record
+  // FeedLand held for us had no `pubDate` key at all.
+  const dir = await contentDir({
+    '2026-07-28.md': 'Older.\n',
+    '2026-07-30.md': 'Newer.\n',
+  });
+  const xml = renderFeed({ config, posts: createBlog({ dir }).posts() });
+
+  // Scoped to the channel: `items()` strips the item elements, so this cannot pass
+  // by accidentally matching an item's own pubDate.
+  const channelOnly = xml.replace(/<item>[\s\S]*<\/item>/, '');
+  assert.match(channelOnly, /<pubDate>Thu, 30 Jul 2026 12:00:00 GMT<\/pubDate>/);
+});
+
+test('re-rendering an unchanged blog produces byte-identical feeds', async () => {
+  // The reason the channel pubDate is the newest POST's date and not the render
+  // time. `renderFeed` runs per request, so a build-time stamp would change these
+  // bytes on every fetch — no conditional request could ever hit, and every rssCloud
+  // subscriber we advertise `<cloud>` to would see the channel change on each poll.
+  const dir = await contentDir({ '2026-07-30.md': 'Stable.\n' });
+  const blog = createBlog({ dir });
+
+  assert.equal(
+    renderFeed({ config, posts: blog.posts() }),
+    renderFeed({ config, posts: blog.posts() }),
+  );
+});
+
+test('a feed with no posts omits the channel pubDate rather than inventing one', () => {
+  // A zero-item channel is valid and phase 1 shipped exactly that, so a site with no
+  // content/ directory must not start emitting a date for content it does not have.
+  const xml = renderFeed({ config, posts: [] });
+
+  assert.doesNotMatch(xml, /<pubDate>/);
+  assert.equal(parseFeed(xml).ok, true);
+});
+
+test('the channel carries an image, with the three sub-elements the spec requires', () => {
+  // RSS 2.0: `<url>`, `<title>` and `<link>` are required; `<width>`/`<height>`/
+  // `<description>` are optional. The spec also says the image's title and link
+  // "should have the same value as the channel's" — which is why they come from one
+  // constant rather than being typed twice.
+  const xml = renderFeed({ config, posts: [] });
+  const { channel } = new XMLParser({ parseTagValue: false }).parse(xml).rss;
+
+  assert.deepEqual(channel.image, {
+    url: 'https://iheartrss.com/apple-touch-icon.png',
+    title: 'I ♥ RSS',
+    link: 'https://iheartrss.com/',
+    description: 'A directory for people who love RSS.',
+  });
+  assert.equal(channel.image.title, channel.title);
+  assert.equal(channel.image.link, channel.link);
+});
+
+test('the channel image declares no width or height rather than a wrong one', () => {
+  // The file is 180x180 and the spec's maximum width is 144 (default 88). Declaring
+  // 180 states a width the spec forbids; declaring 144 states one the file does not
+  // have. Saying nothing is the only option that is not false, and it is what
+  // scripting.com does.
+  const xml = renderFeed({ config, posts: [] });
+
+  assert.doesNotMatch(xml, /<width>/);
+  assert.doesNotMatch(xml, /<height>/);
+});
+
+test("the channel image's URL is built from this deployment's own origin", () => {
+  // Same reasoning as every other absolute URL in the feed: a hardcoded
+  // iheartrss.com would be right in production and quietly wrong everywhere else.
+  const xml = renderFeed({
+    config: { ...config, siteUrl: 'https://ring.example.test/' },
+    posts: [],
+  });
+
+  assert.match(xml, /<url>https:\/\/ring\.example\.test\/apple-touch-icon\.png<\/url>/);
+});
+
+test('the file the channel image names is served so other origins may load it', async () => {
+  // THE HALF THAT IS EASY TO FORGET. A channel image is hotlinked by definition, and
+  // the site-wide default is `Cross-Origin-Resource-Policy: same-origin` — under
+  // which every browser-based reader is refused the image by its own browser, with
+  // nothing in our logs to show for it. This asserts the element and the header agree.
+  const app = createApp({ config });
+  const xml = await (await app.request('/feed.xml')).text();
+  const url = /<image>[\s\S]*?<url>([^<]+)<\/url>/.exec(xml)[1];
+
+  const res = await app.request(new URL(url).pathname);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'image/png');
+  assert.equal(res.headers.get('cross-origin-resource-policy'), 'cross-origin');
+  assert.equal(res.headers.get('access-control-allow-origin'), '*');
+});
+
 test('/feed.xml with real posts passes OUR OWN validator, source namespace and all', async () => {
   // §11: if we ever break our own feed, this test fails. We reject other people's
   // feeds for a living, so ours goes through the very same gate.

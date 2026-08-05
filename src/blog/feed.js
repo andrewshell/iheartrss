@@ -28,10 +28,22 @@ import { escapeXml, SOURCE_NS, xmlSafeContent, xmlSafeText } from '../lib/xml.js
 // because this was its original home.
 export { escapeXml };
 
+/**
+ * The channel title, as a constant because `<image>` has to repeat it.
+ *
+ * The RSS spec says the image's `<title>` and `<link>` "should have the same value as
+ * the channel's `<title>` and `<link>`" — so this is one string with two required
+ * spellings, which is exactly the shape that drifts.
+ */
+const CHANNEL_TITLE = 'I ♥ RSS';
+
 export function renderFeed({ config, posts = [] }) {
   const siteLink = new URL('/', config.siteUrl).href;
   const selfLink = new URL('/feed.xml', config.siteUrl).href;
   const blogrollLink = new URL('/subscriptions.opml', config.siteUrl).href;
+  // §6.1's home-screen icon, doing a second job. See `channelImage` below for why
+  // this file and not one of the SVGs.
+  const imageLink = new URL('/apple-touch-icon.png', config.siteUrl).href;
   // The `<source:cloud>` form names the same server as the `<cloud>` attributes,
   // spelled as one https URL — so the two forms can never drift onto different hosts.
   // `port` belongs to the http-post form only; the URL form uses the scheme's own.
@@ -42,10 +54,11 @@ export function renderFeed({ config, posts = [] }) {
   return `<?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:source="${escapeXml(SOURCE_NS)}">
   <channel>
-    <title>I ♥ RSS</title>
+    <title>${escapeXml(CHANNEL_TITLE)}</title>
     <link>${escapeXml(siteLink)}</link>
     <description>News and notes from iheartrss.com, a directory for people who love RSS.</description>
-    <language>en</language>
+    <language>en</language>${channelPubDate(posts)}
+${channelImage({ imageLink, siteLink })}
     <docs>https://www.rssboard.org/rss-specification</docs>
     <generator>iheartrss.com</generator>
     <cloud domain="${escapeXml(config.rsscloudDomain)}" port="${escapeXml(String(config.rsscloudPort))}" path="${escapeXml(config.rsscloudPath)}" registerProcedure="" protocol="${escapeXml(config.rsscloudProtocol)}"/>
@@ -55,6 +68,93 @@ export function renderFeed({ config, posts = [] }) {
   </channel>
 </rss>
 `;
+}
+
+/**
+ * The channel's own `<pubDate>` — the newest post's date, and **not** the time the
+ * feed was rendered.
+ *
+ * ── Why it exists at all ──────────────────────────────────────────────────────
+ *
+ * A channel `<pubDate>` is optional and this feed shipped without one, which was
+ * invisible until our own feed appeared in a river. FeedLand stores a feed's
+ * channel-level pubDate and hands it back from `getfeed`; `riverviewer.js` renders
+ * that as the date beside a section's title, and prints a literal `[ no date ]` when
+ * the field is absent. Ours was the section on /river reading "no date" next to every
+ * member who had one. Confirmed both ways: scripting.com's channel `<pubDate>` and
+ * the `pubDate` FeedLand reports for it are byte-identical, and the record FeedLand
+ * holds for us had no `pubDate` key at all.
+ *
+ * ── Why the newest post and not `new Date()` ──────────────────────────────────
+ *
+ * `renderFeed` runs per request, so a build-time stamp would make the bytes of
+ * `/feed.xml` differ on every single fetch. Nothing downstream could tell a real
+ * update from a re-render: conditional requests would always miss, and anything
+ * diffing the feed — including the rssCloud subscribers we advertise `<cloud>` to —
+ * would see the channel change every time it polled. The newest post's date changes
+ * exactly when the content does, which is what the element is specified to mean.
+ *
+ * Deliberately no `<lastBuildDate>` alongside it. It is the one element that IS
+ * honestly the render time, and it would reintroduce exactly the churn above for a
+ * value no reader here needs.
+ *
+ * With no posts there is nothing to date, so the element is omitted rather than
+ * invented — a zero-item channel stays valid, which phase 1 relied on.
+ *
+ * `posts` arrives newest-first from `blog/index.js`, which sorts on `pubDate` with a
+ * filename tie-break. Taking `[0]` rather than re-scanning for a maximum keeps this
+ * honest to that contract: if the order ever changed, the feed's item order would be
+ * wrong first and far more loudly.
+ */
+function channelPubDate(posts) {
+  if (posts.length === 0) return '';
+  return `\n    <pubDate>${rfc822(posts[0].pubDate)}</pubDate>`;
+}
+
+/**
+ * `<image>` — the channel's icon, per the RSS 2.0 spec's
+ * [image sub-element](https://cyber.harvard.edu/rss/rss.html#ltimagegtSubelementOfLtchannelgt).
+ *
+ * Three required children in the order the spec lists them — `<url>`, `<title>`,
+ * `<link>` — plus the optional `<description>`, which readers put in the `title`
+ * attribute of the link they wrap the image in. `<width>` and `<height>` are the
+ * other two optional ones and they are **deliberately absent**; see below.
+ *
+ * ── Why apple-touch-icon.png ──────────────────────────────────────────────────
+ *
+ * The spec allows GIF, JPEG or PNG and nothing else, which rules out the three SVG
+ * brand files immediately. Of the PNGs we already serve, this is the right one for a
+ * reason that is easy to miss: it is the **one asset with no alpha channel** (§6.1
+ * flattens it onto opaque white for iOS). A feed reader composites a channel icon
+ * onto whatever its own chrome is — often a dark sidebar — and a transparent
+ * near-black wordmark would disappear into it. The flattening that was done for
+ * iOS home screens is the same thing that makes it safe here.
+ *
+ * ── Why no `<width>`/`<height>` ───────────────────────────────────────────────
+ *
+ * The file is 180×180 and the spec's maximum width is 144 (default 88; height max
+ * 400, default 31). Those numbers describe the 88×31 banner GIFs of 2002, not a
+ * square app icon. All three options are imperfect and omission is the least so:
+ * declaring 180 states a width the spec forbids, declaring 144 states a width the
+ * file does not have, and omitting says nothing false — readers that care measure
+ * the PNG, and the ones that fall back to 88×31 would have been wrong about a
+ * square icon either way. scripting.com omits them too.
+ *
+ * ── The header this depends on ────────────────────────────────────────────────
+ *
+ * **A channel image is hotlinked by definition**, so `apple-touch-icon.png` is in
+ * `HOTLINKABLE` in `routes/static.js`. Without that it is served
+ * `Cross-Origin-Resource-Policy: same-origin` — the site-wide default — and every
+ * browser-based reader is refused the image by its own browser, with nothing in our
+ * logs to show for it. That entry and this element are one change in two files.
+ */
+function channelImage({ imageLink, siteLink }) {
+  return `    <image>
+      <url>${escapeXml(imageLink)}</url>
+      <title>${escapeXml(CHANNEL_TITLE)}</title>
+      <link>${escapeXml(siteLink)}</link>
+      <description>A directory for people who love RSS.</description>
+    </image>`;
 }
 
 /**
