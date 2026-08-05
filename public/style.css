@@ -1267,6 +1267,542 @@ blog-roll li a {
   padding: 0.25rem 0;
 }
 
+/* ----------------------------------------------------------------- river -- */
+
+/*
+ * /river — FeedLand's `riverviewer.js`, restyled into this site.
+ *
+ * Same arrangement as the blogroll block above and the same licence for it: the
+ * third-party sheets (`riverviewer.css`, `oldschoolrender.css`, `misc.css`) still
+ * load and still do the structural work, ours loads after them, and equal specificity
+ * resolves our way. What follows replaces their PRESENTATION — every colour and size
+ * below is a token, which is the only reason this page works in dark mode at all.
+ * His sheet is hardcoded `whitesmoke`, `gainsboro`, `#bbb` and `black` throughout.
+ *
+ * THE MARKUP WE ARE STYLING. riverviewer.js builds all of it inside our one empty
+ * div, and none of these class names are ours to change:
+ *
+ *   #idRiverContainer.divRiverContainer          ← the only thing in views/river.js
+ *     div.divRiverDisplay
+ *       div.divRiverSection[data-feedUrl]        one feed's burst of items
+ *         div.divSectionHeader                   sits ON the section's top border
+ *           span.spFeedPubDate                     floated RIGHT — the feed's pubDate
+ *           span.spFeedTitle                       floated LEFT
+ *             span.spFavicon > img.imgFavIcon      from icons.duckduckgo.com
+ *             span.spHtmlLink > a                  the site
+ *             span.spFeedLink > a                  "(Feed)" — opens it in FeedLand
+ *         div.divRiverItem[data-id]              one item, repeated
+ *           div.divRiverItemBody
+ *             div.divTitledItem                    an item WITH a title…
+ *               div.divTitle > a                     the headline, linked
+ *               div.divTitledItemBody                the description
+ *             div.divSingularItem                  …or one WITHOUT (a linkblog post)
+ *               span.spFirstSentence                 bolded by boldenTitlelessText
+ *               a.aLink                              the domain, appended
+ *             div.divMarkdownGeneratedText         markdowntext items land here
+ *           div.divMoreButton                      inert: flMoreButtonVisible is false
+ *           div.divRiverItemFooter
+ *             span.spRiverItemPermalink            the relative time, floated RIGHT
+ *             span.spLikes                         hides itself when not signed in
+ *             span.spShareButton                   hidden below — see why
+ *             span.spDocButton > a                 the item on FeedLand
+ *             span.spDataButton                    hidden below — see why
+ *             span.spEnclosureButton               podcast audio, when there is any
+ *
+ * THREE THINGS TO KNOW BEFORE EDITING THIS BLOCK:
+ *
+ *  1. **Nothing here may be named `span…`.** The FeedLand includes float every
+ *     element whose class name starts with "span". His own classes are `sp…`, which
+ *     is why they are safe and `span…` is not. Same trap as the blogroll block.
+ *  2. **The section header is a notch, not a bar.** `.divRiverSection` draws a top
+ *     border and the two floated spans pull themselves up onto it with a negative
+ *     top margin and an opaque background, so the rule appears to break around them.
+ *     It is a nice effect and it is entirely dependent on that background matching
+ *     the page — which is why it is `var(--bg)` and not a colour.
+ *  3. **`.divRiverItemBody`'s `max-height: 200` in his sheet is invalid CSS** — no
+ *     unit, so it is dropped and nothing is ever clipped. That is not an accident to
+ *     fix: `riverviewer.js` opens with `const flMoreButtonVisible = false`, so the
+ *     "more" button that would expand a clipped body is off. Items show in full.
+ */
+
+/*
+ * Full width of our column, not his 600px centred card.
+ *
+ * `padding-left` IS THE LAYOUT, not spacing. It opens the gutter the favicon hangs
+ * in, and it is what puts the feed title, every item body and every footer on ONE
+ * left edge with the icon outboard of all of them — which is how scripting.com's own
+ * river reads, and the arrangement Dave's `.imgFavIcon { margin-left: -22px }` was
+ * always for. Take this padding away and that negative margin drags the icon off the
+ * page, which is why an earlier pass here deleted the margin instead and got the
+ * inverse: the body aligned under the ICON and the feed title alone was indented.
+ *
+ * The width has to match what the favicon rule below pulls back by. They are two
+ * halves of one measurement.
+ *
+ * The top margin is not cosmetic either: the first section's header pulls itself UP
+ * onto that section's top border (see note 2 above), so without room made for it here
+ * it lands on the heading above the river.
+ */
+#idRiverContainer .divRiverDisplay {
+  width: 100%;
+  margin: 2rem 0 0;
+  padding-left: 1.5rem;
+}
+
+/* His `#1E68A6` is a fixed blue that has no dark-mode answer. Ours is the same link
+   colour as the rest of the site. */
+#idRiverContainer .divRiverDisplay a {
+  color: var(--brand-text);
+}
+
+#idRiverContainer .divRiverDisplay a:hover {
+  color: var(--brand-text-hover);
+}
+
+/* ── The standing status line ── */
+
+/*
+ * Not part of his markup — ours, outside the container, and the only thing on the
+ * page during the wait. FeedLand builds this river across every member feed on
+ * demand, so the wait is measured in seconds rather than milliseconds and an empty
+ * box under a heading is the wrong thing to show for that long.
+ */
+.river__status {
+  color: var(--text-muted);
+  max-width: var(--measure);
+}
+
+.river__status--error {
+  color: var(--brand-text);
+}
+
+/* ── A section: one feed's burst of items ── */
+
+#idRiverContainer .divRiverSection {
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+  /* His 40px between sections and 20px between items made the two gaps nearly the
+     same, so the sections stopped reading as groups. 2.5rem against the items'
+     1.5rem is the separation his numbers were reaching for. */
+  margin-bottom: 2.5rem;
+}
+
+/* The gap under the header is doing real work: the header is a hairline with two
+   labels punched through it, so it needs enough air beneath to read as a heading for
+   what follows rather than as a divider floating between two items. */
+#idRiverContainer .divSectionHeader {
+  font-size: var(--step-0);
+  line-height: 1.3;
+  margin-bottom: 1.1rem;
+}
+
+/*
+ * The two halves of the notch. `margin-top` has to stay negative — that is what lifts
+ * them onto the border — but it is expressed in `em` here so it tracks the font size
+ * instead of assuming his 12px, and the background is the page's own so the rule
+ * appears to break cleanly around each one.
+ */
+#idRiverContainer .divRiverSection .spFeedTitle,
+#idRiverContainer .divRiverSection .spFeedPubDate {
+  margin-top: -1.35em;
+  background: var(--bg);
+  font-size: 0.9rem;
+  font-weight: normal;
+  line-height: 1.3;
+}
+
+#idRiverContainer .divRiverSection .spFeedTitle {
+  padding: 0 0.6rem 0 0;
+  font-weight: 600;
+}
+
+#idRiverContainer .divRiverSection .spFeedPubDate {
+  padding: 0 0 0 0.6rem;
+  color: var(--text-muted);
+}
+
+/* "(Feed)" opens the feed inside FeedLand. Useful, but it is not the headline of the
+   section — the site name is. */
+#idRiverContainer .spFeedLink a {
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+/*
+ * The favicon, from icons.duckduckgo.com — hanging in the gutter opened above.
+ *
+ * This is Dave's own arrangement, restated in our units: the icon floats left and
+ * then pulls itself back out of the text column by the full width of the gutter, so
+ * the feed title starts flush with the item text below it rather than after the icon.
+ * His numbers were a 16px icon + 6px gap = the 22px he pulls back; ours is a 16px icon
+ * in a 1.5rem (24px) gutter, so the 8px that is left over is the gap.
+ *
+ * `margin-left` must stay equal to the display's `padding-left`. Change one and the
+ * icon either overhangs the page or sits inside the text column.
+ */
+#idRiverContainer .imgFavIcon {
+  float: left;
+  width: 16px;
+  height: 16px;
+  margin: 0.15em 0 0 -1.5rem;
+  top: 0;
+}
+
+/* Set by `feedland-river.js` on a favicon the icon service had none for — the image
+   emits no `alt`, so what shows otherwise is the browser's broken-image glyph beside
+   a site's name, which reads as our bug rather than as a missing icon. There is no
+   CSS selector for "failed to load", which is why a script has to say so. */
+#idRiverContainer .imgFavIcon.river-favicon--missing {
+  display: none;
+}
+
+/* ── An item ── */
+
+#idRiverContainer .divRiverItem {
+  /* His 2px dotted gainsboro box around every item is a lot of ink for a boundary
+     the section rule and the spacing already draw, and gainsboro is invisible on our
+     dark surface anyway. */
+  border: 0;
+  padding: 0;
+  margin-bottom: 1.5rem;
+}
+
+#idRiverContainer .divRiverItem:last-child {
+  margin-bottom: 0;
+}
+
+/*
+ * ONE right edge, and ONE height cap. Both live on this wrapper and nowhere below it.
+ *
+ * ── The right edge ────────────────────────────────────────────────────────────
+ *
+ * This box is deliberately NOT held to `--measure`. It was, briefly, and the 80px of
+ * dead space that left down the right of every item was worse than the long line it
+ * was preventing: the header and footer run the full width, so a narrower body made
+ * every item look indented from a margin that was not there.
+ *
+ * What the width IS doing is keeping the floated images honest. Feeds ship pictures
+ * with `float: right` in an inline style, so an image seeks the right edge of whatever
+ * box it lands in — and while the measure sat on `.divTitledItemBody` and
+ * `.divSingularItem` but NOT on the `<ul>`/`<li>` a Drummer outline renders into, the
+ * same picture landed at 608px in one item and 688px in the next. One width on the
+ * wrapper, inherited by every descendant whatever markup the author used, is what
+ * makes that column of images straight. The `max-width: none` below is part of the
+ * same rule: this stylesheet caps `p`, `ul` and `ol` at `--measure` globally, which
+ * would otherwise re-ragged the edge for any feed that wraps its text in a paragraph.
+ *
+ * ── The height cap ────────────────────────────────────────────────────────────
+ *
+ * `riverviewer.css` asks for `max-height: 200` — no unit, so it is invalid, so the
+ * browser drops it and items render at whatever length their author wrote. That is
+ * the declaration that makes a river a river rather than a page of full posts, and
+ * scripting.com's own river is visibly clipped by it.
+ *
+ * So it is restated here in a unit that parses. In `rem` rather than his `px` so it
+ * tracks our larger type: 14rem is about eight lines plus a headline, which is close
+ * to what his 200px buys at his size.
+ *
+ * **There is no "more" button to expand it, and that is not an oversight.**
+ * `riverviewer.js` opens with `const flMoreButtonVisible = false` — a top-level
+ * `const` in somebody else's file, so `setupMoreButton` is a no-op we cannot switch
+ * back on. The way into a clipped post is its headline, which links to the source,
+ * and the doc button in the footer. The fade below exists so the cut reads as "this
+ * continues" rather than as a sentence that stops mid-word.
+ */
+#idRiverContainer .divRiverItemBody {
+  position: relative;
+  max-width: none;
+  max-height: 14rem;
+  overflow: hidden;
+}
+
+/* The global measure on running prose, off inside the river — see above. */
+#idRiverContainer .divRiverItemBody p,
+#idRiverContainer .divRiverItemBody ul,
+#idRiverContainer .divRiverItemBody ol {
+  max-width: none;
+}
+
+/*
+ * ── Open and closed ───────────────────────────────────────────────────────────
+ *
+ * TWO classes, and the split matters. `--clipped` is a FACT the script measured: this
+ * body overflows its cap. `--expanded` is the READER'S choice: they clicked it open.
+ * An open item keeps both, which is what lets it be closed again — and is why the
+ * fade below is written as "clipped AND NOT expanded" rather than just "clipped".
+ * That single `:not()` is the difference between a gradient that means "there is more
+ * below" and one that sits over fully-visible text forever.
+ */
+#idRiverContainer .divRiverItemBody.river-item--expanded {
+  max-height: none;
+}
+
+/* Both states, because an open item has to be closeable. */
+#idRiverContainer .divRiverItemBody.river-item--clipped {
+  cursor: pointer;
+}
+
+/*
+ * The fade over the cut — and ONLY over a cut that is still cut.
+ *
+ * `.river-item--clipped` is set by `feedland-river.js` on the bodies whose
+ * `scrollHeight` actually exceeds their `clientHeight`. It has to come from a script
+ * because CSS has no way to ask "did this overflow?", and a fade painted over every
+ * item would put a phantom gradient across two-line posts that are showing in full.
+ *
+ * `--bg` because the river sits directly on the page: any other colour and the
+ * gradient ends in a visible band.
+ */
+#idRiverContainer
+  .divRiverItemBody.river-item--clipped:not(.river-item--expanded)::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 3.5rem;
+  background: linear-gradient(to bottom, transparent, var(--bg));
+  pointer-events: none;
+}
+
+#idRiverContainer .divTitledItem,
+#idRiverContainer .divSingularItem {
+  font-size: var(--step-0);
+  line-height: 1.6;
+}
+
+/*
+ * `font-family: inherit` IS the fix for a real bug, not tidiness.
+ *
+ * `riverviewer.css` sets `font-family: "Ubuntu"` on both of these — a Google font
+ * Dave's page links and ours deliberately does not. Unresolvable family names fall
+ * through to the browser's default, so every titled item rendered in the UA serif
+ * while the titleless ones beside them rendered in our sans. That is the same trap
+ * the note at the top of the stylesheet describes: loading ours last settles a
+ * collision PER PROPERTY, and does nothing about a property only their sheet
+ * declares.
+ *
+ * His selectors are three classes deep (`.divRiverDisplay .divTitledItem .divTitle`),
+ * which is why these carry the container's id — an id beats any number of classes.
+ */
+/* `color` is here for the case that is easy to miss: the title is USUALLY an anchor,
+   which the link rule above colours, so his `#5C7991` only shows on an item that has
+   a title and no link — a slate blue that has no dark-mode answer, on a page where
+   131 of 174 items were titled the day this was written. */
+#idRiverContainer .divTitledItem .divTitle {
+  font-family: inherit;
+  font-size: var(--step-1);
+  line-height: 1.3;
+  font-weight: 600;
+  color: inherit;
+  margin-bottom: 0.4rem;
+}
+
+/*
+ * THE HEADLINE IS NOT A LINK-COLOURED LINK, and this rule is the difference between
+ * a river you can scan and a page of shouting.
+ *
+ * Almost every item here has a title, and almost every title is an anchor. Left to
+ * the link rule above, that made each one brand-orange AND underlined at
+ * `--step-1` — so the loudest thing in every item was its headline, 131 times down
+ * the page, while the text underneath sat quiet. scripting.com's own river does the
+ * opposite and is right to: titles are plain body colour, and colour is reserved for
+ * the links INSIDE a post, where it actually distinguishes one span of text from
+ * another.
+ *
+ * The affordance is not lost — size, weight and the underline on hover all say it is
+ * clickable, and it is a headline, which is the most obviously clickable thing on any
+ * news page. Body links keep their colour and their underline untouched.
+ */
+#idRiverContainer .divTitledItem .divTitle a {
+  color: inherit;
+  text-decoration: none;
+}
+
+#idRiverContainer .divTitledItem .divTitle a:hover,
+#idRiverContainer .divTitledItem .divTitle a:focus-visible {
+  color: var(--brand-text);
+  text-decoration: underline;
+}
+
+/*
+ * Full-strength text, NOT muted. This was `--text-muted` on the theory that a
+ * description is secondary to its headline — but in a river the description is the
+ * only actual content on the page, and muting it while the headline was orange made
+ * every item read back-to-front: shout, then whisper the thing you came to read.
+ * Emphasis now comes from size and weight on the title alone.
+ *
+ * No `max-width` here either: the measure is on `.divRiverItemBody` above, once, so
+ * that every item shares one right edge whatever markup it is made of.
+ */
+#idRiverContainer .divTitledItem .divTitledItemBody {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* A titleless item (a linkblog post) IS the post, so it reads at full strength.
+   `boldenTitlelessText` wraps its opening sentence in `.spFirstSentence`, which his
+   sheet paints `#5C7991` — a slate blue with no dark-mode answer. */
+#idRiverContainer .spFirstSentence {
+  color: inherit;
+  font-weight: 600;
+}
+
+/* Items that arrive as an outline rather than as text (Drummer posts) are rendered by
+   oldschoolrender.js, whose sheet strips the list markers and leaves them flush. */
+#idRiverContainer .divTitledItem ul,
+#idRiverContainer .divTitledItem ol {
+  max-width: none;
+}
+
+/* ── The footer controls ── */
+
+#idRiverContainer .divRiverItemFooter {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  /* His `height: 20px` clips the row the moment anything in it wraps, which on a
+     phone is immediately. */
+  height: auto;
+  min-height: 1.5rem;
+  /* His 0.75 opacity on our text is under 4.5:1. A muted colour says "secondary" and
+     stays readable, the same swap the blogroll footer makes. */
+  opacity: 1;
+  color: var(--text-muted);
+}
+
+/* The relative time, floated right by his sheet, and the link to the item. His rule
+   is `color: black` — invisible on our dark surface. */
+#idRiverContainer .divRiverItemFooter .spRiverItemPermalink,
+#idRiverContainer .divRiverItemFooter .spRiverItemPermalink a {
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+#idRiverContainer .divRiverItemFooter .spDocButton a {
+  color: var(--text-muted);
+}
+
+/*
+ * TWO CONTROLS ARE HIDDEN, and neither is hidden for being ugly.
+ *
+ *   * **Share** (`.spShareButton`) is broken here, not merely useless.
+ *     `shareClick` opens with `trimWhitespace (appPrefs.urlLinkblog)` — `appPrefs` is
+ *     the signed-in FeedLand user's preferences, an object this page never defines,
+ *     so clicking it throws a ReferenceError and does nothing visible. It shares to
+ *     *your FeedLand linkblog*, which is not a thing anyone has by visiting us.
+ *   * **Data** (`.spDataButton`) opens riverviewer's own debugging dialog — the raw
+ *     JSON of the feed item, tooltipped "for exploring and debugging." It works
+ *     fine. It is developer furniture on a page for readers.
+ *
+ * Hidden in CSS rather than removed in JS on purpose: the blogroll's equivalent
+ * (`dropUnconfiguredMenuItem`) has to match on an element's *text* because the menu
+ * items carry no identity, and it breaks silently when Dave rewords a label. These
+ * two have stable class names, so the stylesheet is the honest place for it — and if
+ * either ever starts working, one line here brings it back.
+ *
+ * The like button needs no rule: `getLikesIcon` hides itself when nobody is signed
+ * in, which on this page is always.
+ */
+#idRiverContainer .divRiverItemFooter .spShareButton,
+#idRiverContainer .divRiverItemFooter .spDataButton {
+  display: none;
+}
+
+/*
+ * The enclosure button, when there is no enclosure.
+ *
+ * `getEnclosureButton` builds a headphones glyph for EVERY item and marks the ones
+ * with nothing to play `.spEnclosureButtonDisabled`, which his sheet renders at 0.6
+ * opacity — so a text post gets a slightly faded "play" control that does nothing.
+ * That was 174 of 174 items on our list the day this was written, our members being
+ * mostly writers, which makes it the most repeated thing on the page and a promise
+ * the page cannot keep. The enabled one stays, and shows up the moment a podcast
+ * does.
+ */
+#idRiverContainer .divRiverItemFooter .spEnclosureButtonDisabled {
+  display: none;
+}
+
+/*
+ * An author's own picture, inside their post — the one place on this site where the
+ * markup is not ours and cannot be made ours.
+ *
+ * The site-wide `img { max-width: 100% }` is restated because bootstrap and three
+ * FeedLand sheets are also in play here, and an image that overflows would push the
+ * page sideways on a phone.
+ */
+#idRiverContainer .divRiverItemBody img {
+  max-width: 100%;
+  height: auto;
+}
+
+/*
+ * **`!important`, and it is the right tool exactly once.**
+ *
+ * Scripting News — and every Drummer blog — ships its pictures with the float AND the
+ * spacing in an INLINE style attribute, straight through FeedLand into our page:
+ *
+ *     style="float: right; padding-left: 25px; padding-bottom: 10px;
+ *            padding-top: 10px; padding-right: 15px;"
+ *
+ * An inline declaration outranks every selector in this file, id or not. There is no
+ * specificity available to beat it, so overriding the spacing means `!important` or
+ * it means nothing — this is the case the flag exists for, not a shortcut around a
+ * cascade problem of our own making.
+ *
+ * What is actually wrong with those numbers here: 25px of padding on the left and
+ * 15px on the right is asymmetric, so a right-floated image is pushed 15px in from
+ * the column edge it is supposed to sit against while opening a 25px hole against the
+ * text. On his page that is tuned to his column. On ours it read as a picture that
+ * had drifted. Ours sits flush to the measure's right edge with one consistent gap on
+ * the text side.
+ *
+ * The FLOAT is deliberately left alone. It is the author's editorial decision about
+ * their own post, it is the only thing in that attribute that is not spacing, and
+ * `float: right` is what makes the layout in the first place.
+ */
+#idRiverContainer .divRiverItemBody img {
+  padding: 0 !important;
+}
+
+#idRiverContainer .divRiverItemBody img[style*='float: right'],
+#idRiverContainer .divRiverItemBody img[align='right'] {
+  /* Capped, because "float right" says nothing about size and a large picture would
+     otherwise leave a one-word-per-line ribbon of text beside it. */
+  max-width: 40%;
+  margin: 0.2rem 0 0.6rem 1.25rem;
+}
+
+#idRiverContainer .divRiverItemBody img[style*='float: left'],
+#idRiverContainer .divRiverItemBody img[align='left'] {
+  max-width: 40%;
+  margin: 0.2rem 1.25rem 0.6rem 0;
+}
+
+/* An image enclosure, when a feed sends one. `divInlineImage`'s dashed silver box is
+   from oldschoolrender.css. */
+#idRiverContainer .divInlineImage {
+  border: 1px solid var(--border);
+  border-radius: 0.35rem;
+  padding: 0.5rem;
+}
+
+/*
+ * `<code>` inside an item's own description.
+ *
+ * Not from a FeedLand sheet — this is BOOTSTRAP, which the river needs for its
+ * tooltips and popovers and which brings its `code { color: #dd1144; background:
+ * #f7f7f9 }` along with it. It only shows on this page and only inside somebody's
+ * post, so it reads as a bright pink chip on a light panel, punched into our dark
+ * surface. The site already has a token for exactly this.
+ */
+#idRiverContainer code {
+  background: var(--code-bg);
+  color: inherit;
+  border: 0;
+  border-radius: 0.25rem;
+  padding: 0.1em 0.3em;
+  font-size: 0.9em;
+}
+
 /* ------------------------------------------------------------------ blog -- */
 
 /*

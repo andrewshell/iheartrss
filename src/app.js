@@ -22,6 +22,7 @@ import { badgePage } from './views/badge.js';
 import { notFoundPage } from './views/error.js';
 import { guidePage } from './views/guide.js';
 import { homePage } from './views/home.js';
+import { riverPage } from './views/river.js';
 import { sitesPage } from './views/sites.js';
 
 /**
@@ -165,6 +166,15 @@ export function createApp({
       }),
     );
   });
+  // The river: every member's newest items in one stream, rendered by FeedLand's
+  // riverviewer.js. Its own CSP profile rather than the blogroll's — same S3 bucket,
+  // but a different set of needs in both directions (a favicon host it adds, a
+  // script host and a websocket origin it does not need). See `lib/headers.js`.
+  app.get('/river', (c) => {
+    c.set('cspProfile', 'river');
+    return c.html(riverPage({ config }));
+  });
+
   app.get('/about', (c) => c.html(aboutPage({ config })));
   app.get('/badge', (c) => c.html(badgePage({ config })));
 

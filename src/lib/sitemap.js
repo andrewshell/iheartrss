@@ -13,6 +13,7 @@ import { escapeXml } from './xml.js';
 /** The pages worth indexing, in rough order of importance. */
 const STATIC_PATHS = Object.freeze([
   '/',
+  '/river',
   '/blog',
   '/sites',
   '/submit',
