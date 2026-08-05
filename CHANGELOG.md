@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.9.0...iheartrss-v0.10.0) (2026-08-05)
+
+
+### Features
+
+* add a river of news at /river ([b19520f](https://github.com/andrewshell/iheartrss/commit/b19520f9686a357a05fa378752b3176cc278333f))
+* add a river of news at /river ([567f9fa](https://github.com/andrewshell/iheartrss/commit/567f9fa47aba21aae40b080a7c7bbd949ad89c22))
+
 ## [0.9.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.8.0...iheartrss-v0.9.0) (2026-08-03)
 
 
