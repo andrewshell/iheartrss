@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.10.0...iheartrss-v0.10.1) (2026-08-05)
+
+
+### Bug Fixes
+
+* **feed:** give the channel a pubDate and an image ([c0b9943](https://github.com/andrewshell/iheartrss/commit/c0b9943a932a759afd6384d4f43a2a68a41fba64))
+
 ## [0.10.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.9.0...iheartrss-v0.10.0) (2026-08-05)
 
 
