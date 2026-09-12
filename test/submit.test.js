@@ -12,6 +12,7 @@ const CONFIG = Object.freeze({
   maxListingsPerDomain: 5,
   maxNewListingsPerDay: 50,
   submitBudgetMs: 5000,
+  maxResponseBytes: 20971520,
   trustProxy: false,
   trustedProxyHops: 0,
   adminToken: null,
@@ -567,6 +568,29 @@ test('every reason code the pipeline can produce has its own message', async () 
   // Distinct headings, because §5's whole reason for machine-readable codes is that
   // "the UI can show a specific, actionable message".
   assert.equal(headings.size, reasons.length);
+});
+
+test('the "too large" messages quote the configured cap, not a hardcoded 20 MB', async () => {
+  // These two messages used to say "20 MB" outright. On a deploy that lowered
+  // MAX_RESPONSE_BYTES that names a limit the fetcher does not enforce, and the
+  // member is asked to get under the wrong number.
+  for (const [maxResponseBytes, figure] of [
+    [20971520, '20 MB'],
+    [5242880, '5 MB'],
+    [1572864, '1.5 MB'],
+  ]) {
+    for (const reason of ['page_too_large', 'feed_too_large']) {
+      const { body } = rejectionMessage({
+        result: { reason, url: 'https://alice.example/' },
+        config: { ...CONFIG, maxResponseBytes },
+      });
+
+      assert.ok(
+        String(body).includes(`We stop reading at ${figure}`),
+        `${reason} at ${maxResponseBytes} bytes should read "${figure}"`,
+      );
+    }
+  }
 });
 
 test('every themed wordmark offers the dark variant, on every page that shows one', async () => {
