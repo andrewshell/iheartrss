@@ -1,5 +1,7 @@
 import { html } from 'hono/html';
 
+import { DEFAULT_MAX_RESPONSE_BYTES } from '../config.js';
+
 /**
  * Reason code → the words a human reads (plan §5, §6).
  *
@@ -22,6 +24,23 @@ export function rejectionMessage({ result, config }) {
 }
 
 const guide = (fragment = '') => html`<a href="/guide${fragment}">the guide</a>`;
+
+/**
+ * The response cap as the figure a person reads.
+ *
+ * Both "too large" messages used to say "20 MB" outright, which is wrong on any
+ * deploy that changed `MAX_RESPONSE_BYTES`: the member is asked to get under a
+ * limit the fetcher does not enforce.
+ */
+const responseCap = (config) =>
+  formatBytes(config?.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES);
+
+function formatBytes(bytes) {
+  const mb = bytes / 1048576;
+  // One decimal, and only where it earns its place: 20971520 is "20 MB", not "20.0 MB".
+  if (mb < 1) return `${Number((bytes / 1024).toFixed(1))} KB`;
+  return `${Number(mb.toFixed(1))} MB`;
+}
 
 const MESSAGES = {
   invalid_url: () => ({
@@ -96,21 +115,22 @@ const MESSAGES = {
     </p>`,
   }),
 
-  page_too_large: () => ({
+  page_too_large: ({ config }) => ({
     heading: 'That page is very large',
     body: html`<p>
-      We stop reading at 20 MB, and we treat that as an error rather than guessing from a
-      truncated page. If your homepage is genuinely that big, submitting a smaller page
-      that carries the badge and the feed link works just as well.
+      We stop reading at ${responseCap(config)}, and we treat that as an error rather
+      than guessing from a truncated page. If your homepage is genuinely that big,
+      submitting a smaller page that carries the badge and the feed link works just as
+      well.
     </p>`,
   }),
 
-  feed_too_large: () => ({
+  feed_too_large: ({ config }) => ({
     heading: 'That feed is very large',
     body: html`<p>
-      We stop reading at 20 MB. Most feeds this size are publishing their entire archive
-      &mdash; limiting the feed to the most recent posts is kinder to every reader, not
-      just to us.
+      We stop reading at ${responseCap(config)}. Most feeds this size are publishing
+      their entire archive &mdash; limiting the feed to the most recent posts is kinder
+      to every reader, not just to us.
     </p>`,
   }),
 

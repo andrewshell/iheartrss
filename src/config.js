@@ -20,6 +20,10 @@ import { basename } from 'node:path';
 // module; `createIpHasher` re-checks the same floor on the key it is handed.
 const MIN_IP_HMAC_KEY_BYTES = 32;
 
+// Exported because the two "that's too large" rejection messages quote it, and a
+// message that names a cap the fetcher does not enforce is worse than no number.
+export const DEFAULT_MAX_RESPONSE_BYTES = 20971520;
+
 export function loadConfig(env = process.env) {
   const errors = [];
 
@@ -39,7 +43,7 @@ export function loadConfig(env = process.env) {
   );
   const maxResponseBytes = parsePositiveInt(
     env.MAX_RESPONSE_BYTES,
-    20971520,
+    DEFAULT_MAX_RESPONSE_BYTES,
     'MAX_RESPONSE_BYTES',
     errors,
   );
