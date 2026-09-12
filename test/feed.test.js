@@ -275,7 +275,7 @@ test('a feed with no cloud at all records no style', () => {
 });
 
 test('caps title at 200 and description at 500 characters at ingest', () => {
-  // §7: nothing else bounds these — they come verbatim from a 5 MB feed into
+  // §7: nothing else bounds these — they come verbatim from a 20 MB feed into
   // unbounded TEXT columns, so a 1 MB title bloats the OPML for every reader and
   // wrecks the /sites layout for everyone.
   const feed =

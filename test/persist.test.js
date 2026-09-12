@@ -152,7 +152,7 @@ test('a hostile title and description are capped and cleaned at ingest', async (
 
   // §7: "Cap lengths at ingest (title ~200 chars, description ~500) as well as at
   // render, and strip bidi overrides (U+202E) and C0/C1 controls so the DB is clean.
-  // Nothing currently bounds these: they come verbatim from a 5 MB feed into
+  // Nothing currently bounds these: they come verbatim from a 20 MB feed into
   // unbounded TEXT columns."
   assert.equal(Array.from(row.title).length, 200);
   assert.equal(Array.from(row.description).length, 500);

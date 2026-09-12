@@ -39,7 +39,7 @@ export function loadConfig(env = process.env) {
   );
   const maxResponseBytes = parsePositiveInt(
     env.MAX_RESPONSE_BYTES,
-    5242880,
+    20971520,
     'MAX_RESPONSE_BYTES',
     errors,
   );

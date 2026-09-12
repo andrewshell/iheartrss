@@ -224,7 +224,8 @@ CREATE TABLE sites (
   created_at         TEXT    NOT NULL,          -- ISO 8601 UTC
   last_verified_at   TEXT    NOT NULL,          -- last time it fully PASSED
   last_checked_at    TEXT    NOT NULL,          -- last scheduler check, pass or fail
-  last_recheck_at    TEXT                       -- last /recheck/:id, separate cooldown clock
+  last_recheck_at    TEXT,                      -- last /recheck/:id, separate cooldown clock
+  linkback_exempt    INTEGER NOT NULL DEFAULT 0 -- boolean: listed without Step 5 (002; §5 Step 5)
 );
 
 CREATE INDEX idx_sites_status_checked ON sites(status, last_checked_at);
@@ -560,7 +561,10 @@ Other `safeFetch` properties:
   HTML body parses *fine* and simply lacks the link-back, which §8 would read as a
   deliberate opt-out and permanently delist a member whose homepage merely got big. A
   truncated feed likewise parses into a plausible object (see Step 3). Cap raised to
-  **5 MB** since full-content WordPress and podcast archive feeds legitimately exceed 2 MB.
+  **5 MB** since full-content WordPress and podcast archive feeds legitimately exceed 2 MB,
+  then to **20 MB** once real members turned up just over 5 MB (a 1,700-item
+  headline-only feed at 5.35 MB, a full-archive feed at 6.2 MB). The cap is a memory and
+  gzip-bomb guard, not a policy on feed size: any finite number does that job.
   Verified: undici decompresses transparently, so the counter measures *decompressed* bytes
   — gzip-bomb protection comes free.
 - `User-Agent: iheartrss.com validator (+https://iheartrss.com/about)`, plus `Accept` and
@@ -987,6 +991,19 @@ linking.
 page. It sounds friendlier, but it breaks the consent property — being listed under a URL
 would no longer require that page's owner to have opted in.
 
+**The one exception: `sites.linkback_exempt`.** Some sites we want listed will never carry
+a badge — scripting.com, where RSS 2.0 comes from, is the motivating case — and there the
+operator's own judgement stands in for it. `verifySite` takes `requireLinkback: false`,
+under which this step is *read but never fails*: a badge is still noted when present, its
+absence is not `no_linkback`, and the rendering fallback is skipped since its only purpose
+is to find one. Everything else runs unchanged, so an exemption cannot list a page under a
+URL its own feed does not claim. The flag lives **on the row, not on the host**: it is one
+member's exemption, not a door anyone submitting a page on that host walks through. Only
+`/admin/allow` and the two `/admin/sites/:id/*-linkback` routes set or clear it; a public
+`/submit` refreshes the row and leaves it alone (`updateSite` COALESCEs it), and both the
+scheduler (§8) and `/recheck` read it on every check, or the exemption lasts exactly until
+the first revalidation reads the badge-less page as an opt-out.
+
 ### Step 6 — Optional feature detection (booleans, never fail the submission)
 
 **`has_source_ns`** — true if either:
@@ -999,7 +1016,7 @@ would no longer require that page's owner to have opted in.
 - **or** any element uses that bound prefix.
 
 The element scan must be **bounded**: an explicit-stack iterative walk with a node budget
-(~50k) rather than recursion. A 5 MB body affords ~200k nesting levels, and a recursive walk
+(~50k) rather than recursion. A 20 MB body affords ~800k nesting levels, and a recursive walk
 over `<a><a><a>…` blows the stack and kills the process. Cheaper still: regex the raw text
 for the bound prefix before parsing, and only walk if it's present.
 
@@ -1205,6 +1222,9 @@ signals with `AbortSignal.any([...])`; `SUBMIT_BUDGET_MS` is the only real ceili
 | POST | `/admin/sites/:id/unhide` | Back to `active` and re-verify. |
 | POST | `/admin/sites/:id/revalidate` | Run §8's check on one row now, instead of waiting for the scheduler to reach it. The motivating case is a stale `feed_url` — a row listed before Step 2's redirect normalisation carries the spelling subscribers are redirected *from*. Pass-only in both directions: a pass writes the fresh columns, and **any** other outcome writes nothing at all, so an admin cannot start a member's 3-strike clock or complete an opt-out by pressing a button while that member's host is 403-ing. `fixedCanonical`, so it cannot move the row onto another row's URL. Refused on a `hidden` row, where `markRevalidationPass` would silently no-op — unhide is the action there, and it re-verifies on its own. |
 | POST | `/admin/ban` | Add host to `banned_hosts` and hide all its sites. |
+| POST | `/admin/allow` | Vouch for a site by hand: run the whole §5 pipeline with **only Step 5 waived** and list it with `sites.linkback_exempt = 1`. The feed still has to be RSS 2.0 and still has to come from the page we list, the canonical URL is derived the normal way, and bans and the self-listing rule still apply; the anti-flood caps do not, because one operator adding one row is not a flood. A rejection writes nothing and is shown as its reason code. Motivating case: scripting.com, which will never carry a badge. |
+| POST | `/admin/sites/:id/waive-linkback` | Set the flag on an existing row without a fetch — for a member the scheduler is about to read as an opt-out. |
+| POST | `/admin/sites/:id/require-linkback` | Withdraw it. Neither route touches `status`: what happens next is the scheduler's next tick reading the page, not an answer the admin already has. |
 
 #### What `/about` has to say
 
@@ -1844,7 +1864,7 @@ Notes:
   submission.
 - **Cap lengths at ingest** (title ~200 chars, description ~500) as well as at render, and
   strip bidi overrides (U+202E) and C0/C1 controls so the DB is clean. Nothing currently
-  bounds these: they come verbatim from a 5 MB feed into unbounded `TEXT` columns, so a 1 MB
+  bounds these: they come verbatim from a 20 MB feed into unbounded `TEXT` columns, so a 1 MB
   title bloats the OPML for every reader and wrecks `/sites` layout for everyone.
 - This escaper is an **admin-escalation surface, not a cosmetic one**: the OPML is served as
   `text/xml`, which browsers render, so an escaping slip that admits
@@ -2166,7 +2186,7 @@ recovery and a rebuild from nothing.
 | `CONTENT_DIR` | `./content` | Blog posts. |
 | `CONTENT_POLL_MS` | `30000` | Mtime poll for hot-publishing. |
 | `FETCH_TIMEOUT_MS` | `8000` | Per-request sanity cap. Effective timeout is `min(this, budgetRemaining)` — see §5. |
-| `MAX_RESPONSE_BYTES` | `5242880` | 5 MB. Exceeding it is an error, never a truncation. |
+| `MAX_RESPONSE_BYTES` | `20971520` | 20 MB. Exceeding it is an error, never a truncation. |
 
 ---
 

@@ -43,7 +43,7 @@ const PARSER_OPTIONS = Object.freeze({
   //     entity can exist at all.
   // What remains is character references, each expanding to exactly one character. They
   // cannot amplify, so their count is linear in the body size and already bounded by
-  // `MAX_RESPONSE_BYTES` (5 MB ÷ 4 bytes minimum per reference).
+  // `MAX_RESPONSE_BYTES` (20 MB ÷ 4 bytes minimum per reference).
   processEntities: {
     enabled: true,
     maxTotalExpansions: 2_000_000,
@@ -230,7 +230,7 @@ function findSourceNsPrefix(rss) {
 }
 
 /**
- * §5 Step 6: the element scan must be **bounded**. A 5 MB body affords ~200k nesting
+ * §5 Step 6: the element scan must be **bounded**. A 20 MB body affords ~800k nesting
  * levels, and a recursive walk over `<a><a><a>…` blows the stack and kills the
  * process. Cheaper still, as suggested there: regex the raw text for the bound prefix
  * first and only walk if it is present.
