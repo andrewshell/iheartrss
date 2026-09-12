@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.11.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.10.2...iheartrss-v0.11.0) (2026-09-12)
+
+
+### Features
+
+* **admin:** link-back exemptions, and a 20 MB response cap ([3e63b06](https://github.com/andrewshell/iheartrss/commit/3e63b064f14137dcfc851638d25b3de91d0ffc15))
+* **admin:** list a site without the link-back ([c509ad5](https://github.com/andrewshell/iheartrss/commit/c509ad560ef22854ae7116cb6a92489d9b8abed3))
+
+
+### Bug Fixes
+
+* **fetch:** raise the response cap to 20 MB ([c86b510](https://github.com/andrewshell/iheartrss/commit/c86b510d269d6b415c729c018926472d52cb3875))
+
 ## [0.10.2](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.10.1...iheartrss-v0.10.2) (2026-08-05)
 
 
