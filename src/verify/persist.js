@@ -25,9 +25,18 @@ export function createPersister({
    * @param {object} [options.budget] - the submission's SHARED fetch budget (§5).
    *   The incumbent re-check is requests 5 and 6 of the worst case, so it spends the
    *   same clock; without this a collision doubles the wall time of a POST.
+   * @param {boolean} [options.linkbackExempt] - the admin's allow form (§5 Step 5):
+   *   set `sites.linkback_exempt` on the row written. Left out, the flag is not
+   *   touched either way — a public submit of a vouched-for site must not clear it.
+   * @param {boolean} [options.skipCaps] - the same form: the per-domain and daily
+   *   caps are anti-flood backstops, and one operator adding one row is not a flood.
+   *   Bans and the self-listing rule still apply.
    * @returns {Promise<{outcome: string, siteId?: number, reason?: string}>}
    */
-  return async function persistVerified(verification, { budget } = {}) {
+  return async function persistVerified(
+    verification,
+    { budget, linkbackExempt = false, skipCaps = false } = {},
+  ) {
     const url = new URL(verification.url);
     const host = url.hostname.toLowerCase();
 
@@ -65,6 +74,9 @@ export function createPersister({
       title: normalizeMetaText(verification.title, TITLE_MAX),
       description: normalizeMetaText(verification.description, DESCRIPTION_MAX),
       ...featureColumns(verification.features),
+      // `undefined` means "leave it": `updateSite` COALESCEs it away, and a new row
+      // takes the column default.
+      linkback_exempt: linkbackExempt ? true : undefined,
     };
 
     const byUrl = queries.getSiteByUrl(verification.url);
@@ -92,7 +104,7 @@ export function createPersister({
     // genuinely distinct url AND feed_url, so all 500 would reach every subscriber.
     // Checked only for NEW rows — a refresh adds nothing to flood with, and
     // refusing one would break the "idempotent re-check me now" promise above.
-    const capped = checkCaps(url.hostname);
+    const capped = skipCaps ? null : checkCaps(url.hostname);
     if (capped !== null) return capped;
 
     return { outcome: 'added', siteId: queries.insertSite(columns) };

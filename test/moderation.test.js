@@ -1112,3 +1112,208 @@ test('the dashboard shows each listing its feed URL and a Revalidate button', as
   assert.ok(!new RegExp(`action="/admin/sites/${id}/revalidate"`).test(hidden));
   assert.match(hidden, new RegExp(`action="/admin/sites/${id}/unhide"`));
 });
+
+// ── Link-back exemptions (§5 Step 5) ─────────────────────────────────────────
+// The link-back is the consent signal, and some sites we want listed will never
+// carry one. The allow form is the operator vouching for a site by hand; the rest
+// of the pipeline still runs, so it is not a way to list a page under a URL its
+// own feed does not claim.
+
+/** A verifier that answers like a badge-less site whose feed is otherwise fine. */
+function scriptingVerifier(asked = []) {
+  return async (url, options) => {
+    asked.push({ url, options });
+    if (options.requireLinkback !== false) return { ok: false, reason: 'no_linkback' };
+    return {
+      ok: true,
+      url: 'https://scripting.example/',
+      submittedUrl: url,
+      feedUrl: 'https://scripting.example/rss.xml',
+      title: 'Scripting News',
+      description: undefined,
+      features: { has_source_ns: true, has_rsscloud: true, rsscloud_style: 'element' },
+    };
+  };
+}
+
+test('POST /admin/allow lists a badge-less site with the exemption set', async () => {
+  const asked = [];
+  const { app, db, pings } = adminApp({ verifySite: scriptingVerifier(asked) });
+
+  const res = await adminPost(app, '/admin/allow', {
+    url: 'scripting.example',
+    note: 'agreed by email',
+  });
+
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.outcome, 'added');
+  assert.equal(body.url, 'https://scripting.example/');
+  assert.equal(body.feed_url, 'https://scripting.example/rss.xml');
+
+  // The pipeline ran with only Step 5 waived — a full run, not revalidation mode, so
+  // the canonical URL is derived from the feed the normal way.
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].options.requireLinkback, false);
+  assert.notEqual(asked[0].options.fixedCanonical, true);
+
+  const row = db.prepare('SELECT * FROM sites WHERE id = ?').get(body.id);
+  assert.equal(row.linkback_exempt, 1);
+  assert.equal(row.status, 'active');
+  assert.equal(row.title, 'Scripting News');
+
+  // §4: every admin action leaves a record; §6.4: a join pings the cloud.
+  const log = db
+    .prepare('SELECT action, reason, site_id FROM moderation_log ORDER BY id DESC')
+    .get();
+  assert.deepEqual(
+    { ...log },
+    { action: 'linkback_waived', reason: 'agreed by email', site_id: body.id },
+  );
+  assert.deepEqual(pings, ['opml']);
+
+  // And it is in the OPML.
+  const opml = await (await app.request('/subscriptions.opml')).text();
+  assert.match(opml, /scripting\.example\/rss\.xml/);
+});
+
+test('a rejected POST /admin/allow writes nothing and says why', async () => {
+  const { app, db, pings } = adminApp({
+    verifySite: async () => ({ ok: false, reason: 'feed_not_rss2' }),
+  });
+  const before = db.prepare('SELECT COUNT(*) AS n FROM sites').get().n;
+
+  const res = await adminPost(app, '/admin/allow', { url: 'atom.example' });
+
+  assert.equal(res.status, 422);
+  assert.deepEqual(await res.json(), {
+    ok: false,
+    url: 'atom.example',
+    reason: 'feed_not_rss2',
+  });
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM sites').get().n, before);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM moderation_log').get().n, 0);
+  assert.deepEqual(pings, []);
+
+  assert.equal((await adminPost(app, '/admin/allow', {})).status, 400);
+  assert.equal(
+    (await adminPost(app, '/admin/allow', { url: 'x.example' }, null)).status,
+    401,
+  );
+});
+
+test('from a browser session the allow form reports back on the dashboard', async () => {
+  const { app } = adminApp({ verifySite: scriptingVerifier() });
+  const { cookie } = await login(app);
+  const page = await (await app.request('/admin', { headers: { cookie } })).text();
+  const csrf = /name="csrf" value="([^"]+)"/.exec(page)[1];
+
+  const ok = await sessionPost(
+    app,
+    '/admin/allow',
+    { csrf, url: 'scripting.example' },
+    cookie,
+  );
+  assert.equal(ok.status, 303);
+  const okLocation = ok.headers.get('location');
+  assert.match(okLocation, /^\/admin\?allowed=/);
+
+  const after = await (await app.request(okLocation, { headers: { cookie } })).text();
+  assert.match(after, /data-allowed="added"/);
+  // The section lists it, with the withdraw control and the flag on the listing row.
+  assert.match(after, /data-exempt-site="\d+"/);
+  assert.match(after, /action="\/admin\/sites\/\d+\/require-linkback"/);
+  assert.match(after, /link-back waived/);
+
+  // A refusal comes back the same way, as the reason code, never as a bare redirect.
+  const { app: refusing } = adminApp({
+    verifySite: async () => ({ ok: false, reason: 'no_feed_link' }),
+  });
+  const session = await login(refusing);
+  const refusingPage = await (
+    await refusing.request('/admin', { headers: { cookie: session.cookie } })
+  ).text();
+  const refusingCsrf = /name="csrf" value="([^"]+)"/.exec(refusingPage)[1];
+
+  const bad = await sessionPost(
+    refusing,
+    '/admin/allow',
+    { csrf: refusingCsrf, url: 'nofeed.example' },
+    session.cookie,
+  );
+  assert.equal(bad.status, 303);
+  const badLocation = bad.headers.get('location');
+  assert.match(badLocation, /allow_error=no_feed_link/);
+  const shown = await (
+    await refusing.request(badLocation, { headers: { cookie: session.cookie } })
+  ).text();
+  assert.match(shown, /data-allow-error="no_feed_link"/);
+});
+
+test('the exemption can be waived and required again on an existing row', async () => {
+  const { app, db, id } = adminApp();
+  const flag = () => db.prepare('SELECT linkback_exempt FROM sites WHERE id = ?').get(id);
+
+  assert.equal(flag().linkback_exempt, 0);
+
+  const waived = await adminPost(app, `/admin/sites/${id}/waive-linkback`, {
+    reason: 'talked to them',
+  });
+  assert.equal(waived.status, 200);
+  assert.deepEqual(await waived.json(), { ok: true, id, linkback_exempt: true });
+  assert.equal(flag().linkback_exempt, 1);
+
+  const required = await adminPost(app, `/admin/sites/${id}/require-linkback`, {
+    reason: 'badge is up now',
+  });
+  assert.equal(required.status, 200);
+  assert.equal(flag().linkback_exempt, 0);
+
+  // Neither touches status: withdrawing is a question for the scheduler's next tick.
+  assert.equal(statusOf(db, id), 'active');
+
+  const log = db
+    .prepare('SELECT action, reason FROM moderation_log ORDER BY id')
+    .all()
+    .map((row) => `${row.action}:${row.reason}`);
+  assert.deepEqual(log, [
+    'linkback_waived:talked to them',
+    'linkback_required:badge is up now',
+  ]);
+
+  assert.equal((await adminPost(app, '/admin/sites/9999/waive-linkback')).status, 404);
+  assert.equal(
+    (await adminPost(app, `/admin/sites/${id}/waive-linkback`, {}, null)).status,
+    401,
+  );
+});
+
+test('an allow of a hidden site sets the flag but leaves it hidden', async () => {
+  // `hidden` is terminal for the upsert (§5 Step 7), and the allow form goes through
+  // the same upsert. The exemption is recorded so the unhide — the one action that
+  // clears `hidden` — re-verifies it without the badge.
+  const { app, db, id } = adminApp({
+    verifySite: async (url, options) => ({
+      ok: true,
+      url: 'https://spammer.example/',
+      submittedUrl: url,
+      feedUrl: 'https://spammer.example/rss.xml',
+      title: 'Spam',
+      description: undefined,
+      features: { has_source_ns: false, has_rsscloud: false, rsscloud_style: null },
+      requireLinkback: options.requireLinkback,
+    }),
+  });
+  await adminPost(app, `/admin/sites/${id}/hide`, { reason: 'spam' });
+
+  const res = await adminPost(app, '/admin/allow', { url: 'spammer.example' });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).outcome, 'already_submitted');
+
+  const row = db
+    .prepare('SELECT status, linkback_exempt FROM sites WHERE id = ?')
+    .get(id);
+  assert.equal(row.status, 'hidden');
+  assert.equal(row.linkback_exempt, 1);
+});

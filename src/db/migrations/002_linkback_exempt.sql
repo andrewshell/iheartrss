@@ -1,0 +1,11 @@
+-- Link-back exemptions (plan §5 Step 5, §6).
+--
+-- The link-back is the consent signal: a page that links to us has opted in to being
+-- listed. Some sites we want listed will never carry a badge — scripting.com, where
+-- RSS 2.0 comes from, is the motivating case — and the only way to hold them is for
+-- the operator to vouch for them by hand. That is what this flag records.
+--
+-- On the row rather than in a host allowlist, so that it is one member's
+-- exemption and not a door anyone submitting a page on that host walks through.
+-- Only the admin routes set it; a public submit or recheck never touches it.
+ALTER TABLE sites ADD COLUMN linkback_exempt INTEGER NOT NULL DEFAULT 0;

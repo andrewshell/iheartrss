@@ -121,3 +121,65 @@ test('a rejected listing writes no site row at all', async () => {
 
   assert.equal(db.prepare('SELECT count(*) AS n FROM sites').get().n, 1);
 });
+
+// ── §5 Step 5's exemption, at the persister ──────────────────────────────────
+
+test('`linkbackExempt` sets the flag on a new row, and a plain resubmit leaves it alone', async () => {
+  const { db, persist } = setup();
+
+  const first = await persist(member('scripting.example', 1), { linkbackExempt: true });
+  assert.equal(first.outcome, 'added');
+  assert.equal(
+    db.prepare('SELECT linkback_exempt FROM sites WHERE id = ?').get(first.siteId)
+      .linkback_exempt,
+    1,
+  );
+
+  // The flag is the operator's, not the submitter's: a public `/submit` of the same
+  // site refreshes the row and must not clear it, or the next scheduler tick reads
+  // the site as an opt-out.
+  const again = await persist(member('scripting.example', 1));
+  assert.equal(again.outcome, 'updated');
+  assert.equal(
+    db.prepare('SELECT linkback_exempt FROM sites WHERE id = ?').get(first.siteId)
+      .linkback_exempt,
+    1,
+  );
+
+  // And a row that was never exempt stays that way through a normal update.
+  const plain = await persist(member('plain.example', 2));
+  await persist(member('plain.example', 2));
+  assert.equal(
+    db.prepare('SELECT linkback_exempt FROM sites WHERE id = ?').get(plain.siteId)
+      .linkback_exempt,
+    0,
+  );
+});
+
+test('`skipCaps` lets the admin past the per-domain and daily caps, not past a ban', async () => {
+  const { queries, persist } = setup({
+    maxListingsPerDomain: 1,
+    maxNewListingsPerDay: 1,
+  });
+
+  assert.equal((await persist(member('user1.example.com', 1))).outcome, 'added');
+
+  const capped = await persist(member('user2.example.com', 2));
+  assert.equal(capped.reason, 'domain_cap');
+
+  const allowed = await persist(member('user2.example.com', 2), {
+    linkbackExempt: true,
+    skipCaps: true,
+  });
+  assert.equal(allowed.outcome, 'added');
+
+  // The caps are anti-flood backstops and one operator is not a flood; a ban is a
+  // decision, and the same operator's allow form does not silently reverse it.
+  queries.insertBan({ host: 'banned.example', host_suffix: '', path_prefix: '' });
+  const banned = await persist(member('banned.example', 3), {
+    linkbackExempt: true,
+    skipCaps: true,
+  });
+  assert.equal(banned.outcome, 'rejected');
+  assert.equal(banned.reason, 'banned');
+});

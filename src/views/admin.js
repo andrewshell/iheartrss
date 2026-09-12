@@ -97,6 +97,8 @@ export function adminDashboard({
   reports = [],
   bans = [],
   domainLimits = [],
+  exempt = [],
+  notice = null,
   backlog = { oldest_last_checked_at: null, overdue_count: 0 },
   memberCount = 0,
 }) {
@@ -121,6 +123,7 @@ ${histogramSection(histogram)}
 ${reportsSection(reports, csrf)}
 ${sitesSection('Failing and blocked', attention, csrf)}
 ${sitesSection('Recent listings', recent, csrf)}
+${exemptionsSection(exempt, csrf, notice)}
 ${submissionsSection(submissions)}
 ${bansSection(bans, csrf)}
 ${domainLimitsSection(domainLimits, csrf)}
@@ -304,6 +307,75 @@ function domainLimitsSection(rows, csrf) {
 }
 
 /**
+ * §5 Step 5's exemptions: the members the operator has vouched for by hand, and the
+ * form that adds one. The form runs the whole pipeline with only the link-back
+ * waived, so it fails for every other reason a submission can — which is why its
+ * refusal is shown here with the reason code, and not swallowed by a redirect.
+ */
+function exemptionsSection(rows, csrf, notice) {
+  return html`
+<section class="panel">
+  <h2>Link-back exemptions</h2>
+  <p>
+    Lists a site without requiring the link back to us. Everything else still has to
+    pass: the page must declare an RSS 2.0 feed, and the feed must point back at the
+    page. Use it for a site you have agreed to list by hand.
+  </p>
+  ${
+    notice?.kind === 'error'
+      ? html`<p class="panel__error" data-allow-error="${notice.reason}">
+        Could not list <code>${notice.url}</code>: <code>${notice.reason}</code>.
+      </p>`
+      : ''
+  }
+  ${
+    notice?.kind === 'ok'
+      ? html`<p class="panel__ok" data-allowed="${notice.outcome}">
+        Listed <code>${notice.url}</code> (${notice.outcome}).
+      </p>`
+      : ''
+  }
+  <form class="submit-form" method="post" action="/admin/allow">
+    ${csrfField(csrf)}
+    <label for="allow-url">Site or feed URL</label>
+    <input id="allow-url" name="url" type="text" placeholder="scripting.com" required>
+    <label for="allow-note">Note</label>
+    <input id="allow-note" name="note" type="text" placeholder="why this one">
+    <button type="submit">List without link-back</button>
+  </form>
+  ${
+    rows.length === 0
+      ? html`<p>No exemptions.</p>`
+      : html`<ul class="admin-list admin-list--actions">
+        ${rows.map(
+          (row) => html`<li data-exempt-site="${row.id}">
+            <div class="admin-row__main">
+              <a class="admin-row__title" href="${row.url}">${row.title || row.host}</a>
+              ${metaLine([
+                html`#${row.id}`,
+                html`<span class="admin-status" data-status="${row.status}">${row.status}</span>`,
+                row.last_error ? html`<code>${row.last_error}</code>` : '',
+                row.last_checked_at ? html`checked ${stamp(row.last_checked_at)}` : '',
+              ])}
+              ${row.feed_url ? html`<code class="admin-row__feed">${row.feed_url}</code>` : ''}
+            </div>
+            <div class="admin-actions">
+              <form class="admin-inline" method="post"
+                    action="/admin/sites/${row.id}/require-linkback">
+                ${csrfField(csrf)}
+                <input name="reason" type="text" placeholder="reason" aria-label="reason">
+                <button type="submit">Require link-back</button>
+              </form>
+            </div>
+          </li>`,
+        )}
+      </ul>`
+  }
+</section>
+`;
+}
+
+/**
  * A site list with the one control that applies to it. `hidden` rows get an unhide
  * button instead of a hide one — the two are not symmetrical (an unhide re-verifies).
  */
@@ -322,6 +394,7 @@ function sitesSection(heading, rows, csrf) {
               ${metaLine([
                 html`#${row.id}`,
                 html`<span class="admin-status" data-status="${row.status}">${row.status}</span>`,
+                row.linkback_exempt ? 'link-back waived' : '',
                 row.last_error ? html`<code>${row.last_error}</code>` : '',
                 row.last_checked_at ? html`checked ${stamp(row.last_checked_at)}` : '',
               ])}
@@ -351,6 +424,17 @@ function sitesSection(heading, rows, csrf) {
                               action="/admin/sites/${row.id}/revalidate">
                     ${csrfField(csrf)}
                     <button type="submit">Revalidate</button>
+                  </form>`
+              }
+              ${
+                // Withdrawing lives in the exemptions section, where the row is
+                // listed for exactly that; here the only offer is to waive.
+                row.linkback_exempt
+                  ? ''
+                  : html`<form class="admin-inline" method="post"
+                              action="/admin/sites/${row.id}/waive-linkback">
+                    ${csrfField(csrf)}
+                    <button type="submit">Waive link-back</button>
                   </form>`
               }
             </div>

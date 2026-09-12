@@ -84,16 +84,33 @@ export function createQueries(db) {
      */
     listRecentSites: db.prepare(`
       SELECT id, url, host, path, title, status, failure_count, last_error,
-             optout_seen_at, created_at, last_checked_at, feed_url
+             optout_seen_at, created_at, last_checked_at, feed_url, linkback_exempt
         FROM sites
        ORDER BY created_at DESC, id DESC
        LIMIT :limit
     `),
 
+    /**
+     * The rows the operator has vouched for by hand (§5 Step 5). Every status, hidden
+     * included: the exemption is a fact about the row, and the list is where it gets
+     * withdrawn, so a row must not vanish from it by being hidden.
+     */
+    listLinkbackExempt: db.prepare(`
+      SELECT id, url, host, title, status, failure_count, last_error, optout_seen_at,
+             last_checked_at, feed_url, linkback_exempt
+        FROM sites
+       WHERE linkback_exempt = 1
+       ORDER BY created_at DESC, id DESC
+    `),
+
+    setLinkbackExempt: db.prepare(
+      'UPDATE sites SET linkback_exempt = :linkback_exempt WHERE id = :id',
+    ),
+
     /** §4's `failing`/`blocked` rows: the two states that need an admin's eye. */
     listSitesNeedingAttention: db.prepare(`
       SELECT id, url, host, title, status, failure_count, last_error, optout_seen_at,
-             last_checked_at, feed_url
+             last_checked_at, feed_url, linkback_exempt
         FROM sites
        WHERE status IN ('failing', 'blocked')
        ORDER BY CASE status WHEN 'blocked' THEN 0 ELSE 1 END, last_checked_at
@@ -257,6 +274,7 @@ export function createQueries(db) {
              rsscloud_style   = :rsscloud_style,
              cloud_json       = :cloud_json,
              url              = :url,
+             linkback_exempt  = COALESCE(:linkback_exempt, linkback_exempt),
              failure_count    = 0,
              optout_seen_at   = NULL,
              last_error       = NULL,
@@ -600,11 +618,11 @@ export function createQueries(db) {
     insertSite: db.prepare(`
       INSERT INTO sites (
         url, submitted_url, host, path, feed_url, title, description,
-        has_source_ns, has_rsscloud, rsscloud_style, cloud_json,
+        has_source_ns, has_rsscloud, rsscloud_style, cloud_json, linkback_exempt,
         created_at, last_verified_at, last_checked_at
       ) VALUES (
         :url, :submitted_url, :host, :path, :feed_url, :title, :description,
-        :has_source_ns, :has_rsscloud, :rsscloud_style, :cloud_json,
+        :has_source_ns, :has_rsscloud, :rsscloud_style, :cloud_json, :linkback_exempt,
         :now, :now, :now
       )
     `),
@@ -682,6 +700,11 @@ export function createQueries(db) {
         has_rsscloud: bool(site.has_rsscloud),
         rsscloud_style: opt(site.rsscloud_style),
         cloud_json: opt(site.cloud_json),
+        // Three-valued on purpose: `undefined` is "not my business" (a public submit
+        // or recheck), which the COALESCE turns into "keep what the row has". Only
+        // the admin's allow form ever passes a value.
+        linkback_exempt:
+          site.linkback_exempt === undefined ? null : bool(site.linkback_exempt),
         now,
       });
 
@@ -720,6 +743,25 @@ export function createQueries(db) {
         created_at: new Date().toISOString(),
       });
       statements.bumpDirectoryVersion.run();
+    },
+
+    listLinkbackExempt: () => statements.listLinkbackExempt.all(),
+
+    /**
+     * Vouch for a row by hand, or stop vouching (§5 Step 5). The flag alone: the row's
+     * status is not touched, because a withdrawn exemption is a question for the
+     * scheduler — the next tick reads the page and applies §8's table — and not an
+     * answer the admin already has. No directory-version bump for the same reason:
+     * nothing the OPML carries has changed.
+     */
+    setLinkbackExempt(id, exempt, reason) {
+      statements.setLinkbackExempt.run({ id, linkback_exempt: bool(exempt) });
+      statements.insertModerationLog.run({
+        site_id: id,
+        action: exempt ? 'linkback_waived' : 'linkback_required',
+        reason: opt(reason),
+        created_at: new Date().toISOString(),
+      });
     },
 
     /** The only thing that clears `hidden` (§5 Step 7). Re-verification is phase 8. */
@@ -1079,6 +1121,7 @@ export function createQueries(db) {
         has_rsscloud: bool(site.has_rsscloud),
         rsscloud_style: opt(site.rsscloud_style),
         cloud_json: opt(site.cloud_json),
+        linkback_exempt: bool(site.linkback_exempt),
         now,
       });
 

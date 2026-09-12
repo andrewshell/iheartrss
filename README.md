@@ -174,7 +174,9 @@ SITE_URL=https://iheartrss.com
 ```
 
 No admin UI is served at all while `ADMIN_TOKEN` is unset, and hide/ban are the
-only way to take a listing down — set it.
+only way to take a listing down — set it. The dashboard is also where a site can
+be listed **without** the link back to us (its "Link-back exemptions" section):
+the rest of the checks still run, and the site is never read as an opt-out.
 
 Both secrets live in this one file, so **back the `.env` up separately from
 `./data`** — a password manager is fine. The IP HMAC key exists so that stored IP

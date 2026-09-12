@@ -2112,3 +2112,8 @@ blog-roll li a {
   color: var(--brand);
   font-weight: 600;
 }
+
+.panel__ok {
+  color: #2f7d32;
+  font-weight: 600;
+}
