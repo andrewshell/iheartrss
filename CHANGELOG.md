@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.1](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.11.0...iheartrss-v0.11.1) (2026-09-12)
+
+
+### Bug Fixes
+
+* **submit:** quote the configured response cap, not a hardcoded 20 MB ([372ecc6](https://github.com/andrewshell/iheartrss/commit/372ecc6829649eb46db38b5dd2aa98ce6f23bc2e))
+* **submit:** quote the configured response cap, not a hardcoded 20 MB ([486f2a2](https://github.com/andrewshell/iheartrss/commit/486f2a2a55466f68d158f6e53e5ee886ef0ba00c))
+
 ## [0.11.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.10.2...iheartrss-v0.11.0) (2026-09-12)
 
 
