@@ -99,7 +99,7 @@ const MESSAGES = {
   page_too_large: () => ({
     heading: 'That page is very large',
     body: html`<p>
-      We stop reading at 5 MB, and we treat that as an error rather than guessing from a
+      We stop reading at 20 MB, and we treat that as an error rather than guessing from a
       truncated page. If your homepage is genuinely that big, submitting a smaller page
       that carries the badge and the feed link works just as well.
     </p>`,
@@ -108,7 +108,7 @@ const MESSAGES = {
   feed_too_large: () => ({
     heading: 'That feed is very large',
     body: html`<p>
-      We stop reading at 5 MB. Most feeds this size are publishing their entire archive
+      We stop reading at 20 MB. Most feeds this size are publishing their entire archive
       &mdash; limiting the feed to the most recent posts is kinder to every reader, not
       just to us.
     </p>`,

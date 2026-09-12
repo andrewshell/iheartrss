@@ -27,7 +27,7 @@ test('createDb applies the numbered migrations and records them', (t) => {
 
   assert.deepEqual(
     applied.map((row) => row.version),
-    [1],
+    [1, 2],
   );
 });
 
@@ -47,7 +47,7 @@ test('re-opening an already-migrated database applies nothing twice', (t) => {
     .all();
   assert.deepEqual(
     applied.map((row) => row.version),
-    [1],
+    [1, 2],
   );
 });
 

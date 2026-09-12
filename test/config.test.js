@@ -39,7 +39,7 @@ test('the fetch budget knobs default to §9 values', () => {
   const config = loadConfig({});
 
   assert.equal(config.fetchTimeoutMs, 8000);
-  assert.equal(config.maxResponseBytes, 5242880);
+  assert.equal(config.maxResponseBytes, 20971520);
   assert.equal(config.submitBudgetMs, 30000);
 });
 

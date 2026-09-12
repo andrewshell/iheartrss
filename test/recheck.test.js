@@ -309,3 +309,23 @@ test('/status offers no recheck for a site it will not admit to having', async (
   // the row's id would hand back the id — and the existence — that neutrality hides.
   assert.doesNotMatch(body, /\/recheck\//);
 });
+
+test('a recheck of a vouched-for row waives the link-back, like the scheduler', async () => {
+  const asked = [];
+  const { app, db } = setup({
+    verify: async (url, options) => {
+      asked.push({ url, options });
+      return pass(rowOf(db, id));
+    },
+  });
+  const id = seedSite(db);
+  db.prepare('UPDATE sites SET linkback_exempt = 1 WHERE id = ?').run(id);
+
+  const res = await post(app, `/recheck/${id}`);
+
+  // §5 Step 5: `/recheck` is public, so without this a third party could record an
+  // opt-out sighting against a member the operator vouched for by pressing a button.
+  assert.equal(res.status, 200);
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].options.requireLinkback, false);
+});

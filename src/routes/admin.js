@@ -36,6 +36,7 @@ export function registerAdmin(
     log,
     now = () => new Date(),
     verifySite = null,
+    persist = null,
     rsscloud = { notifyOpmlChanged: () => false },
   },
 ) {
@@ -66,10 +67,140 @@ export function registerAdmin(
       adminDashboard({
         config,
         csrf: sessions.csrfFor(sessionId(c)),
+        notice: allowNotice(c),
         ...dashboardData(),
       }),
     );
   });
+
+  /**
+   * Vouch for a site by hand (§5 Step 5): list it without the link-back.
+   *
+   * The link-back is the consent signal, and most of the pipeline exists to make
+   * sure nobody is listed under a page whose owner did not ask. Some sites we want
+   * listed will never carry a badge — scripting.com, where RSS 2.0 comes from, is
+   * the motivating case — and there the operator's own judgement stands in for the
+   * badge. Everything else still runs: the feed has to be RSS 2.0, it has to come
+   * from the page we list, and the canonical URL is derived the normal way, so an
+   * exemption cannot list a page under a URL the feed does not claim. Bans and the
+   * self-listing rule still apply; the anti-flood caps do not, because one operator
+   * adding one row is not a flood.
+   *
+   * The flag lives on the row, not on the host: it is one member's exemption, and
+   * not a door anyone submitting a page on that host walks through. A public
+   * resubmit refreshes the row and leaves the flag alone; the scheduler and
+   * `/recheck` read it and never record an opt-out sighting for a vouched-for row.
+   *
+   * A rejection writes nothing — the same rule as `/submit` — and is shown to the
+   * admin as the reason code, since "it failed" is the one answer this form must not
+   * give. A browser is sent back to the dashboard with the outcome in the query
+   * string rather than a JSON body it cannot use.
+   */
+  app.post('/admin/allow', async (c) => {
+    const form = await parseForm(c);
+    const denial = deny(c, form);
+    if (denial !== null) return denial;
+    if (queries === null || persist === null || verifySite === null) {
+      return c.json({ ok: false, reason: 'no_database' }, 503);
+    }
+
+    const url = field(form, 'url');
+    if (url === undefined) return c.json({ ok: false, reason: 'url_required' }, 400);
+    const note = field(form, 'note');
+
+    // One budget for the verification and the persister's incumbent re-check, the
+    // same way `/submit` does it (§5, "Fetch budget").
+    const budget = createBudget(config);
+
+    let result;
+    try {
+      const verification = await verifySite(url, { budget, requireLinkback: false });
+      result = verification.ok
+        ? {
+            ...verification,
+            ...(await persist(verification, {
+              budget,
+              linkbackExempt: true,
+              skipCaps: true,
+            })),
+          }
+        : { ...verification, outcome: 'rejected' };
+    } catch (err) {
+      log('admin.allow_error', { url, error: err.message });
+      result = { outcome: 'rejected', reason: 'error' };
+    }
+
+    if (result.outcome === 'rejected') {
+      log('admin.allow_rejected', { url, reason: result.reason });
+      return failed(c, { url, reason: result.reason }, 422);
+    }
+
+    // `already_submitted` is the persister's neutral word for "that row is hidden":
+    // the flag is set and the metadata refreshed, but `hidden` is terminal for the
+    // upsert (§5 Step 7) and only an unhide clears it. The row shows up in the
+    // exemptions list as hidden, which is where the admin can do that.
+    const row = queries.getSiteByUrl(result.url);
+    queries.logModeration({
+      site_id: row?.id,
+      action: 'linkback_waived',
+      reason: note,
+    });
+    log('admin.allow', {
+      site_id: row?.id ?? null,
+      url: result.url,
+      feed_url: result.feedUrl,
+      outcome: result.outcome,
+      note: note ?? null,
+    });
+
+    // §6.4: a row that is now in `/subscriptions.opml` and was not a moment ago is
+    // the same event as a join. `updated` counts too — a `removed` row revives here.
+    if (result.outcome === 'added' || result.outcome === 'updated') {
+      rsscloud.notifyOpmlChanged();
+    }
+
+    return done(
+      c,
+      { id: row?.id, url: result.url, feed_url: result.feedUrl, outcome: result.outcome },
+      `/admin?${new URLSearchParams({ allowed: result.url, outcome: result.outcome })}`,
+    );
+  });
+
+  /**
+   * Flip the exemption on a row that already exists, without a fetch. Waiving is
+   * for a member the scheduler is about to read as an opt-out; requiring again is
+   * how an exemption is withdrawn. Neither touches `status`: withdrawing one is a
+   * question for the scheduler's next tick, not an answer the admin already has.
+   */
+  for (const [action, exempt] of [
+    ['waive-linkback', true],
+    ['require-linkback', false],
+  ]) {
+    app.post(`/admin/sites/:id/${action}`, async (c) => {
+      const form = await parseForm(c);
+      const denial = deny(c, form);
+      if (denial !== null) return denial;
+      if (queries === null) return c.json({ ok: false, reason: 'no_database' }, 503);
+
+      const id = Number(c.req.param('id'));
+      if (!Number.isInteger(id) || id < 1) {
+        return c.json({ ok: false, reason: 'bad_id' }, 400);
+      }
+
+      const site = queries.getSiteById(id);
+      if (site === undefined) return c.json({ ok: false, reason: 'not_found' }, 404);
+
+      const reason = field(form, 'reason');
+      queries.setLinkbackExempt(id, exempt, reason);
+      log(exempt ? 'admin.linkback_waived' : 'admin.linkback_required', {
+        site_id: id,
+        url: site.url,
+        reason: reason ?? null,
+      });
+
+      return done(c, { id, linkback_exempt: exempt });
+    });
+  }
 
   app.post('/admin/logout', async (c) => {
     const form = await parseForm(c);
@@ -410,11 +541,44 @@ export function registerAdmin(
    * defined, because `curl` on the production box is still a supported way to
    * moderate.
    */
-  function done(c, json) {
+  function done(c, json, location = '/admin') {
     if (sessions.valid(sessionId(c))) {
-      return c.body(null, 303, { Location: '/admin' });
+      return c.body(null, 303, { Location: location });
     }
     return c.json({ ok: true, ...json });
+  }
+
+  /**
+   * The refusal counterpart of `done`, for the one form whose failure the admin has
+   * to read: a browser goes back to the dashboard carrying the reason code, an API
+   * caller gets the JSON refusal.
+   */
+  function failed(c, json, status) {
+    if (sessions.valid(sessionId(c))) {
+      const query = new URLSearchParams({
+        allow_error: json.reason,
+        allow_url: json.url,
+      });
+      return c.body(null, 303, { Location: `/admin?${query}` });
+    }
+    return c.json({ ok: false, ...json }, status);
+  }
+
+  /**
+   * What the allow form's redirect carried back. Only ever shown, never acted on —
+   * hono/html escapes it like any other interpolation — so a crafted link can put
+   * words on the admin's dashboard and nothing else.
+   */
+  function allowNotice(c) {
+    const error = c.req.query('allow_error');
+    if (error !== undefined && error !== '') {
+      return { kind: 'error', reason: error, url: c.req.query('allow_url') ?? '' };
+    }
+    const allowed = c.req.query('allowed');
+    if (allowed !== undefined && allowed !== '') {
+      return { kind: 'ok', url: allowed, outcome: c.req.query('outcome') ?? '' };
+    }
+    return null;
   }
 
   /**
@@ -460,6 +624,7 @@ export function registerAdmin(
       reports: queries.listReports(50),
       bans: queries.listBans(),
       domainLimits: queries.listDomainLimits(),
+      exempt: queries.listLinkbackExempt(),
       backlog: queries.revalidationBacklog(cutoff),
       memberCount: queries.countSites(),
     };

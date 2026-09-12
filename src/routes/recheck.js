@@ -134,6 +134,9 @@ export function registerRecheck(app, deps) {
             etag: row.feed_etag,
             lastModified: row.feed_last_modified,
           },
+          // §5 Step 5: same as the scheduler — a vouched-for row has no badge to
+          // find, and a recheck must not record an opt-out sighting for that.
+          requireLinkback: !row.linkback_exempt,
         }),
       );
     } catch (err) {

@@ -146,6 +146,9 @@ export function createRevalidator({
               etag: row.feed_etag,
               lastModified: row.feed_last_modified,
             },
+            // §5 Step 5: a row the operator vouched for is never read as an opt-out.
+            // Its feed still has to validate, so it can still fail, drop and return.
+            requireLinkback: !row.linkback_exempt,
           });
 
           apply(row, result, at);

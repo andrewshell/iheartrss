@@ -53,10 +53,21 @@ export function createVerifier({
    *   would produce a 304 for a document we have never seen. A row whose declared feed
    *   URL permanently redirects therefore misses the 304 until the redirect target is
    *   what the page declares — a full fetch, never a wrong one.
+   * @param {boolean} [options.requireLinkback] - `false` for a row the operator has
+   *   vouched for by hand (`sites.linkback_exempt`, §5 Step 5). Steps 1–4 and 6 run
+   *   exactly as before — the feed still has to be RSS 2.0 and still has to come
+   *   from the page we list — and Step 5 is read but never fails: a badge is noted
+   *   in `linkBack` when it is there, and its absence is not `no_linkback`. The
+   *   rendering fallback is skipped too, since its only purpose is to find one.
    */
   return async function verifySite(
     submittedUrl,
-    { budget: sharedBudget, fixedCanonical = false, conditional = null } = {},
+    {
+      budget: sharedBudget,
+      fixedCanonical = false,
+      conditional = null,
+      requireLinkback = true,
+    } = {},
   ) {
     // ── Step 0 — normalize and pre-screen ────────────────────────────────────────
     const normalized = normalizeUrl(submittedUrl);
@@ -184,7 +195,7 @@ export function createVerifier({
     // the renderer ended up on. `canonicalUrl` is already post-redirect — `safeFetch`
     // followed and re-guarded every hop to get it — and it is the URL we publish, so
     // it is the only correct base for deciding whether *that page* links to us.
-    if (linkBack === null && renderPage !== null) {
+    if (linkBack === null && requireLinkback && renderPage !== null) {
       const rendered = await renderPage(canonicalUrl, { budget });
 
       // §8's outcome table is ORDERED, and this is the ordering that matters most in
@@ -208,7 +219,7 @@ export function createVerifier({
       linkBackRendered = linkBack !== null;
     }
 
-    if (linkBack === null) {
+    if (linkBack === null && requireLinkback) {
       return {
         ok: false,
         reason: 'no_linkback',
@@ -230,6 +241,7 @@ export function createVerifier({
       feedUrl,
       title: winningFeed.title,
       description: winningFeed.description,
+      // `null` only when `requireLinkback` is false and the page carries no badge.
       linkBack,
       // True when the link was only visible after rendering. Carried so a member who
       // depends on the fallback is *visible* — in the logs, and to anyone asking why

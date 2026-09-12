@@ -15,10 +15,14 @@ import { createFetcher } from '../src/verify/fetch.js';
 import { createVerifier } from '../src/verify/index.js';
 import { createRenderer } from '../src/verify/render.js';
 
-const [, , target, ...rest] = process.argv;
+// `--no-linkback` is the admin allow form's mode (§5 Step 5): the whole pipeline
+// with only the badge waived, which is the question "would /admin/allow take this?"
+const args = process.argv.slice(2);
+const requireLinkback = !args.includes('--no-linkback');
+const [target, ...rest] = args.filter((arg) => arg !== '--no-linkback');
 
 if (target === undefined || target === '' || rest.length > 0) {
-  process.stderr.write('usage: pnpm verify <url>\n');
+  process.stderr.write('usage: pnpm verify <url> [--no-linkback]\n');
   process.exit(2);
 }
 
@@ -38,7 +42,7 @@ const renderPage = createRenderer({
 const verifySite = createVerifier({ safeFetch, config, renderPage });
 
 const started = Date.now();
-const result = await verifySite(target);
+const result = await verifySite(target, { requireLinkback });
 const elapsed = Date.now() - started;
 
 const lines = [];
@@ -57,10 +61,15 @@ if (result.ok) {
   say('feed url', result.feedUrl);
   say('title', result.title);
   say('description', result.description);
-  say('link-back found', result.linkBack);
+  say(
+    'link-back found',
+    result.linkBack ?? (requireLinkback ? undefined : 'none (waived)'),
+  );
   // Named on a pass too, not just a failure: a member silently depending on the
   // rendering quota is exactly the thing worth knowing before the quota runs out.
-  say('link-back source', result.linkBackRendered ? 'rendered page' : 'served HTML');
+  if (result.linkBack) {
+    say('link-back source', result.linkBackRendered ? 'rendered page' : 'served HTML');
+  }
 
   const f = result.features ?? {};
   lines.push('');

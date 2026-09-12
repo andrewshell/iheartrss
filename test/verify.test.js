@@ -640,3 +640,77 @@ test('the conditional headers are only sent for the feed we already validated', 
     },
   );
 });
+
+test('`requireLinkback: false` lists a page with no badge, and never renders it', async () => {
+  // §5 Step 5's exemption: the operator's judgement stands in for the badge, and
+  // nothing else changes — the feed still has to validate and still has to come from
+  // the page we list. The rendering fallback exists only to find a badge, so an
+  // exempt check must not spend a render on a page that will pass regardless.
+  await withSites(
+    (url) => ({
+      'scripting.example': {
+        '/': { body: html({ feedHref: '/rss.xml', badge: false }) },
+        '/rss.xml': {
+          type: FEED_TYPE,
+          body: rss({
+            title: 'Scripting News',
+            channelLink: url('scripting.example', '/'),
+          }),
+        },
+      },
+    }),
+    async ({ url, safeFetch }) => {
+      let rendered = 0;
+      const verifySite = createVerifier({
+        safeFetch,
+        config: CONFIG,
+        renderPage: async () => {
+          rendered += 1;
+          return { ok: false, reason: 'render_http_error' };
+        },
+      });
+
+      const required = await verifySite(url('scripting.example', '/'));
+      assert.equal(required.reason, 'render_unavailable');
+      assert.equal(rendered, 1);
+
+      const exempt = await verifySite(url('scripting.example', '/'), {
+        requireLinkback: false,
+      });
+      assert.equal(exempt.ok, true);
+      assert.equal(exempt.url, url('scripting.example', '/'));
+      assert.equal(exempt.feedUrl, url('scripting.example', '/rss.xml'));
+      assert.equal(exempt.title, 'Scripting News');
+      assert.equal(exempt.linkBack, null);
+      assert.equal(rendered, 1, 'an exempt check must not render');
+    },
+  );
+});
+
+test('`requireLinkback: false` waives only Step 5 — every other rejection stands', async () => {
+  await withSites(
+    (url) => ({
+      // The feed's <channel><link> names a page that declares no feed at all: row 4
+      // of §5 Step 4's table, and nothing to do with the badge.
+      'blog.example': {
+        '/': { body: html({ feedHref: '/rss.xml', badge: false }) },
+        '/rss.xml': {
+          type: FEED_TYPE,
+          body: rss({ channelLink: url('other.example', '/') }),
+        },
+      },
+      'other.example': {
+        '/': { body: html({ badge: false }) },
+      },
+    }),
+    async ({ url, safeFetch }) => {
+      const verifySite = createVerifier({ safeFetch, config: CONFIG });
+      const result = await verifySite(url('blog.example', '/'), {
+        requireLinkback: false,
+      });
+
+      assert.equal(result.ok, false);
+      assert.equal(result.reason, 'feed_not_declared_on_canonical');
+    },
+  );
+});

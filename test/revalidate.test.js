@@ -911,3 +911,20 @@ test('a verifier that throws does not abort the rest of the batch', async () => 
     ),
   );
 });
+
+test('a vouched-for row is checked with the link-back waived; every other row is not', async () => {
+  const { db, queries } = createDb(':memory:');
+
+  const exempt = seedSite(db, { host: 'scripting.example', checkedDaysAgo: 7 });
+  db.prepare('UPDATE sites SET linkback_exempt = 1 WHERE id = ?').run(exempt);
+  const plain = seedSite(db, { host: 'plain.example', checkedDaysAgo: 7 });
+
+  const { revalidator, asked } = harness(db, queries, (row) => passResult(row));
+  await revalidator.runOnce();
+
+  // §5 Step 5: the flag is read here, on every tick, or the exemption lasts exactly
+  // until the first revalidation reads the badge-less page as an opt-out.
+  const options = Object.fromEntries(asked.map(({ url, options }) => [url, options]));
+  assert.equal(options[rowOf(db, exempt).url].requireLinkback, false);
+  assert.equal(options[rowOf(db, plain).url].requireLinkback, true);
+});
