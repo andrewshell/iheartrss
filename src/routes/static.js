@@ -46,11 +46,16 @@ const CONTENT_TYPES = {
 // immutable** cache below, and none of these URLs are versioned by `lib/assets.js`
 // (deliberately — they are a published interface). So a file listed here cannot be
 // visually changed in place; changing it means a new URL.
+//
+// `stickers.png` is here for the same reason as the touch icon: it is embedded in a
+// blog post, and the post ships in `/feed.xml`, so every browser-based reader loads
+// it from its own origin.
 const HOTLINKABLE = new Set([
   'iheartrss.svg',
   'iheartrss-dark.svg',
   'iheartrss-icon.svg',
   'apple-touch-icon.png',
+  'stickers.png',
 ]);
 
 export function registerStatic(app) {
@@ -78,7 +83,7 @@ export function registerStatic(app) {
     // caught per-request and it killed the whole process. One visit to any page
     // was enough, because `/style.css` comes through here.
     //
-    // Everything in `public/` is small (largest ~34 KB), so buffering removes the
+    // Everything in `public/` is small (largest ~120 KB), so buffering removes the
     // entire stream-lifecycle problem rather than trading it for a subtler one.
     // It also makes Content-Length exact: taken from `stat`, it could disagree
     // with the bytes actually sent if the file changed in between.
