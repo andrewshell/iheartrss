@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.2](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.11.1...iheartrss-v0.11.2) (2026-10-23)
+
+
+### Bug Fixes
+
+* **deps:** apply October 2026 security updates ([c686ad9](https://github.com/andrewshell/iheartrss/commit/c686ad98d992f8228f79c62c70724fffec84c705))
+
 ## [0.11.1](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.11.0...iheartrss-v0.11.1) (2026-09-12)
 
 
