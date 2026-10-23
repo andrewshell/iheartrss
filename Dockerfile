@@ -10,7 +10,7 @@
 # `node:sqlite` is still actively developed and the whole app rests on it.
 # Expect ~245 MB: the base alone is ~230 MB, and src/ does not move that.
 
-FROM node:24.18-alpine AS deps
+FROM node:24.22-alpine AS deps
 
 WORKDIR /app
 
@@ -34,7 +34,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 
-FROM node:24.18-alpine AS runtime
+FROM node:24.22-alpine AS runtime
 
 ENV NODE_ENV=production
 

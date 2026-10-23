@@ -529,22 +529,25 @@ test('items are dated by when they were published, not when FeedLand crawled', a
   // time and none of them with their own.
   const realm = await loadComponent(feedlandItems([]));
 
+  // Relative to now, not fixed: once two fixed dates both age past a month they
+  // render identically ("3 mo. ago") and the comparison below proves nothing.
+  const day = 24 * 3600 * 1000;
+  const published = new Date(Math.floor((Date.now() - 6 * day) / 1000) * 1000);
+  const crawled = new Date(Math.floor((Date.now() - day / 2) / 1000) * 1000);
+
   const rendered = realm.listItemElement(
-    item({
-      pubDate: 'Sun, 26 Jul 2026 02:00:00 GMT',
-      whenUpdated: 'Fri, 31 Jul 2026 18:55:39 GMT',
-    }),
+    item({ pubDate: published.toUTCString(), whenUpdated: crawled.toUTCString() }),
   );
 
-  // The two dates are five days apart, so the rendered time tells us which was read
+  // The two dates are days apart, so the rendered time tells us which was read
   // without pinning the exact wording of a relative time.
   const shown = timeOf(rendered).textContent;
-  assert.equal(shown, realm.timeAgo('Sun, 26 Jul 2026 02:00:00 GMT'));
-  assert.notEqual(shown, realm.timeAgo('Fri, 31 Jul 2026 18:55:39 GMT'));
+  assert.equal(shown, realm.timeAgo(published.toUTCString()));
+  assert.notEqual(shown, realm.timeAgo(crawled.toUTCString()));
 
   // `datetime` has to be a valid HTML datetime, which the RFC-822 string FeedLand
   // sends is not — so it is converted rather than passed through.
-  assert.equal(timeOf(rendered).attrs.datetime, '2026-07-26T02:00:00.000Z');
+  assert.equal(timeOf(rendered).attrs.datetime, published.toISOString());
 });
 
 test('items sort newest-published first', async () => {
