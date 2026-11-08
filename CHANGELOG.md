@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.11.3](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.11.2...iheartrss-v0.11.3) (2026-11-08)
+
+
+### Bug Fixes
+
+* **deps:** apply November 2026 dependency updates ([c87f49e](https://github.com/andrewshell/iheartrss/commit/c87f49e12eccb81a6e686f2c7f98538711663bd1))
+* **deps:** run on Node 26 LTS only ([d47a5ba](https://github.com/andrewshell/iheartrss/commit/d47a5ba23f9cdd4ffb8941b93d72b628382cc995))
+* **deps:** run on Node 26 LTS only ([70e2df1](https://github.com/andrewshell/iheartrss/commit/70e2df1c1a46d70baea7eed332db001898aebee3))
+* **feedland:** move the blogroll and river to feedland.com ([0381f6a](https://github.com/andrewshell/iheartrss/commit/0381f6a7e42309e928296510a90b36b54b8169aa))
+* **feedland:** move the blogroll and river to feedland.com ([c887c16](https://github.com/andrewshell/iheartrss/commit/c887c1680591a5114b72e5c1a244c567d2dbbba8))
+
 ## [0.11.2](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.11.1...iheartrss-v0.11.2) (2026-10-23)
 
 
