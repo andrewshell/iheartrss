@@ -58,14 +58,14 @@
  * `FEEDLAND_SERVER`. A static file cannot import the constant; a test is the only
  * thing that can notice the drift.
  */
-const DEFAULT_FEEDLAND = 'https://claude.feedland.org';
+const DEFAULT_FEEDLAND = 'https://feedland.com';
 
 /**
  * **The trailing slash is required, and its absence is silent.**
  *
  * `servercall` builds its URL as `urlServer + path + "?" + params` — a bare
  * concatenation with no separator. Without the slash the request goes to
- * `https://claude.feedland.orggetriverfromopml`, which fails DNS, which arrives as
+ * `https://feedland.comgetriverfromopml`, which fails DNS, which arrives as
  * an error dialog with a message about a hostname rather than anything about a URL.
  *
  * The host comes from `lib/feedland.js`, where it is an ORIGIN with no trailing

@@ -42,14 +42,14 @@
  * equals `FEEDLAND_SERVER` — a static file cannot import the constant, so a test is
  * the only thing that can notice.
  */
-const DEFAULT_FEEDLAND = 'https://claude.feedland.org';
+const DEFAULT_FEEDLAND = 'https://feedland.com';
 
 /**
  * **The trailing slash is required, and its absence is silent.**
  *
  * FeedLand's `servercall` builds its URL as `urlServer + path + "?" + params` — a
- * bare concatenation with no separator. Hand it `https://claude.feedland.org` and it
- * requests `https://claude.feedland.orggetfeedlistfromopml`, which fails DNS, which
+ * bare concatenation with no separator. Hand it `https://feedland.com` and it
+ * requests `https://feedland.comgetfeedlistfromopml`, which fails DNS, which
  * `servercall` reports through a callback the blogroll logs and moves on from. The
  * page renders an empty box and the console says nothing about a URL.
  *
@@ -62,11 +62,15 @@ function withTrailingSlash(server) {
   return server.endsWith('/') ? server : `${server}/`;
 }
 
-/** `https://claude.feedland.org` → `wss://claude.feedland.org/`. */
+/**
+ * `https://feedland.com` → `wss://feedland.com/_ws/`. feedland.com serves its socket
+ * at `/_ws/`, which is what its own pages set `urlSocketServer` to. The root
+ * refuses the upgrade, and blogroll.js reports that nowhere.
+ */
 function toSocketUrl(server) {
-  const url = new URL(server);
+  const url = new URL('/_ws/', server);
   url.protocol = url.protocol === 'http:' ? 'ws:' : 'wss:';
-  return withTrailingSlash(url.origin);
+  return url.href;
 }
 
 // The FeedLand includes look for this global by name to find the server. It is
@@ -129,9 +133,9 @@ function startBlogroll() {
  * **We cannot simply set the option.** FeedLand addresses a list as a *category
  * belonging to an account* — `?screenname=…&catname=…`, which is the shape of Dave's
  * own `urlBlogrollOpml`. Our list is not that: it is an OPML file on our server that
- * claude.feedland.org subscribes to as a reading list, and nothing in the blogroll
- * or FeedLand includes derives a viewer URL from an OPML url. If Dave tells us the
- * URL his server serves our list at, this function goes away and the option gets set
+ * FeedLand subscribes to as a reading list, and nothing in the blogroll
+ * or FeedLand includes derives a viewer URL from an OPML url. If FeedLand gives us the
+ * URL it serves our list at, this function goes away and the option gets set
  * instead — that is the fix, and this is the stopgap.
  *
  * Matched on the item's TEXT because the menu is built from a flat list of `<li>`s
