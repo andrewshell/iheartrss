@@ -65,7 +65,7 @@ Two things this is **not**:
 - **Not a file copy.** The database is open in WAL mode, so copying `iheartrss.db`
   alone captures whatever the last checkpoint left behind and silently loses every
   write since.
-- **Not `sqlite3 .backup`.** `node:24-alpine` ships no `sqlite3` binary. Use
+- **Not `sqlite3 .backup`.** `node:26-alpine` ships no `sqlite3` binary. Use
   `bin/backup.js` (below) for anything you'd have reached for `sqlite3` to do.
 
 ### Take a backup right now

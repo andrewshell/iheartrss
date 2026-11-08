@@ -9,7 +9,7 @@
  *    sibling, so the copy is whatever the last checkpoint left behind — silently
  *    missing every write since. `backup()` uses SQLite's online backup API,
  *    which reads a consistent snapshot of a live database.
- *  * `node:24-alpine` ships no `sqlite3` binary, so the plan's original
+ *  * `node:26-alpine` ships no `sqlite3` binary, so the plan's original
  *    `sqlite3 .backup` advice cannot run in the container at all.
  */
 
@@ -155,7 +155,7 @@ export function createBackupJob({ db, config, now = () => new Date(), log = () =
 
   /**
    * The timer callback. It **must** swallow its own errors: an unhandled
-   * rejection from a timer terminates the process in Node 24, and a full disk
+   * rejection from a timer terminates the process in Node 26, and a full disk
    * must not be able to take the site down by way of its own backup job.
    */
   function guarded(fn) {

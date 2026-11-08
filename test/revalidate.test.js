@@ -900,7 +900,7 @@ test('a verifier that throws does not abort the rest of the batch', async () => 
 
   // `verifySite` is documented never to throw for an expected failure, but "never
   // throws" is a claim about intent, and an unhandled rejection inside an hourly
-  // timer terminates the process in Node 24.
+  // timer terminates the process in Node 26.
   const summary = await revalidator.runOnce();
 
   assert.equal(summary.checked, 1);

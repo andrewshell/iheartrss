@@ -1,5 +1,5 @@
 # Quality gate for pull requests and for main: lint, formatting, and the test
-# suite on the Node versions this project supports.
+# suite on the Node version in `.node-version`, the same major the image ships.
 #
 # Deliberately no Docker here. The image is built and pushed from a workstation
 # with `pnpm docker:build-push`, which builds linux/amd64 AND linux/arm64 --
@@ -23,28 +23,18 @@ permissions:
 
 jobs:
   quality:
-    name: Lint, format & tests (Node ${{ matrix.node }})
+    name: Lint, format & tests
     runs-on: ubuntu-latest
-    strategy:
-      # 26 is a forward-looking canary, not a deploy target. Without fail-fast
-      # off, a break there would cancel the 24 job and hide the result that
-      # actually matters.
-      fail-fast: false
-      matrix:
-        # `engines.node` is >=24 and the app is built on `node:sqlite`, which
-        # does not exist on 22 — so 22 is not in this list and must not be.
-        node: ['24', '26']
     steps:
       - uses: actions/checkout@v7
 
-      # Provides the pnpm version pinned in package.json's `packageManager`,
-      # and must run before setup-node so `cache: 'pnpm'` can find pnpm.
-      - name: Enable corepack
-        run: corepack enable
+      # Installs the pnpm version pinned in package.json's `packageManager`, and
+      # must run before setup-node so `cache: 'pnpm'` can find pnpm.
+      - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ matrix.node }}
+          node-version-file: .node-version
           cache: 'pnpm'
 
       - name: Install dependencies

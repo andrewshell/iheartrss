@@ -20,7 +20,7 @@ export default [
     languageOptions: {
       ecmaVersion: 2024,
       sourceType: 'module',
-      // Node 24: `fetch`, `AbortController`, `URL`, `structuredClone` and
+      // Node 26: `fetch`, `AbortController`, `URL`, `structuredClone` and
       // friends are all globals, so nodeBuiltin covers them without a
       // hand-maintained list going stale.
       globals: {
