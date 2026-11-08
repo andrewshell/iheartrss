@@ -10,6 +10,14 @@ bundler, no native modules.
 
 ## Local development
 
+Needs Node 26 (the version is in `.node-version`, which fnm and nvm read) and the
+pnpm version named by `packageManager` in `package.json`. Node 25 and later no
+longer bundle corepack, so install it once to get that pnpm:
+
+```sh
+npm install -g corepack && corepack enable
+```
+
 ```sh
 pnpm install
 cp .env.example .env      # optional; every value has a working default
@@ -27,7 +35,7 @@ pnpm dev                  # http://localhost:3000
 | `node bin/backup.js`     | Back up the database now, and verify the copy. In production: `docker compose exec iheartrss node bin/backup.js`.                                                                                                       |
 | `pnpm rsscloud:ping`     | Ping our rssCloud server for `/feed.xml` and `/subscriptions.opml` by hand. Add `feed` or `opml` for just one. The app does the feed on boot and the OPML whenever a member joins; this is for when that didn't happen. |
 | `pnpm docker:dry-run`    | Rehearse the manual image build: runs the quality checks and prints the tags it would push, without pushing.                                                                                                            |
-| `pnpm docker:build-push` | Build and push a multi-platform image to ghcr.io by hand. The out-of-band path; releases normally do this.                                                                                                              |
+| `pnpm docker:build-push` | Build and push a multi-platform image to ghcr.io. The only way an image is published; CI never builds one.                                                                                                              |
 
 `./data/` is created on first boot and is gitignored. Configuration is
 documented in `.env.example` and validated at startup: a bad value stops the
