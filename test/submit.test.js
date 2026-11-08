@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 
 import { createApp } from '../src/app.js';
+import { truncateIp } from '../src/lib/iphash.js';
 import { createDb } from '../src/db/index.js';
 import { rejectionMessage } from '../src/views/messages.js';
 
@@ -192,7 +194,9 @@ test('every attempt is logged with a hashed IP and never a raw one', async () =>
   // §4: HMAC-SHA256 over a truncated IP plus a date. Never the raw address, and not
   // a bare digest of one either.
   assert.match(row.ip_hash, /^[0-9a-f]{64}$/);
-  assert.doesNotMatch(row.ip_hash, /203|113/);
+  for (const ip of ['203.0.113.9', truncateIp('203.0.113.9')]) {
+    assert.notEqual(row.ip_hash, createHash('sha256').update(ip).digest('hex'), ip);
+  }
 });
 
 test('a rejected submission writes NOTHING to the site row', async () => {
