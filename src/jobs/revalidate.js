@@ -19,7 +19,7 @@
  *    `classify`.
  *  * **Every per-site write is wrapped in try/catch inside the loop.** `feed_url` is
  *    UNIQUE and revalidation is allowed to change it, so two rows converging on one
- *    feed raises a constraint violation mid-batch — which in Node 24 terminates the
+ *    feed raises a constraint violation mid-batch — which in Node 26 terminates the
  *    process. On conflict: log and skip.
  */
 
@@ -132,7 +132,7 @@ export function createRevalidator({
 
         // Both the fetch and the write are inside this try. The write, because
         // `feed_url` is UNIQUE and this path may change it, so two rows converging on
-        // one feed raises a constraint violation mid-batch — which in Node 24
+        // one feed raises a constraint violation mid-batch — which in Node 26
         // terminates the process (§8). The fetch, because "never throws" is a claim
         // about `verifySite`'s intent, and one site must not be able to cancel the
         // other 19 or the purge.
@@ -359,7 +359,7 @@ export function createRevalidator({
 
   /**
    * The timer callback. It **must** swallow its own errors: an unhandled rejection
-   * from a timer terminates the process in Node 24, and this one runs unattended
+   * from a timer terminates the process in Node 26, and this one runs unattended
    * every hour for as long as the container lives.
    */
   function tick() {

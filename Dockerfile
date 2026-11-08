@@ -5,16 +5,18 @@
 # needs no python/make/g++ layer. The split exists only to keep pnpm's store and
 # lockfile machinery out of the runtime layer.
 #
-# The base tag is PINNED. `node:24-alpine` floats, and a rebuild months from now
+# The base tag is PINNED. `node:26-alpine` floats, and a rebuild months from now
 # would silently pull a different Node — a real reproducibility risk when
 # `node:sqlite` is still actively developed and the whole app rests on it.
 # Expect ~245 MB: the base alone is ~230 MB, and src/ does not move that.
 
-FROM node:24.22-alpine AS deps
+FROM node:26.13-alpine AS deps
 
 WORKDIR /app
 
-RUN corepack enable
+# Node 25 stopped bundling corepack, so it comes from npm. It still reads the
+# pnpm version from `packageManager` in package.json.
+RUN npm install -g corepack@0.36.0 && corepack enable
 
 # Only the manifests, so this layer is cached until dependencies actually change.
 COPY package.json pnpm-lock.yaml ./
@@ -34,7 +36,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 
-FROM node:24.22-alpine AS runtime
+FROM node:26.13-alpine AS runtime
 
 ENV NODE_ENV=production
 
@@ -46,7 +48,7 @@ COPY package.json ./
 COPY src ./src
 COPY public ./public
 # The operator CLIs. `bin/backup.js` is what RUNBOOK.md uses to take a backup on
-# demand and to verify one — `node:24-alpine` ships no `sqlite3`, so without this
+# demand and to verify one — `node:26-alpine` ships no `sqlite3`, so without this
 # there is no way to answer "is that file actually a database" from the box.
 COPY bin ./bin
 # Blog posts ship IN the image. Deploying via dockge means pulling a published

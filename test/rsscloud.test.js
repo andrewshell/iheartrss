@@ -74,7 +74,7 @@ test('a non-2xx answer is a logged failure, not a silent success', async () => {
 });
 
 test('a network error and a timeout are logged and swallowed — runOnce never rejects', async () => {
-  // An unhandled rejection from a timer terminates the process in Node 24, so a
+  // An unhandled rejection from a timer terminates the process in Node 26, so a
   // stranger's DNS being down must not be able to take the site with it.
   const dead = recorder();
   const refused = await createRsscloudPing({

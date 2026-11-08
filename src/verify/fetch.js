@@ -297,7 +297,7 @@ function* causeChain(error, depth = 0) {
  *
  * The declaration matters: older WordPress and hand-rolled feeds really are
  * Latin-1 and say so only in the XML declaration, and decoding those as UTF-8
- * mangles every title we publish. (`node:24-alpine` ships full ICU, so
+ * mangles every title we publish. (`node:26-alpine` ships full ICU, so
  * `windows-1252`, `gbk` and `shift_jis` all decode without the `full-icu` package.)
  */
 function detectCharset(bytes, contentType, kind) {

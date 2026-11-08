@@ -17,7 +17,7 @@ import { createBackupJob } from '../src/jobs/backup.js';
 
 // Plan §9, "Backup, rollback, monitoring": a timer calling `node:sqlite`'s
 // exported `backup()` writes `./data/backups/YYYY-MM-DD.db` nightly with 14-day
-// retention. `node:24-alpine` ships no `sqlite3` CLI, so the copy has to come
+// retention. `node:26-alpine` ships no `sqlite3` CLI, so the copy has to come
 // from inside the process — and it has to be safe against a *live* database,
 // which is the whole reason `backup()` is used rather than a file copy.
 

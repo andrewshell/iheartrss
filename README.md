@@ -5,7 +5,7 @@ site, submit your URL, and the site verifies that the badge is really there and
 that you really publish a feed. Everything that passes lands in a public OPML
 file other readers can subscribe to.
 
-Node 24, [Hono](https://hono.dev), and `node:sqlite` — no build step, no
+Node 26, [Hono](https://hono.dev), and `node:sqlite` — no build step, no
 bundler, no native modules.
 
 ## Local development

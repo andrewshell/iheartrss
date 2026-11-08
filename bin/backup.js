@@ -2,7 +2,7 @@
 /**
  * `node bin/backup.js` — take a backup right now, or verify one (plan §9).
  *
- * This exists because `node:24-alpine` ships no `sqlite3` CLI, so there is otherwise
+ * This exists because `node:26-alpine` ships no `sqlite3` CLI, so there is otherwise
  * no way to say "back up before I touch anything" or "is that file actually a
  * database" from inside the running container. RUNBOOK.md leans on both.
  *
