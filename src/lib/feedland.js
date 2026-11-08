@@ -2,9 +2,15 @@
  * Which FeedLand this site talks to. **One place, and this is it.**
  *
  * The homepage's feed reader runs in the visitor's browser and calls a FeedLand
- * server for the member feed list and their recent items. Dave Winer asked us onto
- * `claude.feedland.org` rather than `feedland.com` because he can support us better
- * there, so that is the host — see the blogroll trial in `views/home.js`.
+ * server for the member feed list and their recent items. That is `feedland.com`,
+ * which Automattic runs and keeps current. We were on Dave Winer's
+ * `claude.feedland.org` while debugging the blogroll trial with him, until its app
+ * went down behind a proxy that still answered: every call got a 500 with
+ * `connect ECONNREFUSED` in the body.
+ *
+ * feedland.com's socket lives at `/_ws/`, not the root, so the two browser files
+ * add that path when they build the socket URL. The CSP entry below stays an
+ * origin, and an origin admits every path on that host.
  *
  * ── Why this module exists ────────────────────────────────────────────────────
  *
@@ -26,8 +32,8 @@
  * ── Both schemes, deliberately ────────────────────────────────────────────────
  *
  * `FEEDLAND_SOCKET` is not decoration. A CSP source expression matches on scheme as
- * well as host, and `https://claude.feedland.org` does NOT cover
- * `wss://claude.feedland.org` — verified by removing it and watching Chrome refuse
+ * well as host, and `https://feedland.com` does NOT cover `wss://feedland.com`.
+ * Verified (against the previous host) by removing it and watching Chrome refuse
  * the connection:
  *
  *     blockedURI: "wss://claude.feedland.org/", effectiveDirective: "connect-src"
@@ -35,7 +41,7 @@
  * So the reader's two API calls and its live-update socket need one entry each.
  */
 
-export const FEEDLAND_SERVER = 'https://claude.feedland.org';
+export const FEEDLAND_SERVER = 'https://feedland.com';
 
 /** The same origin as a websocket: `https://…` → `wss://…`, `http://…` → `ws://…`. */
 export const FEEDLAND_SOCKET = toSocketOrigin(FEEDLAND_SERVER);

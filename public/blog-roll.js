@@ -124,9 +124,9 @@ function hasKnownUpdateTime(feed) {
  *
  * **The server is a parameter, not a constant in the fetch line.** It was
  * `https://feedland.com` written into two URLs, which is the kind of thing that is
- * only wrong once and then very confusing: the site now talks to Dave Winer's
- * `claude.feedland.org`, so a restored reader would have quietly gone on asking a
- * different server than the rest of the page. It is settable per element via the
+ * only wrong once and then very confusing: a host change elsewhere would have left a
+ * restored reader quietly asking a different server than the rest of the page. The
+ * default is checked against `FEEDLAND_SERVER` by the tests. It is settable per element via the
  * `server` attribute — but note that whatever it points at must ALSO be named in
  * `connect-src` in `src/lib/headers.js`, or the browser refuses the request. Two
  * places, unavoidably: a CSP cannot be derived from an attribute.
@@ -136,7 +136,7 @@ function hasKnownUpdateTime(feed) {
  * never rendered and never gave up, with nothing in the console to say why.
  * blogroll.js passes 30s to jQuery for the same calls; this matches it.
  */
-const DEFAULT_SERVER = 'https://claude.feedland.org';
+const DEFAULT_SERVER = 'https://feedland.com';
 const REQUEST_TIMEOUT_MS = 30000;
 
 async function getFeedListFromOpml(url, server = DEFAULT_SERVER) {
@@ -304,9 +304,9 @@ function parseSocketMessage(data) {
   }
 }
 
-/** `https://claude.feedland.org` → `wss://claude.feedland.org/`. */
+/** `https://feedland.com` → `wss://feedland.com/_ws/`, where feedland.com serves it. */
 function socketUrl(server) {
-  const url = new URL(server);
+  const url = new URL('/_ws/', server);
   url.protocol = url.protocol === 'http:' ? 'ws:' : 'wss:';
   return url.href;
 }

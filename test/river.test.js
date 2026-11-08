@@ -329,7 +329,7 @@ async function loadStarter(overrides = {}) {
 test('the FeedLand host reaches api.js with the trailing slash it concatenates', async () => {
   // `servercall` builds its URL as `urlServer + path + "?" + params`, a bare
   // concatenation with no separator. Without the slash the request goes to
-  // `https://claude.feedland.orggetriverfromopml`, which fails DNS and surfaces as an
+  // `https://feedland.comgetriverfromopml`, which fails DNS and surfaces as an
   // error about a hostname rather than anything about a URL. The host cannot carry
   // the slash itself — `lib/feedland.js` holds it as an ORIGIN, because a CSP source
   // expression must not have a path.

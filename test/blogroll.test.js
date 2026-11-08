@@ -38,11 +38,11 @@ test('the homepage CSP admits blogroll.js and its hosts, and nothing wider', asy
     csp,
     /(?:^|;\s*)script-src 'self' https:\/\/s3\.amazonaws\.com https:\/\/code\.scripting\.com(?:;|$)/,
   );
-  // Dave's server, not feedland.com — and the socket, which is what keeps the
+  // feedland.com — and the socket, which is what keeps the
   // "when" times live.
   assert.match(
     csp,
-    /(?:^|;\s*)connect-src 'self' https:\/\/claude\.feedland\.org wss:\/\/claude\.feedland\.org(?:;|$)/,
+    /(?:^|;\s*)connect-src 'self' https:\/\/feedland\.com wss:\/\/feedland\.com(?:;|$)/,
   );
 
   // Still fails safe, and script is still ours-plus-two-named-hosts: no wildcard,
@@ -572,14 +572,14 @@ test('items sort newest-published first', async () => {
 // ── Which server, and how long we wait for it ──────────────────────────────────
 
 test('the FeedLand server is a parameter, defaulting to the one the site uses', async () => {
-  // It was `https://feedland.com` written into two fetch lines. The site talks to
-  // Dave's server now, so a restored reader would have quietly been asking a
-  // different FeedLand than the rest of the page.
+  // It was a host written into two fetch lines, so a host change elsewhere would
+  // have left a restored reader quietly asking a different FeedLand than the rest
+  // of the page.
   const { calls, fetchStub } = feedland([feed()]);
   const realm = await loadComponent(fetchStub);
 
   await realm.getFeedListFromOpml('https://iheartrss.com/subscriptions.opml');
-  assert.match(calls[0].url, /^https:\/\/claude\.feedland\.org\/getfeedlistfromopml\?/);
+  assert.match(calls[0].url, /^https:\/\/feedland\.com\/getfeedlistfromopml\?/);
 
   await realm.getFeedListFromOpml('https://x/o', 'https://feedland.example');
   assert.match(calls[1].url, /^https:\/\/feedland\.example\/getfeedlistfromopml\?/);
@@ -659,15 +659,12 @@ test('a frame that does not parse is ignored, not thrown', async () => {
   }
 });
 
-test('the socket URL is the server, upgraded to a websocket scheme', async () => {
+test("the socket URL is the server's /_ws/ path, upgraded to a websocket scheme", async () => {
   const realm = await loadComponent(feedlandItems([]));
 
-  assert.equal(
-    realm.socketUrl('https://claude.feedland.org'),
-    'wss://claude.feedland.org/',
-  );
+  assert.equal(realm.socketUrl('https://feedland.com'), 'wss://feedland.com/_ws/');
   // http only ever means a local FeedLand, but it must not become `wss:` there.
-  assert.equal(realm.socketUrl('http://localhost:1408'), 'ws://localhost:1408/');
+  assert.equal(realm.socketUrl('http://localhost:1408'), 'ws://localhost:1408/_ws/');
 });
 
 test('an item with no usable date renders a blank time, never the word "undefined"', async () => {
@@ -698,7 +695,7 @@ test('/about names the third parties and what they get to see', async () => {
   assert.ok(paragraph, '/about does not say the homepage loads third-party code');
   // Naming FeedLand alone would now be an understatement: the scripts come from a
   // different party than the API calls do, and both see the visitor.
-  assert.match(paragraph, /claude\.feedland\.org/);
+  assert.match(paragraph, /feedland\.com/);
   assert.match(paragraph, /scripting\.com|Amazon S3/);
 
   // The parts that are still true have to still be said, or the correction reads

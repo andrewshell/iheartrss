@@ -96,9 +96,8 @@ const CSP = [
  *    than spelling the host out: `FEEDLAND_SERVER` for the two API calls and
  *    `FEEDLAND_SOCKET` for the socket that keeps the "when" times live. A `https:`
  *    source expression does NOT admit a `wss:` URL to the same host — removing the
- *    second entry gets `blockedURI: "wss://claude.feedland.org/"` from Chrome. Dave
- *    asked us onto his server, so `feedland.com` is not kept alongside it; nothing on
- *    the page calls it any more.
+ *    second entry got `blockedURI: "wss://claude.feedland.org/"` from Chrome when
+ *    that was the host. Both are origins, so the socket's `/_ws/` path is covered.
  *
  * `img-src` deliberately does NOT widen: blogroll.js emits no `<img>`, so if
  * something starts loading images from elsewhere we would rather see it refused and
