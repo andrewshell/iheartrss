@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.11.3...iheartrss-v0.12.0) (2026-11-12)
+
+
+### Features
+
+* **seo:** mark member links rel="nofollow ugc" ([142cabd](https://github.com/andrewshell/iheartrss/commit/142cabd14744c2b0d3593d7db8e98b723d378eb0))
+* **seo:** mark member links rel="nofollow ugc" ([a4ba877](https://github.com/andrewshell/iheartrss/commit/a4ba87701015ff65ce77429a4ce0a440153c86fb))
+
 ## [0.11.3](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.11.2...iheartrss-v0.11.3) (2026-11-08)
 
 
