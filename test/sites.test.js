@@ -72,6 +72,16 @@ test('GET /sites lists every member newest first, on one page', async () => {
     'members must appear in created_at DESC order',
   );
 
+  // Being listed must pass no link equity, so member links are nofollow ugc.
+  assert.match(
+    html,
+    /<a href="https:\/\/member1\.example\/" rel="nofollow ugc noopener">/,
+  );
+  assert.match(
+    html,
+    /<a href="https:\/\/member1\.example\/rss\.xml" rel="nofollow ugc">feed</,
+  );
+
   // §6.3: "Why /sites has no pagination" — no pagination UI to make responsive.
   assert.doesNotMatch(html, /rel="next"/);
   assert.doesNotMatch(html, /\?page=/);

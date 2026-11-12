@@ -80,7 +80,7 @@ export function riverPage({ config }) {
     // Only this page. The shell renders every page and the river has an element to
     // attach to on exactly one of them; without this being a parameter, /about would
     // download jQuery and bootstrap for nothing.
-    scripts: ['/feedland-river.js'],
+    scripts: ['/nofollow.js', '/feedland-river.js'],
   });
 }
 
