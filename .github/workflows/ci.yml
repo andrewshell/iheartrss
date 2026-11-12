@@ -1,10 +1,8 @@
 # Quality gate for pull requests and for main: lint, formatting, and the test
 # suite on the Node version in `.node-version`, the same major the image ships.
 #
-# Deliberately no Docker here. The image is built and pushed from a workstation
-# with `pnpm docker:build-push`, which builds linux/amd64 AND linux/arm64 --
-# GitHub's runners are amd64, so a CI build could only ever cover half of what
-# actually ships. Publishing is a deliberate act, not a side effect of merging.
+# No Docker here. The image is built and pushed by the `publish` job in
+# release-please.yml when a release PR is merged.
 
 name: CI
 

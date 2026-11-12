@@ -4,14 +4,13 @@
 # Builds and pushes a multi-platform image to the GitHub Container Registry
 # (ghcr.io/andrewshell/iheartrss).
 #
-# This is the ONLY way images get published. Nothing in CI pushes an image, by
-# design: GitHub's runners are amd64-only, and production may run on arm64, so an
-# automated publish could only ever ship half of what is needed. This builds both
-# linux/amd64 and linux/arm64 through buildx.
+# Releases are normally published by the `publish` job in
+# .github/workflows/release-please.yml. This is the manual fallback (a hotfix
+# tag, an Actions outage) and does the same thing: builds linux/amd64 and
+# linux/arm64 through buildx and pushes the version and `latest`.
 #
-# The version comes from package.json, which release-please bumps when you merge
-# the release PR it keeps open on main. Usual order: merge that PR, `git pull`,
-# then run this. Pass a custom tag to publish alongside the version and `latest`.
+# The version comes from package.json, so check out the commit you want to
+# publish first. Pass a custom tag to publish alongside the version and `latest`.
 
 set -e  # Exit on any error
 

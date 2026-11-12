@@ -35,7 +35,7 @@ pnpm dev                  # http://localhost:3000
 | `node bin/backup.js`     | Back up the database now, and verify the copy. In production: `docker compose exec iheartrss node bin/backup.js`.                                                                                                       |
 | `pnpm rsscloud:ping`     | Ping our rssCloud server for `/feed.xml` and `/subscriptions.opml` by hand. Add `feed` or `opml` for just one. The app does the feed on boot and the OPML whenever a member joins; this is for when that didn't happen. |
 | `pnpm docker:dry-run`    | Rehearse the manual image build: runs the quality checks and prints the tags it would push, without pushing.                                                                                                            |
-| `pnpm docker:build-push` | Build and push a multi-platform image to ghcr.io. The only way an image is published; CI never builds one.                                                                                                              |
+| `pnpm docker:build-push` | Build and push a multi-platform image to ghcr.io by hand. Merging a release PR does this in CI; this is the fallback.                                                                                                   |
 
 `./data/` is created on first boot and is gitignored. Configuration is
 documented in `.env.example` and validated at startup: a bad value stops the
@@ -71,8 +71,9 @@ docs: ...  chore: ...  refactor: ...   -> no release on its own
 ```
 
 `release-please` reads these and keeps a release PR open on `main` with the version
-bump and the generated `CHANGELOG.md`. Merging that PR tags `v<x.y.z>`, which is what
-builds and publishes the image. Nothing publishes on an ordinary push to `main` —
+bump and the generated `CHANGELOG.md`. Merging that PR tags `v<x.y.z>`, and the same
+workflow then builds the image from that tag and publishes it. Nothing publishes on an
+ordinary push to `main` —
 `.github/workflows/ci.yml` is the gate there.
 
 Commits made before this was set up are not conventional, and that is fine:
@@ -114,8 +115,8 @@ create a stack in the UI, paste in a compose file and a `.env`, and dockge write
 them to `/opt/stacks/iheartrss/`. It then _pulls_ the published image. Three things
 follow from that, and they are the whole shape of this deployment:
 
-- **The image is pulled, never built on the server.** Publish it from a workstation
-  with `pnpm docker:build-push` (see below).
+- **The image is pulled, never built on the server.** Merging a release PR
+  publishes it (see below).
 - **Blog posts ship inside the image.** There is no `content/` to bind-mount, so
   publishing a post is: commit it, publish an image, redeploy. There is no
   `./content` volume — mounting one would mask the posts with an empty directory.
@@ -245,28 +246,19 @@ The stack pulls `ghcr.io/andrewshell/iheartrss:$IHEARTRSS_TAG`, so a version has
 exist before it can be deployed — and pinning a version is what makes rollback a
 one-line edit rather than a rebuild on the production box with the site down.
 
-Publishing is a **manual, deliberate act**, run from a workstation:
-
-```sh
-pnpm docker:build-push          # builds linux/amd64 + linux/arm64, pushes to ghcr.io
-pnpm docker:dry-run             # shows the tags it would push, builds nothing
-```
-
-It is not automated in CI on purpose: GitHub's runners are amd64-only, so a CI
-publish could only ever ship half of what production may need. The script builds
-both architectures via buildx, and gates on `lint`, `format:check` and `test`
-before it pushes anything.
-
-Version comes from `package.json`, which `release-please` bumps when you merge the
-release PR it keeps open on `main`. So the usual order is: merge the release PR,
-`git pull`, then `pnpm docker:build-push`. That publishes:
+Merging the release PR that `release-please` keeps open on `main` publishes one.
+The `publish` job in `.github/workflows/release-please.yml` checks out the new tag,
+gates on `lint`, `format:check` and `test`, then builds linux/amd64 + linux/arm64
+and pushes:
 
 ```
 ghcr.io/andrewshell/iheartrss:1.2.3    <- deploy and roll back by this
-ghcr.io/andrewshell/iheartrss:1.2
-ghcr.io/andrewshell/iheartrss:1
 ghcr.io/andrewshell/iheartrss:latest
 ```
+
+`pnpm docker:build-push` does the same from a workstation, for when CI can't
+(a hotfix tag, an Actions outage). `pnpm docker:dry-run` shows the tags it would
+push without building.
 
 To deploy one: set `IHEARTRSS_TAG=1.2.3` in the stack's `.env` and redeploy. Pin the
 exact version rather than `latest` — "the previous latest" is not something you can
@@ -304,8 +296,9 @@ Bump `IHEARTRSS_TAG` in the stack's `.env` and hit **Deploy** (or
 no `git pull`.
 
 **Publishing a blog post is a redeploy.** Posts live in `content/` and ship inside
-the image, so the sequence is: commit the post, `pnpm docker:build-push`, bump the
-tag, deploy. The app pings rpc.rsscloud.io on start, so subscribers are notified as
+the image, so the sequence is: commit the post, merge the release PR, bump the
+tag, deploy. A `docs:` commit alone does not open a release PR; add a
+`Release-As: x.y.z` footer to force one. The app pings rpc.rsscloud.io on start, so subscribers are notified as
 soon as the new container is up.
 
 The app handles `SIGTERM`, so stops take a fraction of a second rather than the full
