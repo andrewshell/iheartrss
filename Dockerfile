@@ -38,6 +38,9 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 FROM node:26.13-alpine AS runtime
 
+# Links the ghcr.io package to this repo.
+LABEL org.opencontainers.image.source="https://github.com/andrewshell/iheartrss"
+
 ENV NODE_ENV=production
 
 WORKDIR /app

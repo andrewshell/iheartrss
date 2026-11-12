@@ -28,7 +28,7 @@ services:
   iheartrss:
     # Pinned by version, set in .env. Not `latest`: "the previous latest" is not
     # something you can name at 2am, and rolling back is the whole reason images
-    # are published. Publish with `pnpm docker:build-push` (multi-arch, amd64 +
+    # are published. Merging a release PR publishes one (multi-arch, amd64 +
     # arm64). See RUNBOOK.md, "Roll back to a previous image".
     image: ghcr.io/andrewshell/iheartrss:${IHEARTRSS_TAG:-latest}
     container_name: iheartrss
