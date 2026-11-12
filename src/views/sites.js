@@ -66,12 +66,12 @@ function row(site) {
 
   return html`
   <li class="site" id="site-${site.id}">
-    <h2 class="site__title"><a href="${site.url}" rel="nofollow noopener">${title}</a></h2>
+    <h2 class="site__title"><a href="${site.url}" rel="nofollow ugc noopener">${title}</a></h2>
     <p class="site__host">${site.host}</p>
     ${description ? html`<p class="site__description">${description}</p>` : ''}
     <p class="site__badges">${badges(site)}</p>
     <p class="site__meta">
-      <a href="${site.feed_url}">feed</a>
+      <a href="${site.feed_url}" rel="nofollow ugc">feed</a>
       &middot;
       <time datetime="${site.created_at}">joined ${day(site.created_at)}</time>
     </p>

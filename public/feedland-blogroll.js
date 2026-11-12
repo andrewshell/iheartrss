@@ -87,6 +87,9 @@ function startBlogroll() {
   // thrown error if that ever slips.
   if (container === null) return;
 
+  // eslint-disable-next-line no-undef -- from /nofollow.js, loaded just before this
+  nofollowMemberLinks(container);
+
   const server = container.dataset.feedland || DEFAULT_FEEDLAND;
   appConsts.urlFeedlandServer = withTrailingSlash(server);
   appConsts.urlSocketServer = toSocketUrl(server);

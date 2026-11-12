@@ -96,9 +96,9 @@ function listed({ site }) {
   <p class="status__state">${STATUS_WORDS[site.status] ?? site.status}</p>
   <dl class="published-urls">
     <dt>Page we publish (<code>htmlUrl</code>)</dt>
-    <dd><a href="${site.url}">${site.url}</a></dd>
+    <dd><a href="${site.url}" rel="nofollow ugc">${site.url}</a></dd>
     <dt>Feed we publish (<code>xmlUrl</code>)</dt>
-    <dd><a href="${site.feed_url}">${site.feed_url}</a></dd>
+    <dd><a href="${site.feed_url}" rel="nofollow ugc">${site.feed_url}</a></dd>
     <dt>You submitted</dt>
     <dd><code>${site.submitted_url}</code></dd>
     <dt>Last successful check</dt>

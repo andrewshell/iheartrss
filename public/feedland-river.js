@@ -111,6 +111,8 @@ function startRiver() {
     container.dataset.feedland || DEFAULT_FEEDLAND,
   );
 
+  // eslint-disable-next-line no-undef -- from /nofollow.js, loaded just before this
+  nofollowMemberLinks(container);
   watchImages(container);
   watchExpandClicks(container);
 

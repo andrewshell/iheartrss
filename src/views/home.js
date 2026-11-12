@@ -110,7 +110,7 @@ export function homePage({ config, memberCount = 0 }) {
     // `/blog-roll.js` — our own reader — is deliberately NOT loaded while the trial
     // runs. The file is still served and still tested; nothing but this line has to
     // change to put it back.
-    scripts: ['/feedland-blogroll.js'],
+    scripts: ['/nofollow.js', '/feedland-blogroll.js'],
   });
 }
 

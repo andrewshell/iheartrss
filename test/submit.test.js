@@ -444,6 +444,8 @@ test('/status finds a site by the URL its owner actually submitted', async () =>
   assert.match(html, /Alice writes things/);
   assert.match(html, /alice\.example\/rss\.xml/);
   assert.match(html, /Listed and healthy/);
+  assert.match(html, /<a href="https:\/\/alice\.example\/[^"]*" rel="nofollow ugc">/);
+  assert.match(html, /<a href="[^"]*alice\.example\/rss\.xml" rel="nofollow ugc">/);
 });
 
 test('/status finds the same site by its canonical URL', async () => {
