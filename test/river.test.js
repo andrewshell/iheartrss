@@ -358,10 +358,11 @@ test('the account-only controls are told there is no account', async () => {
   assert.deepEqual(Object.keys(realm.globals), []);
 });
 
-test('a favicon the icon service does not have is hidden, not left broken', async () => {
-  // `getUrlIconImage` emits its `<img>` with no `alt`, so a domain DuckDuckGo has no
-  // icon for shows the browser's broken-image glyph next to a working row — which
-  // reads as our bug. One section of 145 on the day this was written.
+test('an image that fails to load is hidden, enclosure box and all', async () => {
+  // A broken-image glyph next to a working row reads as our bug. The causes are all
+  // outside our control: DuckDuckGo 404s for some favicons, and some hosts (misar.blog)
+  // serve images with `Cross-Origin-Resource-Policy: same-origin`, which no other site
+  // may embed. So a failed image is removed, never left broken.
   const realm = await loadStarter();
 
   const listeners = [];
@@ -384,26 +385,42 @@ test('a favicon the icon service does not have is hidden, not left broken', asyn
   );
   const onError = listeners[0].handler;
 
-  const classesOf = (name) => {
-    const classes = new Set(name ? [name] : []);
+  const element = (tagName, ancestors = {}) => {
+    const classes = new Set();
     return {
-      contains: (c) => classes.has(c),
-      add: (c) => classes.add(c),
-      has: (c) => classes.has(c),
+      tagName,
+      classList: { add: (c) => classes.add(c), contains: (c) => classes.has(c) },
+      closest: (selector) => ancestors[selector] ?? null,
+      hidden: () => classes.has('river-image--failed'),
     };
   };
 
-  const favicon = { classList: classesOf('imgFavIcon') };
+  // A favicon sits in no box, so the image itself goes.
+  const favicon = element('IMG');
   onError({ target: favicon });
-  assert.ok(favicon.classList.has('river-favicon--missing'));
+  assert.ok(favicon.hidden());
 
-  // An item's own picture failing is the author's business, not ours to hide.
-  const postImage = { classList: classesOf(null) };
-  onError({ target: postImage });
-  assert.ok(!postImage.classList.has('river-favicon--missing'));
+  // An enclosure: hiding only the <img> would leave an empty bordered box, so the
+  // box is what gets the class, and the body it shortened is re-measured.
+  // Overflowing, and not yet marked: only a re-measure can mark it.
+  const body = fakeBody({ scrollHeight: 300, clientHeight: 100 });
+  const box = element('DIV');
+  const enclosure = element('IMG', { '.divInlineImage': box, '.divRiverItemBody': body });
+  onError({ target: enclosure });
+  assert.ok(box.hidden());
+  assert.ok(!enclosure.hidden(), 'the box hides it; the <img> needs no class of its own');
+  assert.ok(body.has('river-item--clipped'), 'the body was not re-measured');
 
-  // And a target with no classList at all — a failed <script> or <link> caught on the
-  // way down — must not throw inside a listener nothing is catching.
+  // A picture inside a post, outside any enclosure box.
+  const inline = element('IMG', { '.divRiverItemBody': body });
+  onError({ target: inline });
+  assert.ok(inline.hidden());
+
+  // `error` from a failed <script> or <link> caught on the way down is not ours to
+  // hide, and must not throw inside a listener nothing is catching.
+  const script = element('SCRIPT');
+  onError({ target: script });
+  assert.ok(!script.hidden());
   onError({ target: {} });
 });
 

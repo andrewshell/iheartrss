@@ -1448,11 +1448,12 @@ blog-roll li a {
   top: 0;
 }
 
-/* Set by `feedland-river.js` on a favicon the icon service had none for — the image
-   emits no `alt`, so what shows otherwise is the browser's broken-image glyph beside
-   a site's name, which reads as our bug rather than as a missing icon. There is no
-   CSS selector for "failed to load", which is why a script has to say so. */
-#idRiverContainer .imgFavIcon.river-favicon--missing {
+/* Set by `feedland-river.js` on any image that failed to load: a favicon the icon
+   service had none for, or an enclosure's whole `.divInlineImage` box, or a picture
+   inside a post. What shows otherwise is the browser's broken-image glyph, which reads
+   as our bug. There is no CSS selector for "failed to load", which is why a script has
+   to say so. */
+#idRiverContainer .river-image--failed {
   display: none;
 }
 
@@ -1521,6 +1522,63 @@ blog-roll li a {
 #idRiverContainer .divRiverItemBody ul,
 #idRiverContainer .divRiverItemBody ol {
   max-width: none;
+}
+
+/*
+ * ── Other people's markup ─────────────────────────────────────────────────────
+ *
+ * An item body is the feed author's own HTML, and without these rules it picks up
+ * this site's page styles: an author's `<h1>` renders at the size of our page title,
+ * so an opened post reads as a new section of our page rather than as one item in a
+ * stream. On the day this was written, 154 items carried 40 headings, 15
+ * blockquotes, 10 rules and 3 `pre` blocks.
+ *
+ * So inside an item, every heading is a bold line at body size, and the block
+ * elements get quiet versions of their blog-post styles. Every item looks the same
+ * however its author marked it up.
+ */
+#idRiverContainer .divRiverItemBody :is(h1, h2, h3, h4, h5, h6) {
+  font-size: 1em;
+  line-height: inherit;
+  font-weight: 700;
+  margin: 0.9em 0 0.3em;
+  text-wrap: pretty;
+}
+
+#idRiverContainer .divRiverItemBody blockquote {
+  margin: 0.6em 0;
+  padding-left: 0.9rem;
+  border-left: 3px solid var(--border);
+  color: var(--text-muted);
+}
+
+#idRiverContainer .divRiverItemBody hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 0.9em 0;
+}
+
+/* Code and tables scroll inside the item rather than widening the page. */
+#idRiverContainer .divRiverItemBody pre {
+  background: var(--code-bg);
+  border-radius: 0.35rem;
+  padding: 0.6rem 0.75rem;
+  overflow-x: auto;
+  font-size: 0.9em;
+}
+
+#idRiverContainer .divRiverItemBody table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+#idRiverContainer .divRiverItemBody figure {
+  margin: 0.6em 0;
+}
+
+#idRiverContainer .divRiverItemBody :is(iframe, video) {
+  max-width: 100%;
 }
 
 /*
