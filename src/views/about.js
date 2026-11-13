@@ -127,9 +127,11 @@ export function aboutPage({ config }) {
     place of our own reader, and <a href="/river">the river</a> runs FeedLand&rsquo;s
     river display. Your browser fetches both &mdash; along with jQuery, Bootstrap and
     Font Awesome &mdash; from <code>scripting.com</code>&rsquo;s files on Amazon S3,
-    and then asks <a href="${FEEDLAND_SERVER}/">${new URL(FEEDLAND_SERVER).host}</a>
-    for the member feeds and their latest items. Those two hosts see your IP address
-    and which of our two pages you loaded.
+    which sees your IP address and which of our two pages you loaded. The member
+    feeds and their latest items then come from
+    <a href="${FEEDLAND_SERVER}/">${new URL(FEEDLAND_SERVER).host}</a>, a feed server
+    we run ourselves for these two pages, so that request does not go to a third
+    party.
   </p>
   <p>
     <strong>The river also loads images from the sites it is showing you.</strong>
