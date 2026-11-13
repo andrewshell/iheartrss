@@ -38,11 +38,11 @@ test('the homepage CSP admits blogroll.js and its hosts, and nothing wider', asy
     csp,
     /(?:^|;\s*)script-src 'self' https:\/\/s3\.amazonaws\.com https:\/\/code\.scripting\.com(?:;|$)/,
   );
-  // feedland.com — and the socket, which is what keeps the
+  // the FeedLand API server — and the socket, which is what keeps the
   // "when" times live.
   assert.match(
     csp,
-    /(?:^|;\s*)connect-src 'self' https:\/\/feedland\.com wss:\/\/feedland\.com(?:;|$)/,
+    /(?:^|;\s*)connect-src 'self' https:\/\/river\.geekity\.com wss:\/\/river\.geekity\.com(?:;|$)/,
   );
 
   // Still fails safe, and script is still ours-plus-two-named-hosts: no wildcard,
@@ -73,9 +73,9 @@ test('every copy of the FeedLand host agrees with lib/feedland.js', async () => 
 
   for (const file of files) {
     const source = await readFile(new URL(file, import.meta.url), 'utf8');
-    const literals = [...source.matchAll(/'(https?:\/\/[^']*feedland[^']*)'/g)].map(
-      (match) => match[1],
-    );
+    const literals = [
+      ...source.matchAll(/const DEFAULT_(?:FEEDLAND|SERVER) = '([^']+)'/g),
+    ].map((match) => match[1]);
 
     assert.ok(literals.length > 0, `${file} names no FeedLand host at all`);
     for (const literal of literals) {
@@ -579,7 +579,7 @@ test('the FeedLand server is a parameter, defaulting to the one the site uses', 
   const realm = await loadComponent(fetchStub);
 
   await realm.getFeedListFromOpml('https://iheartrss.com/subscriptions.opml');
-  assert.match(calls[0].url, /^https:\/\/feedland\.com\/getfeedlistfromopml\?/);
+  assert.match(calls[0].url, /^https:\/\/river\.geekity\.com\/getfeedlistfromopml\?/);
 
   await realm.getFeedListFromOpml('https://x/o', 'https://feedland.example');
   assert.match(calls[1].url, /^https:\/\/feedland\.example\/getfeedlistfromopml\?/);
@@ -693,9 +693,12 @@ test('/about names the third parties and what they get to see', async () => {
     .match(/<p>[\s\S]*?<\/p>/g)
     ?.find((p) => /IP address/i.test(p) && /blogroll/i.test(p));
   assert.ok(paragraph, '/about does not say the homepage loads third-party code');
-  // Naming FeedLand alone would now be an understatement: the scripts come from a
+  // Naming the API host alone would be an understatement: the scripts come from a
   // different party than the API calls do, and both see the visitor.
-  assert.match(paragraph, /feedland\.com/);
+  assert.ok(
+    paragraph.includes(new URL(FEEDLAND_SERVER).host),
+    '/about does not name the API host',
+  );
   assert.match(paragraph, /scripting\.com|Amazon S3/);
 
   // The parts that are still true have to still be said, or the correction reads

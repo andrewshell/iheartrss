@@ -1,16 +1,17 @@
 /**
  * Which FeedLand this site talks to. **One place, and this is it.**
  *
- * The homepage's feed reader runs in the visitor's browser and calls a FeedLand
- * server for the member feed list and their recent items. That is `feedland.com`,
- * which Automattic runs and keeps current. We were on Dave Winer's
- * `claude.feedland.org` while debugging the blogroll trial with him, until its app
- * went down behind a proxy that still answered: every call got a 500 with
- * `connect ECONNREFUSED` in the body.
+ * The homepage's blogroll and the river run in the visitor's browser and call a
+ * server that speaks FeedLand's API for the member feed list, the river, and
+ * recent items. That is `river.geekity.com`, our own service (geekitycom/river),
+ * which implements only the read-side calls these pages make. Before it we were on
+ * `feedland.com`, which capped our account at 250 feeds, and before that on Dave
+ * Winer's `claude.feedland.org`, until its app went down behind a proxy that still
+ * answered with 500s.
  *
- * feedland.com's socket lives at `/_ws/`, not the root, so the two browser files
- * add that path when they build the socket URL. The CSP entry below stays an
- * origin, and an origin admits every path on that host.
+ * The socket lives at `/_ws/`, not the root, so the two browser files add that
+ * path when they build the socket URL. The CSP entry below stays an origin, and an
+ * origin admits every path on that host.
  *
  * ── Why this module exists ────────────────────────────────────────────────────
  *
@@ -41,7 +42,7 @@
  * So the reader's two API calls and its live-update socket need one entry each.
  */
 
-export const FEEDLAND_SERVER = 'https://feedland.com';
+export const FEEDLAND_SERVER = 'https://river.geekity.com';
 
 /** The same origin as a websocket: `https://…` → `wss://…`, `http://…` → `ws://…`. */
 export const FEEDLAND_SOCKET = toSocketOrigin(FEEDLAND_SERVER);

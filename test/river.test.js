@@ -123,9 +123,9 @@ test('every copy of the FeedLand host agrees with lib/feedland.js', async () => 
     new URL('../public/feedland-river.js', import.meta.url),
     'utf8',
   );
-  const literals = [...source.matchAll(/'(https?:\/\/[^']*feedland[^']*)'/g)].map(
-    (match) => match[1],
-  );
+  const literals = [
+    ...source.matchAll(/const DEFAULT_(?:FEEDLAND|SERVER) = '([^']+)'/g),
+  ].map((match) => match[1]);
 
   assert.ok(literals.length > 0, 'feedland-river.js names no FeedLand host at all');
   for (const literal of literals) {

@@ -36,3 +36,7 @@ PLAN.md
 
 # Logs
 *.log
+
+# Claude Code's local state, including agent worktrees: whole checkouts of this
+# repo whose fixtures would otherwise be checked as if they were source.
+.claude/

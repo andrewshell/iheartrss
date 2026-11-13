@@ -58,7 +58,7 @@
  * `FEEDLAND_SERVER`. A static file cannot import the constant; a test is the only
  * thing that can notice the drift.
  */
-const DEFAULT_FEEDLAND = 'https://feedland.com';
+const DEFAULT_FEEDLAND = 'https://river.geekity.com';
 
 /**
  * **The trailing slash is required, and its absence is silent.**

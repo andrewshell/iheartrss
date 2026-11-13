@@ -42,7 +42,7 @@
  * equals `FEEDLAND_SERVER` — a static file cannot import the constant, so a test is
  * the only thing that can notice.
  */
-const DEFAULT_FEEDLAND = 'https://feedland.com';
+const DEFAULT_FEEDLAND = 'https://river.geekity.com';
 
 /**
  * **The trailing slash is required, and its absence is silent.**
