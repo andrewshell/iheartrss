@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.13.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.12.0...iheartrss-v0.13.0) (2026-11-13)
+
+
+### Features
+
+* **feedland:** move the blogroll and river to river.geekity.com ([e20f698](https://github.com/andrewshell/iheartrss/commit/e20f6987af6858d3c47b32ad9e3eb6ff41ccc6f8))
+* **feedland:** move the blogroll and river to river.geekity.com ([242a4a1](https://github.com/andrewshell/iheartrss/commit/242a4a14484d1a825a52e1e06c9bc78953ad824e))
+
+
+### Bug Fixes
+
+* **about:** say the feed server is ours, not a third party ([aabfb1e](https://github.com/andrewshell/iheartrss/commit/aabfb1ef4929de90de18640f87515bcb7a738194))
+* **deps:** apply mid-November 2026 dependency updates ([ca841b7](https://github.com/andrewshell/iheartrss/commit/ca841b7f04d05d2662be4874ec6a57c629a8e80a))
+
 ## [0.12.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.11.3...iheartrss-v0.12.0) (2026-11-12)
 
 
