@@ -136,7 +136,7 @@ function hasKnownUpdateTime(feed) {
  * never rendered and never gave up, with nothing in the console to say why.
  * blogroll.js passes 30s to jQuery for the same calls; this matches it.
  */
-const DEFAULT_SERVER = 'https://feedland.com';
+const DEFAULT_SERVER = 'https://river.geekity.com';
 const REQUEST_TIMEOUT_MS = 30000;
 
 async function getFeedListFromOpml(url, server = DEFAULT_SERVER) {
