@@ -197,13 +197,23 @@ function riverFinished(container, err) {
  * of these images do, because riverviewer.js creates them itself as each feed's info
  * arrives, long after this runs. Per-image handlers are not available to us.
  *
- * **On `error` — hide the favicon.** `getUrlIconImage` asks
- * `icons.duckduckgo.com/ip3/<domain>.ico` for every feed and emits the `<img>` with no
- * `alt`, so a domain DuckDuckGo has no icon for renders the browser's broken-image
- * glyph next to the site's name. That was one section of 145 on our list the day this
- * was written, and it reads as a broken page rather than as a missing icon — the row
- * beside it is fine, so the eye blames us. Scoped to favicons by class: an item's own
- * picture failing is the author's business and their `alt` text should show.
+ * **On `error` — remove the image.** Any image in the river that fails to load is
+ * hidden, along with the bordered box it sits in if it is an enclosure. A broken-image
+ * glyph next to a working row reads as our bug, not as the source's, and nothing
+ * here can make the image load:
+ *
+ *   * **Favicons.** `getUrlIconImage` asks `icons.duckduckgo.com/ip3/<domain>.ico`
+ *     for every feed, and DuckDuckGo 404s for domains it has no icon for.
+ *   * **Image enclosures.** `getRiverItemImageEnclosure` wraps each one in a bordered
+ *     `.divInlineImage`. Some hosts forbid embedding outright: www.misar.blog serves
+ *     every image with `Cross-Origin-Resource-Policy: same-origin`, which accounted for
+ *     42 of 45 broken images on the day this changed. Hiding only the `<img>` would
+ *     leave an empty bordered box, so the box goes too.
+ *   * **Pictures inside a post.** Chrome's ORB blocks some of them (a non-image
+ *     response, for instance). The author's alt text is lost with the picture, but a
+ *     broken glyph communicated nothing more.
+ *
+ * Hiding an image can shorten the body it sits in, so that body is re-measured.
  *
  * **On `load` — re-measure the clip.** An item's own picture changes the height of
  * the body it sits in, and it lands after `markClippedItems` has already run. Without
@@ -220,10 +230,16 @@ function watchImages(container) {
   container.addEventListener(
     'error',
     function (event) {
+      // `error` also arrives from <script>/<link> elements on the way down. Only an
+      // image is ours to hide.
       const target = event.target;
-      if (target.classList && target.classList.contains('imgFavIcon')) {
-        target.classList.add('river-favicon--missing');
-      }
+      if (target.tagName !== 'IMG') return;
+
+      const box = target.closest('.divInlineImage') || target;
+      box.classList.add('river-image--failed');
+
+      const body = target.closest('.divRiverItemBody');
+      if (body !== null) markOneItem(body);
     },
     true,
   );

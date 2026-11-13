@@ -1448,11 +1448,12 @@ blog-roll li a {
   top: 0;
 }
 
-/* Set by `feedland-river.js` on a favicon the icon service had none for — the image
-   emits no `alt`, so what shows otherwise is the browser's broken-image glyph beside
-   a site's name, which reads as our bug rather than as a missing icon. There is no
-   CSS selector for "failed to load", which is why a script has to say so. */
-#idRiverContainer .imgFavIcon.river-favicon--missing {
+/* Set by `feedland-river.js` on any image that failed to load: a favicon the icon
+   service had none for, or an enclosure's whole `.divInlineImage` box, or a picture
+   inside a post. What shows otherwise is the browser's broken-image glyph, which reads
+   as our bug. There is no CSS selector for "failed to load", which is why a script has
+   to say so. */
+#idRiverContainer .river-image--failed {
   display: none;
 }
 
