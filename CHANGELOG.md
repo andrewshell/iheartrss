@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.13.1](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.13.0...iheartrss-v0.13.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* **river:** hide broken images and normalize item markup ([cb20de0](https://github.com/andrewshell/iheartrss/commit/cb20de078dd43ab1f0567e65188de3d0237e0e30))
+* **river:** hide images that fail to load instead of leaving them broken ([072865d](https://github.com/andrewshell/iheartrss/commit/072865d5ba39f59032d78ff77383caf93165b1ee))
+* **river:** normalize headings and block elements inside items ([31a446b](https://github.com/andrewshell/iheartrss/commit/31a446b850761dbca945657d62ef232a2bea09d0))
+
 ## [0.13.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.12.0...iheartrss-v0.13.0) (2026-11-13)
 
 
