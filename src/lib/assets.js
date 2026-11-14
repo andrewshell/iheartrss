@@ -5,8 +5,8 @@
  * who loaded any page keeps that stylesheet for a week — and a deploy that changes it
  * reaches them a week later, or whenever they force-reload. That is the bug this
  * module exists for: people were still on the old styles after an update. The same
- * applies to `/blog-roll.js`, where it is worse, because stale *logic* against a live
- * third-party API fails in ways stale colours do not.
+ * applies to our scripts, where it is worse, because stale *logic* fails in ways
+ * stale colours do not.
  *
  * **The version is a digest of the file's own bytes**, not the release number and not
  * the boot time. Both alternatives are wrong in one direction each: a release number

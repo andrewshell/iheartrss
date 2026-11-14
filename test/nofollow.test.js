@@ -5,7 +5,7 @@
  * There is no DOM library in this repo, so the script runs in a `vm` realm against
  * minimal fakes: anchors with a real `href` string and a token-set `relList`, and a
  * `MutationObserver` the test fires by hand, the way the browser would after a
- * third-party script adds or rewrites a link.
+ * River's element adds or rewrites a link.
  */
 
 import { test } from 'node:test';
@@ -35,7 +35,14 @@ async function load(initial = []) {
     'utf8',
   );
   const observers = [];
+  const anchors = [...initial];
+  const container = { querySelectorAll: () => anchors };
   const realm = createContext({
+    // The script finds River's elements itself; this page has one of them.
+    document: {
+      querySelectorAll: (selector) =>
+        selector === 'river-blogroll, river-river' ? [container] : [],
+    },
     URL,
     location: { href: 'https://iheartrss.com/river', origin: 'https://iheartrss.com' },
     MutationObserver: class {
@@ -50,10 +57,6 @@ async function load(initial = []) {
     },
   });
   runInContext(source, realm);
-
-  const anchors = [...initial];
-  const container = { querySelectorAll: () => anchors };
-  realm.nofollowMemberLinks(container);
 
   return {
     anchors,
@@ -103,18 +106,13 @@ test('a link added later, or repointed off-site, is marked too', async () => {
   assert.equal(repointed.rel, 'nofollow ugc');
 });
 
-test('the homepage and the river load nofollow.js before their starter', async () => {
+test('the homepage and the river load nofollow.js, and nothing of ours else', async () => {
   const app = createApp({ config: { siteUrl: 'https://iheartrss.com' } });
 
-  for (const [path, starter] of [
-    ['/', '/feedland-blogroll.js'],
-    ['/river', '/feedland-river.js'],
-  ]) {
+  for (const path of ['/', '/river']) {
     const html = await (await app.request(path)).text();
-    const marker = html.search(
-      /<script\b[^>]*src="\/nofollow\.js\?v=[0-9a-f]+"[^>]*defer/,
-    );
-    assert.ok(marker > -1, `${path} does not load nofollow.js deferred`);
-    assert.ok(marker < html.indexOf(`src="${starter}`), `${path} loads it too late`);
+    const ours = [...html.matchAll(/<script\b[^>]*\bsrc="(\/[^"?]+)/g)].map((m) => m[1]);
+    assert.deepEqual(ours, ['/nofollow.js'], path);
+    assert.match(html, /<script\b[^>]*src="\/nofollow\.js\?v=[0-9a-f]+"[^>]*defer/, path);
   }
 });

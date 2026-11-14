@@ -1,3 +1,5 @@
+import { html } from 'hono/html';
+
 /**
  * Which FeedLand this site talks to. **One place, and this is it.**
  *
@@ -9,26 +11,13 @@
  * Winer's `claude.feedland.org`, until its app went down behind a proxy that still
  * answered with 500s.
  *
- * The socket lives at `/_ws/`, not the root, so the two browser files add that
- * path when they build the socket URL. The CSP entry below stays an origin, and an
- * origin admits every path on that host.
+ * The socket lives at `/_ws/`, not the root. River's blogroll element adds that
+ * path itself; the CSP entry below stays an origin, and an origin admits every path
+ * on that host.
  *
- * ── Why this module exists ────────────────────────────────────────────────────
- *
- * The host was written out longhand in four places that did not know about each
- * other: the CSP in `lib/headers.js`, the privacy note on /about, the trial's
- * starter script, and the fallback reader's own default. Changing one and missing
- * another does not fail loudly — it fails as a reader that renders nothing, with a
- * CSP violation in a console nobody has open, because `connect-src` still named the
- * old host. Everything server-side now reads these two exports instead.
- *
- * ── The two browser files ─────────────────────────────────────────────────────
- *
- * `public/feedland-blogroll.js` and `public/blog-roll.js` cannot import this: they
- * are static files served to a browser, not modules in this build. They each still
- * carry the literal, and `test/blogroll.test.js` asserts that every one of those
- * copies equals `FEEDLAND_SERVER`. That is the enforcement — a host changed here and
- * not there fails the test suite rather than the page.
+ * The pages embed River's own `<river-blogroll>` and `<river-river>` elements
+ * (geekitycom/river, docs/EMBED.md). Their stylesheet and modules come from this
+ * host too, which is why `script-src` and `style-src` name it in `lib/headers.js`.
  *
  * ── Both schemes, deliberately ────────────────────────────────────────────────
  *
@@ -53,4 +42,16 @@ function toSocketOrigin(server) {
   // `origin` rather than `href`, which would add the trailing slash a CSP source
   // expression must not have — a path in a source expression changes the match.
   return url.origin;
+}
+
+/**
+ * River's stylesheet and one of its element modules, for a view's `<head>`.
+ *
+ * The stylesheet goes in before ours (the layout puts `/style.css` after `head`),
+ * though order matters less than it looks: every rule in River's sheet sits in
+ * `@layer river`, and our unlayered rules beat it whatever the specificity.
+ */
+export function riverIncludes(module) {
+  return html`<link rel="stylesheet" href="${FEEDLAND_SERVER}/static/client/river.css">
+<script type="module" src="${FEEDLAND_SERVER}/static/client/${module}"></script>`;
 }
