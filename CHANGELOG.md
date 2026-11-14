@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.13.1...iheartrss-v0.14.0) (2026-11-14)
+
+
+### Features
+
+* embed River's blogroll and river elements ([b03c07d](https://github.com/andrewshell/iheartrss/commit/b03c07d0fba2adaf73177922cd9645cb02772611))
+
 ## [0.13.1](https://github.com/andrewshell/iheartrss/compare/iheartrss-v0.13.0...iheartrss-v0.13.1) (2026-11-13)
 
 
