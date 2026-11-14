@@ -122,16 +122,13 @@ export function aboutPage({ config }) {
     <strong>Submission records are deleted after 90 days.</strong>
   </p>
   <p>
-    <strong>Two pages load other people&rsquo;s code, and it is worth being plain
-    about that.</strong> The homepage runs Dave Winer&rsquo;s blogroll software in
-    place of our own reader, and <a href="/river">the river</a> runs FeedLand&rsquo;s
-    river display. Your browser fetches both &mdash; along with jQuery, Bootstrap and
-    Font Awesome &mdash; from <code>scripting.com</code>&rsquo;s files on Amazon S3,
-    which sees your IP address and which of our two pages you loaded. The member
-    feeds and their latest items then come from
+    <strong>Two pages load code from another of our servers.</strong> The
+    homepage&rsquo;s blogroll and <a href="/river">the river</a> are built in your
+    browser by scripts from
     <a href="${FEEDLAND_SERVER}/">${new URL(FEEDLAND_SERVER).host}</a>, a feed server
-    we run ourselves for these two pages, so that request does not go to a third
-    party.
+    we run ourselves, which also sends the member feeds and their latest items. It
+    sees your IP address and which of our two pages you loaded, but it is ours, so
+    that request does not go to a third party.
   </p>
   <p>
     <strong>The river also loads images from the sites it is showing you.</strong>

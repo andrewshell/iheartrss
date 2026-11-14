@@ -1,9 +1,10 @@
 /*
  * Mark every off-site link inside a container `rel="nofollow ugc"`.
  *
- * The blogroll and the river are third-party scripts that build their links in the
- * browser, after load and again whenever an update arrives, so the only place to add
- * the tokens is on the live DOM. Listing a site here must not pass it link equity,
+ * The blogroll and the river are River's custom elements, which build their links in
+ * the browser, after load and again whenever an update arrives, so the only place to
+ * add the tokens is on the live DOM. River's elements render into the page's own DOM,
+ * not a shadow root, so a MutationObserver on the element sees every link. Listing a site here must not pass it link equity,
  * or the directory becomes worth joining for SEO spam.
  *
  * `relList.add` keeps whatever tokens were already there (`noopener`, say) and does
@@ -41,4 +42,10 @@ function nofollowMemberLinks(container) {
     attributes: true,
     attributeFilter: ['href'],
   });
+}
+
+// Deferred, so the elements are parsed by the time this runs, whether or not River's
+// modules have upgraded them yet.
+for (const element of document.querySelectorAll('river-blogroll, river-river')) {
+  nofollowMemberLinks(element);
 }

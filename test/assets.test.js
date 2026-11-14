@@ -1,5 +1,5 @@
 /**
- * `lib/assets.js` — the cache-busting version on `/style.css` and `/blog-roll.js`.
+ * `lib/assets.js` — the cache-busting version on `/style.css` and our scripts.
  *
  * The end-to-end contract (every page links the same versioned URL, a versioned
  * request is immutable, HTML is revalidated) lives in `headers.test.js`. What is

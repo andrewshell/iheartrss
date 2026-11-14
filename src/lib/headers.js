@@ -10,51 +10,28 @@
 import { FEEDLAND_SERVER, FEEDLAND_SOCKET } from './feedland.js';
 
 /**
- * The policy for every page but `/` — see `CSP_BLOGROLL` for that one, which is
- * wider for as long as Dave Winer's blogroll is on trial there.
+ * The policy for every page but `/` and `/river`, which embed River's elements and
+ * get the two wider policies below.
  *
- * There is still no inline JS and no inline `style=` in anything we write — every
- * page is server-rendered HTML linking a single same-origin stylesheet, and the
- * scripts we serve are separate same-origin files — so the policy stays close to the
- * strict one §6 asks for rather than the `'unsafe-inline'` compromise most apps
- * settle for.
+ * There is no inline JS and no inline `style=` in anything we write: every page is
+ * server-rendered HTML linking a single same-origin stylesheet, and the scripts we
+ * serve are separate same-origin files. So the policy stays close to the strict one
+ * §6 asks for rather than the `'unsafe-inline'` compromise most apps settle for.
  *
  *  * `default-src 'none'` then allow-listing is the direction that fails safe: a
  *    fetch type nobody thought about is refused rather than inherited.
- *  * `script-src 'self'`: §10's feed reader (`/blog-roll.js`) is the app's only
- *    script, and it is our file on our origin. Deliberately **not**
- *    `'unsafe-inline'` — no page carries an inline `<script>` or an event-handler
- *    attribute, so an injected one is still refused, which is the property worth
- *    keeping. No third-party script host is allow-listed either: the reader is
- *    self-hosted precisely so this line does not have to name anyone else.
- *  * `style-src 'self'`: one stylesheet, ours. No inline `style=` anywhere.
+ *  * `script-src 'self'` and `style-src 'self'`: our files, our origin, and
+ *    deliberately not `'unsafe-inline'`, so an injected tag or attribute is refused.
  *  * `img-src 'self'`: the only images are our own badge SVGs and the favicons.
- *  * `manifest-src 'self'`: every page links `/site.webmanifest`. Without this
- *    line the manifest inherits `default-src 'none'` and the browser refuses to
- *    load it — the exact fail-safe described above, doing its job on a fetch type
- *    we did in fact think about, just not when the list was written.
- *  * `connect-src 'self'`: no page under this policy talks to anyone else. It read
- *    `'self' https://feedland.com` until the blogroll trial moved the one page that
- *    did onto `CSP_BLOGROLL` below; leaving the host here would have been a standing
- *    allowance with nothing using it.
- *
- *    Putting `/blog-roll.js` back on the homepage means putting FeedLand back on
- *    this line — as `${FEEDLAND_SERVER} ${FEEDLAND_SOCKET}`, which is what
- *    `CSP_BLOGROLL` below already does. Two entries, not one: the reader makes two
- *    API calls and opens a live-update socket, and a `https://` source expression
- *    does not cover a `wss://` URL. There is no host to type — `lib/feedland.js`
- *    holds it.
- *  * `form-action 'self'`: /submit, /check, /report and /admin post to us. Note
- *    that CSP is a second line here, not the first — §6's `Sec-Fetch-Site`
- *    check is what actually stops a cross-origin form driving our fetcher.
- *  * `frame-ancestors 'none'`: nothing here wants to be framed, and it is the
- *    modern replacement for `X-Frame-Options: DENY`.
- *  * `base-uri 'none'`: an injected `<base>` would silently repoint every
- *    relative URL on the page, including the form actions above.
- *
- * Still forbidden, and worth naming: inline and `eval`'d script, script from any
- * other origin, objects/plugins, framing us, `<base>` rewriting, and every fetch
- * type `default-src 'none'` catches by omission.
+ *  * `manifest-src 'self'`: every page links `/site.webmanifest`, and without this
+ *    line it would inherit `default-src 'none'`.
+ *  * `connect-src 'self'`: no page under this policy talks to anyone else.
+ *  * `form-action 'self'`: /submit, /check, /report and /admin post to us. CSP is a
+ *    second line here: §6's `Sec-Fetch-Site` check is what actually stops a
+ *    cross-origin form driving our fetcher.
+ *  * `frame-ancestors 'none'`: nothing here wants to be framed.
+ *  * `base-uri 'none'`: an injected `<base>` would silently repoint every relative
+ *    URL on the page, including the form actions above.
  */
 const CSP = [
   "default-src 'none'",
@@ -70,45 +47,26 @@ const CSP = [
 ].join('; ');
 
 /**
- * The homepage's policy while Dave Winer's blogroll is on trial there (see
- * `views/home.js`). Every other route keeps `CSP` above unchanged — which is the
- * whole reason there are two policies rather than one widened one.
+ * The homepage's policy, for River's `<river-blogroll>` element.
  *
- * blogroll.js is not our code and does not run under the policy above. What it
- * needs, and why each line is the narrowest form that works:
+ * It differs from `CSP` in two lines, both naming River's host from
+ * `lib/feedland.js` rather than spelling it out:
  *
- *  * `script-src`/`style-src` name `s3.amazonaws.com` and `code.scripting.com`.
- *    Both hosts, because `code.scripting.com/blogroll/*` 302s to that S3 bucket and
- *    CSP checks the redirect target too. **Still no `'unsafe-inline'` on
- *    `script-src`** — that property is the one worth keeping, and keeping it is why
- *    `feedland-blogroll.js` is a file rather than an inline tag like Dave's.
- *  * `style-src` DOES take `'unsafe-inline'`, and this is the real concession. The
- *    FeedLand includes build markup with `style=` attributes in it, which CSP blocks
- *    whether it was parsed or injected; without this the blogroll renders unstyled
- *    in ways that look like our bug. It buys an attacker style injection on this one
- *    page — defacement and layout tricks, not script execution.
- *  * `font-src` gains the S3 bucket, for Font Awesome's own font files — the wedge
- *    carets are glyphs in an icon font. It does NOT name Google: the one Google font
- *    on the page was Rancho, the script face of the title inside the box, and the
- *    title is turned off. `style-src` keeps `fonts.googleapis.com` off the list for
- *    the same reason.
- *  * `connect-src` names FeedLand twice, and takes both from `lib/feedland.js` rather
- *    than spelling the host out: `FEEDLAND_SERVER` for the two API calls and
- *    `FEEDLAND_SOCKET` for the socket that keeps the "when" times live. A `https:`
- *    source expression does NOT admit a `wss:` URL to the same host — removing the
- *    second entry got `blockedURI: "wss://claude.feedland.org/"` from Chrome when
- *    that was the host. Both are origins, so the socket's `/_ws/` path is covered.
+ *  * `script-src` and `style-src` add River for the element's modules and
+ *    `river.css`. Still no `'unsafe-inline'` on either: River's elements write no
+ *    inline styles or scripts.
+ *  * `connect-src` adds River twice: `FEEDLAND_SERVER` for the API calls and
+ *    `FEEDLAND_SOCKET` for the socket that keeps the "when" times live. An `https:`
+ *    source does NOT admit a `wss:` URL to the same host.
  *
- * `img-src` deliberately does NOT widen: blogroll.js emits no `<img>`, so if
- * something starts loading images from elsewhere we would rather see it refused and
- * come back here than have allowed it up front.
+ * `img-src` stays `'self'`: the blogroll shows no pictures.
  */
 const CSP_BLOGROLL = [
   "default-src 'none'",
-  "script-src 'self' https://s3.amazonaws.com https://code.scripting.com",
-  "style-src 'self' 'unsafe-inline' https://s3.amazonaws.com https://code.scripting.com",
+  `script-src 'self' ${FEEDLAND_SERVER}`,
+  `style-src 'self' ${FEEDLAND_SERVER}`,
   "img-src 'self'",
-  "font-src 'self' https://s3.amazonaws.com",
+  "font-src 'self'",
   "manifest-src 'self'",
   `connect-src 'self' ${FEEDLAND_SERVER} ${FEEDLAND_SOCKET}`,
   "form-action 'self'",
@@ -117,59 +75,31 @@ const CSP_BLOGROLL = [
 ].join('; ');
 
 /**
- * `/river`'s policy — FeedLand's `riverviewer.js`, the display wp.feedland.org runs,
- * pointed at our own OPML file. See `views/river.js` for the include list.
+ * `/river`'s policy, for River's `<river-river>` element.
  *
- * It is a THIRD policy rather than a reuse of `CSP_BLOGROLL` because the two pages
- * do not need the same things, and the differences all run in the narrowing
- * direction. Reusing the blogroll's would have handed this page a script host and a
- * websocket origin it never contacts.
+ * A third policy rather than a reuse of `CSP_BLOGROLL`, because the differences run
+ * in both directions:
  *
- *  * `script-src` names `s3.amazonaws.com` and **not** `code.scripting.com`. The
- *    blogroll needs both because `code.scripting.com/blogroll/*` 302s to the bucket
- *    and CSP checks the redirect target; every river include is a bucket URL to begin
- *    with. Still no `'unsafe-inline'` — `feedland-river.js` is a file rather than the
- *    inline `startup()` call Dave's page ends with, precisely so this stays true.
- *  * `style-src` takes `'unsafe-inline'`, the same real concession the blogroll
- *    makes: riverviewer.js positions with `style=` attributes (`.css()` calls on the
- *    "more" button and the like count), which CSP blocks whether parsed or injected.
- *    It buys an attacker style injection on this page — defacement, not execution.
- *  * `img-src` is `'self' https:`, and it is **by far the widest line in this file** —
- *    every host on the web, provided it speaks TLS. It is deliberate, and it is the
- *    only directive here that is not the narrowest form that works.
- *
- *    Two things need it. Every river section shows the feed's favicon, which
- *    `getUrlIconImage` fetches from `https://icons.duckduckgo.com/ip3/<domain>.ico`.
- *    And the items themselves carry the author's own HTML, `<img>` and image
- *    enclosures included, served from whatever host that member happens to use —
- *    their own domain, their CDN, their image bucket. There is no list to write: the
- *    set of hosts is the set of places ~150 independent bloggers keep their pictures,
- *    and it changes without us.
- *
- *    Naming hosts as they turn up was the alternative, and it fails in the direction
- *    that does not get noticed — the next member to embed from somewhere new gets a
- *    broken image on our page and a violation in a console nobody has open. Refusing
- *    them all was the other, and it was tried: three items of 174 rendered the
- *    browser's broken-image glyph, which reads to a visitor as our bug.
- *
- *    **What it costs, stated plainly.** A member's server — or anyone their feed
- *    embeds from — learns the IP address of everyone reading the river, and a
- *    tracking pixel in a feed would work. It buys an attacker nothing executable:
- *    `img-src` governs images, and `script-src` is unchanged and still names one
- *    host. /about says all of this in the visitor's words.
- *  * `connect-src` names FeedLand **once**, not twice. The blogroll opens a
- *    websocket to keep its "when" column live; the river does not — the socket
- *    plumbing lives in FeedLand's own app shell, which `views/river.js` does not
- *    load. `FEEDLAND_SOCKET` would be a standing allowance with nothing using it.
- *  * `font-src` gains the bucket for Font Awesome's font files, which is where the
- *    footer glyphs come from.
+ *  * `connect-src` names River **once**. The river loads once and opens no socket,
+ *    so `FEEDLAND_SOCKET` would be an allowance with nothing using it.
+ *  * `img-src` is `'self' https:`, by far the widest line in this file. Every
+ *    section shows the feed's favicon from `icons.duckduckgo.com`, and the items
+ *    carry the authors' own pictures from wherever each member keeps them. There is
+ *    no list to write: the set of hosts changes without us. What it costs: a
+ *    member's server, or anyone their feed embeds from, learns the IP address of
+ *    everyone reading the river, and a tracking pixel would work. It buys an
+ *    attacker nothing executable. /about says this in the visitor's words.
+ *  * `media-src https: http:` plays audio and video enclosures. Chrome upgrades an
+ *    `http:` picture on an `https:` page, but blocks an `http:` medium that
+ *    `media-src` does not allow, and podcast enclosures are often plain `http:`.
  */
 const CSP_RIVER = [
   "default-src 'none'",
-  "script-src 'self' https://s3.amazonaws.com",
-  "style-src 'self' 'unsafe-inline' https://s3.amazonaws.com",
+  `script-src 'self' ${FEEDLAND_SERVER}`,
+  `style-src 'self' ${FEEDLAND_SERVER}`,
   "img-src 'self' https:",
-  "font-src 'self' https://s3.amazonaws.com",
+  'media-src https: http:',
+  "font-src 'self'",
   "manifest-src 'self'",
   `connect-src 'self' ${FEEDLAND_SERVER}`,
   "form-action 'self'",

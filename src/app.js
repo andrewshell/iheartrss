@@ -166,10 +166,9 @@ export function createApp({
       }),
     );
   });
-  // The river: every member's newest items in one stream, rendered by FeedLand's
-  // riverviewer.js. Its own CSP profile rather than the blogroll's — same S3 bucket,
-  // but a different set of needs in both directions (a favicon host it adds, a
-  // script host and a websocket origin it does not need). See `lib/headers.js`.
+  // The river: every member's newest items in one stream, rendered by River's
+  // <river-river> element. Its own CSP profile rather than the blogroll's: it adds
+  // images and media from anywhere and drops the websocket. See `lib/headers.js`.
   app.get('/river', (c) => {
     c.set('cspProfile', 'river');
     return c.html(riverPage({ config }));
